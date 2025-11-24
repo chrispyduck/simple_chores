@@ -105,11 +105,13 @@ class ChoreSensorManager:
         self.async_add_entities = async_add_entities
         self.config_loader = config_loader
         self.sensors: dict[str, ChoreSensor] = {}
+        self.summary_sensors: dict[str, ChoreSummarySensor] = {}  # type: ignore[name-defined]
 
     async def async_setup(self) -> None:
         """Set up initial sensors from configuration."""
         config = self.config_loader.config
         await self._create_sensors_from_config(config)
+        await self._create_summary_sensors(config)
 
     async def async_config_changed(self, config: SimpleChoresConfig) -> None:
         """
@@ -121,6 +123,7 @@ class ChoreSensorManager:
         """
         LOGGER.debug("Config changed, updating sensors")
         await self._update_sensors_from_config(config)
+        await self._update_summary_sensors(config)
 
     async def _create_sensors_from_config(self, config: SimpleChoresConfig) -> None:
         """
@@ -208,6 +211,81 @@ class ChoreSensorManager:
         if sensors_to_add:
             self.async_add_entities(sensors_to_add)
             LOGGER.info("Added %d chore sensor(s)", len(sensors_to_add))
+
+    async def _create_summary_sensors(self, config: SimpleChoresConfig) -> None:
+        """
+        Create summary sensors for each assignee.
+
+        Args:
+            config: Configuration to create summary sensors from
+
+        """
+        # Get unique assignees
+        assignees = set()
+        for chore in config.chores:
+            assignees.update(chore.assignees)
+
+        summary_sensors_to_add = []
+        for assignee in assignees:
+            if assignee not in self.summary_sensors:
+                summary_sensor = ChoreSummarySensor(self.hass, assignee, self)
+                self.summary_sensors[assignee] = summary_sensor
+                summary_sensors_to_add.append(summary_sensor)
+                LOGGER.debug("Created summary sensor for assignee %s", assignee)
+
+        if summary_sensors_to_add:
+            self.async_add_entities(summary_sensors_to_add)
+            LOGGER.info("Added %d summary sensor(s)", len(summary_sensors_to_add))
+
+    async def _update_summary_sensors(self, config: SimpleChoresConfig) -> None:
+        """
+        Update summary sensors based on new configuration.
+
+        Args:
+            config: New configuration
+
+        """
+        # Get unique assignees from new config
+        assignees = set()
+        for chore in config.chores:
+            assignees.update(chore.assignees)
+
+        # Remove summary sensors for assignees no longer in config
+        summary_sensors_to_remove = []
+        for assignee, sensor in list(self.summary_sensors.items()):
+            if assignee not in assignees:
+                summary_sensors_to_remove.append(assignee)
+                if sensor.hass is not None and hasattr(sensor, "platform"):
+                    try:
+                        await sensor.async_remove()
+                        LOGGER.debug("Removed summary sensor for %s", assignee)
+                    except Exception as err:
+                        LOGGER.warning(
+                            "Failed to remove summary sensor %s: %s", assignee, err
+                        )
+
+        for assignee in summary_sensors_to_remove:
+            del self.summary_sensors[assignee]
+
+        if summary_sensors_to_remove:
+            LOGGER.info("Removed %d summary sensor(s)", len(summary_sensors_to_remove))
+
+        # Create new summary sensors for new assignees
+        summary_sensors_to_add = []
+        for assignee in assignees:
+            if assignee not in self.summary_sensors:
+                summary_sensor = ChoreSummarySensor(self.hass, assignee, self)
+                self.summary_sensors[assignee] = summary_sensor
+                summary_sensors_to_add.append(summary_sensor)
+                LOGGER.debug("Created summary sensor for assignee %s", assignee)
+
+        if summary_sensors_to_add:
+            self.async_add_entities(summary_sensors_to_add)
+            LOGGER.info("Added %d summary sensor(s)", len(summary_sensors_to_add))
+
+        # Update all existing summary sensors
+        for summary_sensor in self.summary_sensors.values():
+            summary_sensor.async_schedule_update_ha_state(force_refresh=True)
 
 
 class ChoreSensor(SensorEntity):
@@ -322,3 +400,99 @@ class ChoreSensor(SensorEntity):
             self._attr_icon = "mdi:clipboard-list-outline"
 
         self.async_write_ha_state()
+
+        # Update summary sensor for this assignee
+        if DOMAIN in self.hass.data and "summary_sensors" in self.hass.data[DOMAIN]:
+            summary_sensors = self.hass.data[DOMAIN]["summary_sensors"]
+            if self._assignee in summary_sensors:
+                summary_sensors[self._assignee].async_schedule_update_ha_state(
+                    force_refresh=True
+                )
+
+
+class ChoreSummarySensor(SensorEntity):
+    """Summary sensor showing pending chore count for an assignee."""
+
+    _attr_has_entity_name = False
+    _attr_should_poll = False
+    _attr_native_unit_of_measurement = "chores"
+    _attr_icon = "mdi:format-list-checks"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        assignee: str,
+        manager: ChoreSensorManager,
+    ) -> None:
+        """
+        Initialize the summary sensor.
+
+        Args:
+            hass: Home Assistant instance
+            assignee: Username of the assignee
+            manager: Sensor manager to access chore sensors
+
+        """
+        self.hass = hass
+        self._assignee = assignee
+        self._manager = manager
+        self._attr_unique_id = f"{DOMAIN}_meta_{assignee}_summary"
+        self._attr_name = "Summary"
+
+        # Set entity ID
+        self.entity_id = f"sensor.simple_chore_meta_{assignee}_summary"
+
+        # Set device info to group with other chores for this person
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, assignee)},
+            name=f"{assignee.title()} - Chores",
+            manufacturer="Simple Chores",
+            model="Chore Tracker",
+            entry_type=dr.DeviceEntryType.SERVICE,
+            suggested_area="Household",
+        )
+
+    @property
+    def native_value(self) -> int:
+        """
+        Return the number of pending chores.
+
+        Returns:
+            Count of pending chores for this assignee
+
+        """
+        pending_count = 0
+        for sensor in self._manager.sensors.values():
+            if (
+                sensor._assignee == self._assignee
+                and sensor.native_value == ChoreState.PENDING.value
+            ):
+                pending_count += 1
+        return pending_count
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """
+        Return the state attributes.
+
+        Returns:
+            Dictionary of state attributes with entity IDs by state
+
+        """
+        pending_entities = []
+        complete_entities = []
+
+        for entity_id, sensor in self._manager.sensors.items():
+            if sensor._assignee == self._assignee:
+                full_entity_id = f"sensor.simple_chore_{entity_id}"
+                if sensor.native_value == ChoreState.PENDING.value:
+                    pending_entities.append(full_entity_id)
+                elif sensor.native_value == ChoreState.COMPLETE.value:
+                    complete_entities.append(full_entity_id)
+
+        return {
+            "assignee": self._assignee,
+            "pending_chores": pending_entities,
+            "complete_chores": complete_entities,
+            "total_chores": len(pending_entities) + len(complete_entities),
+        }

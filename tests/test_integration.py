@@ -375,7 +375,9 @@ class TestSensorManagerIntegration:
         # Setup
         await manager.async_setup()
         assert len(manager.sensors) == 1
-        assert async_add_entities.call_count == 1
+        assert len(manager.summary_sensors) == 1
+        # Called twice: once for chore sensors, once for summary sensors
+        assert async_add_entities.call_count == 2
 
         # Update config
         updated_data = {

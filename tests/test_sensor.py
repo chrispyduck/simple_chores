@@ -145,10 +145,13 @@ class TestChoreSensorManager:
         assert "alice_dishes" in manager.sensors
         assert "bob_vacuum" in manager.sensors
 
-        # Should add entities
-        async_add_entities.assert_called_once()
-        added_sensors = async_add_entities.call_args[0][0]
-        assert len(added_sensors) == 2
+        # Should create 2 summary sensors (one for each assignee)
+        assert len(manager.summary_sensors) == 2
+        assert "alice" in manager.summary_sensors
+        assert "bob" in manager.summary_sensors
+
+        # Should add entities twice (once for chore sensors, once for summary sensors)
+        assert async_add_entities.call_count == 2
 
     @pytest.mark.asyncio
     async def test_async_setup_multiple_assignees(
@@ -176,6 +179,12 @@ class TestChoreSensorManager:
         assert "alice_dishes" in manager.sensors
         assert "bob_dishes" in manager.sensors
         assert "charlie_dishes" in manager.sensors
+
+        # Should create 3 summary sensors (one per assignee)
+        assert len(manager.summary_sensors) == 3
+        assert "alice" in manager.summary_sensors
+        assert "bob" in manager.summary_sensors
+        assert "charlie" in manager.summary_sensors
 
     @pytest.mark.asyncio
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
@@ -226,8 +235,17 @@ class TestChoreSensorManager:
         assert "alice_dishes" in manager.sensors
         assert "bob_vacuum" in manager.sensors
 
-        # async_add_entities should be called twice (initial + update)
-        assert async_add_entities.call_count == 2
+        # Should now have 2 summary sensors
+        assert len(manager.summary_sensors) == 2
+        assert "alice" in manager.summary_sensors
+        assert "bob" in manager.summary_sensors
+
+        # async_add_entities called 4 times:
+        # 1. Initial chore sensors (1)
+        # 2. Initial summary sensors (1)
+        # 3. New chore sensor (1)
+        # 4. New summary sensor (1)
+        assert async_add_entities.call_count == 4
 
     @pytest.mark.asyncio
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
