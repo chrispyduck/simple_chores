@@ -474,3 +474,102 @@ class TestConfigLoaderFileWatching:
             assert not callback.called
         finally:
             await loader.async_stop_watching()
+
+
+class TestConfigLoaderCreateChore:
+    """Tests for creating chores via ConfigLoader."""
+
+    @pytest.mark.asyncio
+    async def test_create_chore_success(
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test creating a new chore successfully."""
+        from custom_components.simple_chores.models import ChoreConfig, ChoreFrequency
+
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
+
+        # Create new chore with enum frequency
+        new_chore = ChoreConfig(
+            name="Take Out Trash",
+            slug="take_out_trash",
+            description="Take the trash to the curb",
+            frequency=ChoreFrequency.WEEKLY,
+            assignees=["alice", "bob"],
+        )
+
+        await loader.async_create_chore(new_chore)
+
+        # Verify file was saved correctly
+        saved_data = yaml.safe_load(temp_config_file.read_text())
+        assert len(saved_data["chores"]) == 3
+
+        # Find the new chore
+        trash_chore = next(
+            c for c in saved_data["chores"] if c["slug"] == "take_out_trash"
+        )
+        assert trash_chore["name"] == "Take Out Trash"
+        assert trash_chore["frequency"] == "weekly"  # Should be serialized as string
+        assert trash_chore["assignees"] == ["alice", "bob"]
+
+    @pytest.mark.asyncio
+    async def test_create_chore_with_manual_frequency(
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test creating a chore with manual frequency (the problematic enum value)."""
+        from custom_components.simple_chores.models import ChoreConfig, ChoreFrequency
+
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
+
+        # Create chore with MANUAL frequency (this was failing before)
+        new_chore = ChoreConfig(
+            name="Seasonal Task",
+            slug="seasonal_task",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["charlie"],
+        )
+
+        # This should not raise an error
+        await loader.async_create_chore(new_chore)
+
+        # Verify file was saved correctly with string value
+        saved_data = yaml.safe_load(temp_config_file.read_text())
+        seasonal = next(c for c in saved_data["chores"] if c["slug"] == "seasonal_task")
+        assert seasonal["frequency"] == "manual"  # Must be string, not enum object
+
+    @pytest.mark.asyncio
+    async def test_create_chore_duplicate_slug(
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test creating a chore with duplicate slug fails."""
+        from custom_components.simple_chores.models import ChoreConfig, ChoreFrequency
+
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
+
+        # Try to create chore with existing slug
+        duplicate_chore = ChoreConfig(
+            name="Another Dishes",
+            slug="dishes",  # This already exists
+            frequency=ChoreFrequency.DAILY,
+            assignees=["charlie"],
+        )
+
+        with pytest.raises(ConfigLoadError, match="already exists"):
+            await loader.async_create_chore(duplicate_chore)

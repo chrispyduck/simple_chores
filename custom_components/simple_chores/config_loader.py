@@ -230,8 +230,8 @@ class ConfigLoader:
             raise ConfigLoadError(msg)
 
         try:
-            # Convert config to dict
-            data = config.model_dump(mode="python")
+            # Convert config to dict, using json mode to serialize enums as strings
+            data = config.model_dump(mode="json")
 
             # Write to file
             yaml_content = yaml.safe_dump(
