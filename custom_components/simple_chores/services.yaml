@@ -57,6 +57,18 @@ mark_not_requested:
       selector:
         text:
 
+reset_completed:
+  name: Reset Completed
+  description: Reset completed chores to not requested status. If no user is specified, resets for all users.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, resets for all users)
+      required: false
+      example: "alice"
+      selector:
+        text:
+
 create_chore:
   name: Create Chore
   description: Create a new chore in the YAML configuration

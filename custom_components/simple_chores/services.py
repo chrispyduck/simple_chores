@@ -24,7 +24,9 @@ from .const import (
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_NOT_REQUESTED,
     SERVICE_MARK_PENDING,
+    SERVICE_RESET_COMPLETED,
     SERVICE_UPDATE_CHORE,
+    sanitize_entity_id,
 )
 from .models import ChoreConfig, ChoreFrequency, ChoreState
 
@@ -69,6 +71,12 @@ DELETE_CHORE_SCHEMA = vol.Schema(
     }
 )
 
+RESET_COMPLETED_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_USER): cv.string,
+    }
+)
+
 
 async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the mark_complete service call."""
@@ -79,7 +87,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.error("Simple Chores integration not loaded")
         return
 
-    sensor_id = f"{user}_{chore_slug}"
+    sensor_id = f"{sanitize_entity_id(user)}_{sanitize_entity_id(chore_slug)}"
     sensors = hass.data[DOMAIN].get("sensors", {})
 
     if sensor_id not in sensors:
@@ -100,7 +108,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.error("Simple Chores integration not loaded")
         return
 
-    sensor_id = f"{user}_{chore_slug}"
+    sensor_id = f"{sanitize_entity_id(user)}_{sanitize_entity_id(chore_slug)}"
     sensors = hass.data[DOMAIN].get("sensors", {})
 
     if sensor_id not in sensors:
@@ -120,7 +128,7 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
         LOGGER.error("Simple Chores integration not loaded")
         return
 
-    sensor_id = f"{user}_{chore_slug}"
+    sensor_id = f"{sanitize_entity_id(user)}_{sanitize_entity_id(chore_slug)}"
     sensors = hass.data[DOMAIN].get("sensors", {})
 
     if sensor_id not in sensors:
@@ -129,6 +137,35 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
 
     sensor = sensors[sensor_id]
     sensor.set_state(ChoreState.NOT_REQUESTED)
+
+
+async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the reset_completed service call."""
+    if DOMAIN not in hass.data:
+        LOGGER.error("Simple Chores integration not loaded")
+        return
+
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    user = call.data.get(ATTR_USER)
+
+    # Sanitize user if provided for matching
+    sanitized_user = sanitize_entity_id(user) if user else None
+
+    reset_count = 0
+    for sensor_id, sensor in sensors.items():
+        # If user specified, only reset their chores
+        if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
+            continue
+
+        # Only reset sensors that are currently COMPLETE
+        if sensor.native_value == ChoreState.COMPLETE.value:
+            sensor.set_state(ChoreState.NOT_REQUESTED)
+            reset_count += 1
+
+    if user:
+        LOGGER.info("Reset %d completed chore(s) for user '%s'", reset_count, user)
+    else:
+        LOGGER.info("Reset %d completed chore(s) for all users", reset_count)
 
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -230,6 +267,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_MARK_NOT_REQUESTED,
         partial(handle_mark_not_requested, hass),
         schema=SERVICE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESET_COMPLETED,
+        partial(handle_reset_completed, hass),
+        schema=RESET_COMPLETED_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN,
