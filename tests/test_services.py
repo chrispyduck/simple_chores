@@ -4,14 +4,16 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from custom_components.simple_chores import async_setup_services
 from custom_components.simple_chores.const import (
     ATTR_CHORE_SLUG,
     ATTR_USER,
     DOMAIN,
+    SERVICE_CREATE_CHORE,
+    SERVICE_DELETE_CHORE,
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_NOT_REQUESTED,
     SERVICE_MARK_PENDING,
+    SERVICE_UPDATE_CHORE,
 )
 from custom_components.simple_chores.models import (
     ChoreConfig,
@@ -19,10 +21,11 @@ from custom_components.simple_chores.models import (
     ChoreState,
 )
 from custom_components.simple_chores.sensor import ChoreSensor
+from custom_components.simple_chores.services import async_setup_services
 
 
 @pytest.fixture
-def mock_hass():
+def mock_hass() -> MagicMock:
     """Create a mock Home Assistant instance."""
     hass = MagicMock()
     hass.data = {}
@@ -33,7 +36,7 @@ def mock_hass():
 
 
 @pytest.fixture
-def mock_sensor(mock_hass):
+def mock_sensor(mock_hass: MagicMock) -> ChoreSensor:
     """Create a mock chore sensor."""
     chore = ChoreConfig(
         name="Dishes",
@@ -51,11 +54,13 @@ class TestServiceSetup:
     """Tests for service setup."""
 
     @pytest.mark.asyncio
-    async def test_setup_services_registers_all_services(self, mock_hass):
+    async def test_setup_services_registers_all_services(
+        self, mock_hass: MagicMock
+    ) -> None:
         """Test that all services are registered."""
         await async_setup_services(mock_hass)
 
-        assert mock_hass.services.async_register.call_count == 3
+        assert mock_hass.services.async_register.call_count == 6
 
         # Check that each service was registered
         calls = mock_hass.services.async_register.call_args_list
@@ -64,9 +69,14 @@ class TestServiceSetup:
         assert SERVICE_MARK_COMPLETE in registered_services
         assert SERVICE_MARK_PENDING in registered_services
         assert SERVICE_MARK_NOT_REQUESTED in registered_services
+        assert SERVICE_CREATE_CHORE in registered_services
+        assert SERVICE_UPDATE_CHORE in registered_services
+        assert SERVICE_DELETE_CHORE in registered_services
 
     @pytest.mark.asyncio
-    async def test_setup_services_uses_correct_domain(self, mock_hass):
+    async def test_setup_services_uses_correct_domain(
+        self, mock_hass: MagicMock
+    ) -> None:
         """Test that services are registered with correct domain."""
         await async_setup_services(mock_hass)
 
@@ -79,7 +89,9 @@ class TestMarkCompleteService:
     """Tests for mark_complete service."""
 
     @pytest.mark.asyncio
-    async def test_mark_complete_updates_sensor_state(self, mock_hass, mock_sensor):
+    async def test_mark_complete_updates_sensor_state(
+        self, mock_hass: MagicMock, mock_sensor: ChoreSensor
+    ) -> None:
         """Test that mark_complete service updates sensor state."""
         # Setup
         mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
@@ -100,7 +112,9 @@ class TestMarkCompleteService:
         assert mock_sensor.set_state.call_args[0][0] == ChoreState.COMPLETE
 
     @pytest.mark.asyncio
-    async def test_mark_complete_sensor_not_found(self, mock_hass, caplog):
+    async def test_mark_complete_sensor_not_found(
+        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Test mark_complete when sensor doesn't exist."""
         mock_hass.data[DOMAIN] = {"sensors": {}}
         await async_setup_services(mock_hass)
@@ -115,7 +129,9 @@ class TestMarkCompleteService:
         assert "No sensor found" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_mark_complete_integration_not_loaded(self, mock_hass, caplog):
+    async def test_mark_complete_integration_not_loaded(
+        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Test mark_complete when integration not loaded."""
         await async_setup_services(mock_hass)
 
@@ -132,7 +148,9 @@ class TestMarkPendingService:
     """Tests for mark_pending service."""
 
     @pytest.mark.asyncio
-    async def test_mark_pending_updates_sensor_state(self, mock_hass, mock_sensor):
+    async def test_mark_pending_updates_sensor_state(
+        self, mock_hass: MagicMock, mock_sensor: ChoreSensor
+    ) -> None:
         """Test that mark_pending service updates sensor state."""
         mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
         await async_setup_services(mock_hass)
@@ -149,7 +167,9 @@ class TestMarkPendingService:
         assert mock_sensor.set_state.call_args[0][0] == ChoreState.PENDING
 
     @pytest.mark.asyncio
-    async def test_mark_pending_sensor_not_found(self, mock_hass, caplog):
+    async def test_mark_pending_sensor_not_found(
+        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Test mark_pending when sensor doesn't exist."""
         mock_hass.data[DOMAIN] = {"sensors": {}}
         await async_setup_services(mock_hass)
@@ -168,8 +188,8 @@ class TestMarkNotRequestedService:
 
     @pytest.mark.asyncio
     async def test_mark_not_requested_updates_sensor_state(
-        self, mock_hass, mock_sensor
-    ):
+        self, mock_hass: MagicMock, mock_sensor: ChoreSensor
+    ) -> None:
         """Test that mark_not_requested service updates sensor state."""
         mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
         await async_setup_services(mock_hass)
@@ -186,7 +206,9 @@ class TestMarkNotRequestedService:
         assert mock_sensor.set_state.call_args[0][0] == ChoreState.NOT_REQUESTED
 
     @pytest.mark.asyncio
-    async def test_mark_not_requested_sensor_not_found(self, mock_hass, caplog):
+    async def test_mark_not_requested_sensor_not_found(
+        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Test mark_not_requested when sensor doesn't exist."""
         mock_hass.data[DOMAIN] = {"sensors": {}}
         await async_setup_services(mock_hass)
@@ -204,7 +226,9 @@ class TestServiceIntegration:
     """Integration tests for services."""
 
     @pytest.mark.asyncio
-    async def test_services_work_after_sensor_platform_setup(self, mock_hass):
+    async def test_services_work_after_sensor_platform_setup(
+        self, mock_hass: MagicMock
+    ) -> None:
         """Test that services work after sensor platform is set up."""
         # Create sensors manually (simulating what sensor platform does)
         chore = ChoreConfig(
@@ -236,7 +260,7 @@ class TestServiceIntegration:
         sensor.set_state.assert_called_once_with(ChoreState.COMPLETE)
 
     @pytest.mark.asyncio
-    async def test_multiple_sensors_different_users(self, mock_hass):
+    async def test_multiple_sensors_different_users(self, mock_hass: MagicMock) -> None:
         """Test services with multiple sensors for different users."""
         # Create multiple sensors
         chore = ChoreConfig(
@@ -278,7 +302,9 @@ class TestServiceIntegration:
         sensor_bob.set_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_service_with_special_characters_in_slug(self, mock_hass):
+    async def test_service_with_special_characters_in_slug(
+        self, mock_hass: MagicMock
+    ) -> None:
         """Test service with special characters in slug."""
         chore = ChoreConfig(
             name="Test Chore",

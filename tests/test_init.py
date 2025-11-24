@@ -1,6 +1,7 @@
 """Tests for simple_chores __init__."""
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -15,7 +16,7 @@ from custom_components.simple_chores.config_loader import ConfigLoadError
 
 
 @pytest.fixture
-def mock_hass():
+def mock_hass() -> MagicMock:
     """Create a mock Home Assistant instance."""
     hass = MagicMock()
     hass.data = {}
@@ -30,7 +31,7 @@ def mock_hass():
 
 
 @pytest.fixture
-def mock_config_loader():
+def mock_config_loader() -> MagicMock:
     """Create a mock config loader."""
     loader = MagicMock()
     loader.async_load = AsyncMock()
@@ -40,7 +41,7 @@ def mock_config_loader():
 
 
 @pytest.fixture
-def mock_config_entry():
+def mock_config_entry() -> MagicMock:
     """Create a mock config entry."""
     entry = MagicMock()
     entry.entry_id = "test_entry_id"
@@ -48,14 +49,14 @@ def mock_config_entry():
 
 
 @pytest.fixture
-def temp_config_file(tmp_path):
+def temp_config_file(tmp_path: Path) -> Path:
     """Create a temporary config file."""
     config_path = tmp_path / "simple_chores.yaml"
     return config_path
 
 
 @pytest.fixture
-def valid_config_data():
+def valid_config_data() -> dict[str, Any]:
     """Return valid config data."""
     return {
         "chores": [
@@ -75,8 +76,11 @@ class TestAsyncSetup:
     @pytest.mark.asyncio
     @patch("custom_components.simple_chores.ConfigLoader")
     async def test_setup_success(
-        self, mock_loader_class, mock_hass, mock_config_loader
-    ):
+        self,
+        mock_loader_class: MagicMock,
+        mock_hass: MagicMock,
+        mock_config_loader: MagicMock,
+    ) -> None:
         """Test successful setup."""
         mock_loader_class.return_value = mock_config_loader
 
@@ -103,8 +107,12 @@ class TestAsyncSetup:
     @patch("custom_components.simple_chores.sensor.async_setup_platform")
     @patch("custom_components.simple_chores.ConfigLoader")
     async def test_setup_with_sensor_platform(
-        self, mock_loader_class, mock_sensor_setup, mock_hass, mock_config_loader
-    ):
+        self,
+        mock_loader_class: MagicMock,
+        mock_sensor_setup: MagicMock,
+        mock_hass: MagicMock,
+        mock_config_loader: MagicMock,
+    ) -> None:
         """Test setup loads sensor platform."""
         mock_loader_class.return_value = mock_config_loader
 
@@ -122,8 +130,11 @@ class TestAsyncSetup:
     @pytest.mark.asyncio
     @patch("custom_components.simple_chores.ConfigLoader")
     async def test_setup_config_load_error(
-        self, mock_loader_class, mock_hass, mock_config_loader
-    ):
+        self,
+        mock_loader_class: MagicMock,
+        mock_hass: MagicMock,
+        mock_config_loader: MagicMock,
+    ) -> None:
         """Test setup when config loading fails."""
         mock_config_loader.async_load.side_effect = ConfigLoadError("Test error")
         mock_loader_class.return_value = mock_config_loader
@@ -139,8 +150,11 @@ class TestAsyncSetup:
     @pytest.mark.asyncio
     @patch("custom_components.simple_chores.ConfigLoader")
     async def test_setup_initializes_hass_data(
-        self, mock_loader_class, mock_hass, mock_config_loader
-    ):
+        self,
+        mock_loader_class: MagicMock,
+        mock_hass: MagicMock,
+        mock_config_loader: MagicMock,
+    ) -> None:
         """Test that setup initializes hass.data correctly."""
         mock_loader_class.return_value = mock_config_loader
 
@@ -158,8 +172,11 @@ class TestAsyncSetup:
     @pytest.mark.asyncio
     @patch("custom_components.simple_chores.ConfigLoader")
     async def test_setup_config_path(
-        self, mock_loader_class, mock_hass, mock_config_loader
-    ):
+        self,
+        mock_loader_class: MagicMock,
+        mock_hass: MagicMock,
+        mock_config_loader: MagicMock,
+    ) -> None:
         """Test that setup uses correct config path."""
         mock_loader_class.return_value = mock_config_loader
         mock_hass.config.path = Mock(return_value="/custom/path")
@@ -176,8 +193,12 @@ class TestAsyncSetupEntry:
 
     @pytest.mark.asyncio
     async def test_setup_entry_success(
-        self, mock_hass, mock_config_entry, temp_config_file, valid_config_data
-    ):
+        self,
+        mock_hass: MagicMock,
+        mock_config_entry: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
         """Test successful entry setup."""
         import yaml
 
@@ -202,7 +223,9 @@ class TestAsyncSetupEntry:
         await mock_hass.data["simple_chores"]["config_loader"].async_stop_watching()
 
     @pytest.mark.asyncio
-    async def test_setup_entry_config_load_error(self, mock_hass, mock_config_entry):
+    async def test_setup_entry_config_load_error(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ) -> None:
         """Test setup entry with config load error."""
         # Mock config path to non-existent file with invalid content
         mock_hass.config.path = MagicMock(return_value="/nonexistent")
@@ -222,8 +245,11 @@ class TestAsyncUnloadEntry:
 
     @pytest.mark.asyncio
     async def test_unload_entry_success(
-        self, mock_hass, mock_config_entry, mock_config_loader
-    ):
+        self,
+        mock_hass: MagicMock,
+        mock_config_entry: MagicMock,
+        mock_config_loader: MagicMock,
+    ) -> None:
         """Test successful unload."""
         mock_hass.data["simple_chores"] = {"config_loader": mock_config_loader}
 
@@ -233,14 +259,18 @@ class TestAsyncUnloadEntry:
         mock_config_loader.async_stop_watching.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_unload_entry_no_data(self, mock_hass, mock_config_entry):
+    async def test_unload_entry_no_data(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ) -> None:
         """Test unload when no data exists."""
         result = await async_unload_entry(mock_hass, mock_config_entry)
 
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_unload_entry_no_config_loader(self, mock_hass, mock_config_entry):
+    async def test_unload_entry_no_config_loader(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ) -> None:
         """Test unload when config_loader doesn't exist."""
         mock_hass.data["simple_chores"] = {}
 
@@ -253,7 +283,9 @@ class TestAsyncReloadEntry:
     """Tests for async_reload_entry."""
 
     @pytest.mark.asyncio
-    async def test_reload_entry(self, mock_hass, mock_config_entry):
+    async def test_reload_entry(
+        self, mock_hass: MagicMock, mock_config_entry: MagicMock
+    ) -> None:
         """Test reload entry."""
         await async_reload_entry(mock_hass, mock_config_entry)
 

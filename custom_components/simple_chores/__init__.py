@@ -10,27 +10,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import homeassistant.helpers.config_validation as cv
-import voluptuous as vol
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
 
 from .config_loader import ConfigLoader, ConfigLoadError
-from .const import (
-    ATTR_CHORE_SLUG,
-    ATTR_USER,
-    CONFIG_FILE_NAME,
-    DOMAIN,
-    LOGGER,
-    SERVICE_MARK_COMPLETE,
-    SERVICE_MARK_NOT_REQUESTED,
-    SERVICE_MARK_PENDING,
-)
+from .const import CONFIG_FILE_NAME, DOMAIN, LOGGER
 from .data import SimpleChoresData as SimpleChoresData
-from .models import ChoreState
+from .services import async_setup_services
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -95,123 +85,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     LOGGER.info("Simple Chores integration loaded successfully")
     return True
-
-
-SERVICE_SCHEMA = vol.Schema(
-    {
-        vol.Required(ATTR_USER): cv.string,
-        vol.Required(ATTR_CHORE_SLUG): cv.string,
-    }
-)
-
-
-async def async_setup_services(hass: HomeAssistant) -> None:
-    """
-    Set up services for the Simple Chores integration.
-
-    Args:
-        hass: Home Assistant instance
-
-    """
-
-    async def handle_mark_complete(call: ServiceCall) -> None:
-        """
-        Handle the mark_complete service call.
-
-        Args:
-            call: Service call data
-
-        """
-        user = call.data[ATTR_USER]
-        chore_slug = call.data[ATTR_CHORE_SLUG]
-
-        if DOMAIN not in hass.data:
-            LOGGER.error("Simple Chores integration not loaded")
-            return
-
-        # Find the sensor and update its state
-        sensor_id = f"{user}_{chore_slug}"
-        sensors = hass.data[DOMAIN].get("sensors", {})
-
-        if sensor_id not in sensors:
-            LOGGER.error(
-                "No sensor found for user '%s' and chore '%s'", user, chore_slug
-            )
-            return
-
-        sensor = sensors[sensor_id]
-        sensor.set_state(ChoreState.COMPLETE)
-        LOGGER.debug("Marked chore '%s' as complete for user '%s'", chore_slug, user)
-
-    async def handle_mark_pending(call: ServiceCall) -> None:
-        """
-        Handle the mark_pending service call.
-
-        Args:
-            call: Service call data
-
-        """
-        user = call.data[ATTR_USER]
-        chore_slug = call.data[ATTR_CHORE_SLUG]
-
-        if DOMAIN not in hass.data:
-            LOGGER.error("Simple Chores integration not loaded")
-            return
-
-        sensor_id = f"{user}_{chore_slug}"
-        sensors = hass.data[DOMAIN].get("sensors", {})
-
-        if sensor_id not in sensors:
-            LOGGER.error(
-                "No sensor found for user '%s' and chore '%s'", user, chore_slug
-            )
-            return
-
-        sensor = sensors[sensor_id]
-        sensor.set_state(ChoreState.PENDING)
-
-    async def handle_mark_not_requested(call: ServiceCall) -> None:
-        """
-        Handle the mark_not_requested service call.
-
-        Args:
-            call: Service call data
-
-        """
-        user = call.data[ATTR_USER]
-        chore_slug = call.data[ATTR_CHORE_SLUG]
-
-        if DOMAIN not in hass.data:
-            LOGGER.error("Simple Chores integration not loaded")
-            return
-
-        sensor_id = f"{user}_{chore_slug}"
-        sensors = hass.data[DOMAIN].get("sensors", {})
-
-        if sensor_id not in sensors:
-            LOGGER.error(
-                "No sensor found for user '%s' and chore '%s'", user, chore_slug
-            )
-            return
-
-        sensor = sensors[sensor_id]
-        sensor.set_state(ChoreState.NOT_REQUESTED)
-
-    # Register all three services
-    hass.services.async_register(
-        DOMAIN, SERVICE_MARK_COMPLETE, handle_mark_complete, schema=SERVICE_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_MARK_PENDING, handle_mark_pending, schema=SERVICE_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_MARK_NOT_REQUESTED,
-        handle_mark_not_requested,
-        schema=SERVICE_SCHEMA,
-    )
-
-    LOGGER.debug("Registered Simple Chores services")
 
 
 async def async_setup_entry(

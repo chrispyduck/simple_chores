@@ -14,7 +14,7 @@ class TestConfigFlow:
     """Test the config flow."""
 
     @pytest.mark.asyncio
-    async def test_user_flow_success(self, hass: HomeAssistant):
+    async def test_user_flow_success(self, hass: HomeAssistant) -> None:
         """Test successful user flow."""
         flow = SimpleChoresConfigFlow()
         flow.hass = hass
@@ -30,7 +30,7 @@ class TestConfigFlow:
         assert result2["data"] == {}
 
     @pytest.mark.asyncio
-    async def test_user_flow_single_instance(self, hass: HomeAssistant):
+    async def test_user_flow_single_instance(self, hass: HomeAssistant) -> None:
         """Test that only one instance is allowed."""
         flow = SimpleChoresConfigFlow()
         flow.hass = hass
@@ -43,7 +43,7 @@ class TestConfigFlow:
         assert result["reason"] == "single_instance_allowed"
 
     @pytest.mark.asyncio
-    async def test_options_flow(self, hass: HomeAssistant):
+    async def test_options_flow(self, hass: HomeAssistant) -> None:
         """Test the options flow."""
         from custom_components.simple_chores.config_flow import (
             SimpleChoresOptionsFlow,
@@ -70,7 +70,7 @@ class TestConfigFlowUI:
     """Test the config flow UI elements."""
 
     @pytest.mark.asyncio
-    async def test_config_file_path_shown(self, hass: HomeAssistant):
+    async def test_config_file_path_shown(self, hass: HomeAssistant) -> None:
         """Test that config file path is shown in description."""
         flow = SimpleChoresConfigFlow()
         flow.hass = hass
@@ -79,7 +79,7 @@ class TestConfigFlowUI:
         assert "config_file" in result.get("description_placeholders", {})
 
     @pytest.mark.asyncio
-    async def test_options_shows_config_file_path(self, hass: HomeAssistant):
+    async def test_options_shows_config_file_path(self, hass: HomeAssistant) -> None:
         """Test that options flow shows config file path."""
         from custom_components.simple_chores.config_flow import (
             SimpleChoresOptionsFlow,

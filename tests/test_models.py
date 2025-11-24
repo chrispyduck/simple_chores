@@ -14,7 +14,7 @@ from custom_components.simple_chores.models import (
 class TestChoreFrequency:
     """Tests for ChoreFrequency enum."""
 
-    def test_frequency_values(self):
+    def test_frequency_values(self) -> None:
         """Test that frequency enum has expected values."""
         assert ChoreFrequency.DAILY.value == "daily"
         assert ChoreFrequency.WEEKLY.value == "weekly"
@@ -24,7 +24,7 @@ class TestChoreFrequency:
 class TestChoreState:
     """Tests for ChoreState enum."""
 
-    def test_state_values(self):
+    def test_state_values(self) -> None:
         """Test that state enum has expected values."""
         assert ChoreState.PENDING.value == "Pending"
         assert ChoreState.COMPLETE.value == "Complete"
@@ -34,7 +34,7 @@ class TestChoreState:
 class TestChoreConfig:
     """Tests for ChoreConfig model."""
 
-    def test_valid_chore_config(self):
+    def test_valid_chore_config(self) -> None:
         """Test creating a valid chore configuration."""
         chore = ChoreConfig(
             name="Dishes",
@@ -50,7 +50,7 @@ class TestChoreConfig:
         assert chore.frequency == ChoreFrequency.DAILY
         assert chore.assignees == ["alice", "bob"]
 
-    def test_chore_config_minimal(self):
+    def test_chore_config_minimal(self) -> None:
         """Test creating a chore with minimal required fields."""
         chore = ChoreConfig(
             name="Vacuum",
@@ -65,7 +65,7 @@ class TestChoreConfig:
         assert chore.frequency == ChoreFrequency.WEEKLY
         assert chore.assignees == ["alice"]
 
-    def test_slug_validation_empty(self):
+    def test_slug_validation_empty(self) -> None:
         """Test that empty slug raises validation error."""
         with pytest.raises(ValidationError) as exc_info:
             ChoreConfig(
@@ -78,7 +78,7 @@ class TestChoreConfig:
         errors = exc_info.value.errors()
         assert any("Slug cannot be empty" in str(err) for err in errors)
 
-    def test_slug_validation_invalid_characters(self):
+    def test_slug_validation_invalid_characters(self) -> None:
         """Test that slug with invalid characters raises validation error."""
         with pytest.raises(ValidationError) as exc_info:
             ChoreConfig(
@@ -91,7 +91,7 @@ class TestChoreConfig:
         errors = exc_info.value.errors()
         assert any("must contain only alphanumeric" in str(err) for err in errors)
 
-    def test_slug_normalized_to_lowercase(self):
+    def test_slug_normalized_to_lowercase(self) -> None:
         """Test that slug is normalized to lowercase."""
         chore = ChoreConfig(
             name="Test",
@@ -102,7 +102,7 @@ class TestChoreConfig:
 
         assert chore.slug == "mychore"
 
-    def test_slug_allows_hyphens_and_underscores(self):
+    def test_slug_allows_hyphens_and_underscores(self) -> None:
         """Test that slug allows hyphens and underscores."""
         chore = ChoreConfig(
             name="Test",
@@ -113,7 +113,7 @@ class TestChoreConfig:
 
         assert chore.slug == "my-chore_name"
 
-    def test_assignees_validation_empty(self):
+    def test_assignees_validation_empty(self) -> None:
         """Test that empty assignees list raises validation error."""
         with pytest.raises(ValidationError) as exc_info:
             ChoreConfig(
@@ -126,7 +126,7 @@ class TestChoreConfig:
         errors = exc_info.value.errors()
         assert any("At least one assignee is required" in str(err) for err in errors)
 
-    def test_chore_config_forbids_extra_fields(self):
+    def test_chore_config_forbids_extra_fields(self) -> None:
         """Test that extra fields are forbidden."""
         with pytest.raises(ValidationError) as exc_info:
             ChoreConfig(
@@ -144,12 +144,12 @@ class TestChoreConfig:
 class TestSimpleChoresConfig:
     """Tests for SimpleChoresConfig model."""
 
-    def test_empty_config(self):
+    def test_empty_config(self) -> None:
         """Test creating an empty configuration."""
         config = SimpleChoresConfig(chores=[])
         assert config.chores == []
 
-    def test_config_with_chores(self):
+    def test_config_with_chores(self) -> None:
         """Test creating a configuration with chores."""
         chore1 = ChoreConfig(
             name="Dishes",
@@ -169,7 +169,7 @@ class TestSimpleChoresConfig:
         assert config.chores[0].slug == "dishes"
         assert config.chores[1].slug == "vacuum"
 
-    def test_duplicate_slugs_validation(self):
+    def test_duplicate_slugs_validation(self) -> None:
         """Test that duplicate slugs raise validation error."""
         chore1 = ChoreConfig(
             name="Dishes 1",
@@ -191,7 +191,7 @@ class TestSimpleChoresConfig:
         assert any("Duplicate chore slugs" in str(err) for err in errors)
         assert any("dishes" in str(err) for err in errors)
 
-    def test_get_chore_by_slug_found(self):
+    def test_get_chore_by_slug_found(self) -> None:
         """Test getting a chore by slug when it exists."""
         chore1 = ChoreConfig(
             name="Dishes",
@@ -213,7 +213,7 @@ class TestSimpleChoresConfig:
         assert found_chore.name == "Vacuum"
         assert found_chore.slug == "vacuum"
 
-    def test_get_chore_by_slug_not_found(self):
+    def test_get_chore_by_slug_not_found(self) -> None:
         """Test getting a chore by slug when it doesn't exist."""
         chore = ChoreConfig(
             name="Dishes",
@@ -227,7 +227,7 @@ class TestSimpleChoresConfig:
 
         assert found_chore is None
 
-    def test_get_chores_for_assignee_found(self):
+    def test_get_chores_for_assignee_found(self) -> None:
         """Test getting chores for an assignee."""
         chore1 = ChoreConfig(
             name="Dishes",
@@ -255,7 +255,7 @@ class TestSimpleChoresConfig:
         assert "dishes" in [c.slug for c in alice_chores]
         assert "vacuum" in [c.slug for c in alice_chores]
 
-    def test_get_chores_for_assignee_none_found(self):
+    def test_get_chores_for_assignee_none_found(self) -> None:
         """Test getting chores for an assignee with no chores."""
         chore = ChoreConfig(
             name="Dishes",
@@ -269,7 +269,7 @@ class TestSimpleChoresConfig:
 
         assert bob_chores == []
 
-    def test_config_forbids_extra_fields(self):
+    def test_config_forbids_extra_fields(self) -> None:
         """Test that extra fields are forbidden in config."""
         with pytest.raises(ValidationError) as exc_info:
             SimpleChoresConfig(chores=[], extra_field="not allowed")
@@ -277,7 +277,7 @@ class TestSimpleChoresConfig:
         errors = exc_info.value.errors()
         assert any("extra_field" in str(err) for err in errors)
 
-    def test_default_empty_chores_list(self):
+    def test_default_empty_chores_list(self) -> None:
         """Test that chores list defaults to empty."""
         config = SimpleChoresConfig()
         assert config.chores == []

@@ -1,5 +1,6 @@
 """Edge case tests for simple_chores sensor platform."""
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -21,14 +22,14 @@ pytestmark = pytest.mark.usefixtures("mock_async_write_ha_state")
 
 
 @pytest.fixture
-def mock_async_write_ha_state():
+def mock_async_write_ha_state() -> Any:
     """Mock async_write_ha_state for ChoreSensor."""
     with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
         yield
 
 
 @pytest.fixture
-def mock_hass():
+def mock_hass() -> MagicMock:
     """Create a mock Home Assistant instance."""
     hass = MagicMock()
     hass.data = {}
@@ -39,7 +40,7 @@ def mock_hass():
 
 
 @pytest.fixture
-def mock_config_loader(mock_hass):
+def mock_config_loader(mock_hass: MagicMock) -> MagicMock:
     """Create a mock config loader."""
     loader = MagicMock(spec=ConfigLoader)
     loader.config = SimpleChoresConfig(chores=[])
@@ -50,7 +51,9 @@ def mock_config_loader(mock_hass):
 class TestSensorStatePersistence:
     """Tests for sensor state persistence edge cases."""
 
-    def test_state_persists_across_sensor_recreation(self, mock_hass):
+    def test_state_persists_across_sensor_recreation(
+        self, mock_hass: MagicMock
+    ) -> None:
         """Test that state persists when sensor is recreated."""
         chore = ChoreConfig(
             name="Dishes",
@@ -69,7 +72,9 @@ class TestSensorStatePersistence:
         # State should be restored
         assert sensor2.native_value == ChoreState.COMPLETE.value
 
-    def test_state_isolated_between_different_assignees(self, mock_hass):
+    def test_state_isolated_between_different_assignees(
+        self, mock_hass: MagicMock
+    ) -> None:
         """Test that state is isolated between different assignees."""
         chore = ChoreConfig(
             name="Dishes",
@@ -89,8 +94,10 @@ class TestSensorStatePersistence:
         assert sensor_alice.native_value == ChoreState.COMPLETE.value
         assert sensor_bob.native_value == ChoreState.PENDING.value
 
-    def test_state_isolated_between_different_chores(self, mock_hass):
-        """Test that state is isolated between different chores."""
+    def test_state_isolated_between_different_chores(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test that states are isolated between different chores."""
         chore1 = ChoreConfig(
             name="Dishes",
             slug="dishes",
@@ -115,7 +122,9 @@ class TestSensorStatePersistence:
         assert sensor1.native_value == ChoreState.COMPLETE.value
         assert sensor2.native_value == ChoreState.PENDING.value
 
-    def test_state_persistence_with_special_characters_in_slug(self, mock_hass):
+    def test_state_persistence_with_special_characters_in_slug(
+        self, mock_hass: MagicMock
+    ) -> None:
         """Test state persistence with special characters in slug."""
         chore = ChoreConfig(
             name="Test Chore",
@@ -130,8 +139,10 @@ class TestSensorStatePersistence:
         sensor2 = ChoreSensor(mock_hass, chore, "alice")
         assert sensor2.native_value == ChoreState.COMPLETE.value
 
-    def test_state_persistence_with_special_characters_in_assignee(self, mock_hass):
-        """Test state persistence with special characters in assignee name."""
+    def test_state_persistence_with_special_characters_in_assignee(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test state persistence with special characters in assignee."""
         chore = ChoreConfig(
             name="Dishes",
             slug="dishes",
@@ -151,8 +162,8 @@ class TestSensorManagerEdgeCases:
 
     @pytest.mark.asyncio
     async def test_manager_handles_empty_config_after_populated(
-        self, mock_hass, mock_config_loader
-    ):
+        self, mock_hass: MagicMock, mock_config_loader: MagicMock
+    ) -> None:
         """Test manager handles transition from populated to empty config."""
         # Start with populated config
         initial_config = SimpleChoresConfig(
@@ -186,9 +197,9 @@ class TestSensorManagerEdgeCases:
 
     @pytest.mark.asyncio
     async def test_manager_handles_assignee_addition(
-        self, mock_hass, mock_config_loader
-    ):
-        """Test manager handles adding assignee to existing chore."""
+        self, mock_hass: MagicMock, mock_config_loader: MagicMock
+    ) -> None:
+        """Test adding assignee to existing chore."""
         initial_config = SimpleChoresConfig(
             chores=[
                 ChoreConfig(
@@ -228,8 +239,8 @@ class TestSensorManagerEdgeCases:
 
     @pytest.mark.asyncio
     async def test_manager_handles_assignee_removal(
-        self, mock_hass, mock_config_loader
-    ):
+        self, mock_hass: MagicMock, mock_config_loader: MagicMock
+    ) -> None:
         """Test manager handles removing assignee from existing chore."""
         initial_config = SimpleChoresConfig(
             chores=[
@@ -273,8 +284,8 @@ class TestSensorManagerEdgeCases:
 
     @pytest.mark.asyncio
     async def test_manager_handles_chore_slug_change(
-        self, mock_hass, mock_config_loader
-    ):
+        self, mock_hass: MagicMock, mock_config_loader: MagicMock
+    ) -> None:
         """Test manager handles chore slug change (creates new sensor)."""
         initial_config = SimpleChoresConfig(
             chores=[
@@ -317,8 +328,8 @@ class TestSensorManagerEdgeCases:
 
     @pytest.mark.asyncio
     async def test_manager_handles_multiple_simultaneous_changes(
-        self, mock_hass, mock_config_loader
-    ):
+        self, mock_hass: MagicMock, mock_config_loader: MagicMock
+    ) -> None:
         """Test manager handles multiple changes at once."""
         initial_config = SimpleChoresConfig(
             chores=[
@@ -378,7 +389,7 @@ class TestSensorManagerEdgeCases:
 class TestSensorIconStates:
     """Tests for sensor icon based on state."""
 
-    def test_icon_changes_with_state(self, mock_hass):
+    def test_icon_changes_with_state(self, mock_hass: MagicMock) -> None:
         """Test that icon changes correctly with state."""
         chore = ChoreConfig(
             name="Dishes",
@@ -407,8 +418,8 @@ class TestSensorIconStates:
 class TestSensorExtraAttributes:
     """Tests for sensor extra attributes edge cases."""
 
-    def test_attributes_with_empty_description(self, mock_hass):
-        """Test attributes when description is empty."""
+    def test_attributes_with_empty_description(self, mock_hass: MagicMock) -> None:
+        """Test attributes when description is None."""
         chore = ChoreConfig(
             name="Dishes",
             slug="dishes",
@@ -421,7 +432,7 @@ class TestSensorExtraAttributes:
         attrs = sensor.extra_state_attributes
         assert attrs["description"] == ""
 
-    def test_attributes_with_single_assignee(self, mock_hass):
+    def test_attributes_with_single_assignee(self, mock_hass: MagicMock) -> None:
         """Test attributes when there's only one assignee."""
         chore = ChoreConfig(
             name="Dishes",
@@ -435,7 +446,7 @@ class TestSensorExtraAttributes:
         assert attrs["all_assignees"] == ["alice"]
         assert attrs["assignee"] == "alice"
 
-    def test_attributes_with_many_assignees(self, mock_hass):
+    def test_attributes_with_many_assignees(self, mock_hass: MagicMock) -> None:
         """Test attributes when there are many assignees."""
         chore = ChoreConfig(
             name="Dishes",
@@ -449,7 +460,7 @@ class TestSensorExtraAttributes:
         assert attrs["all_assignees"] == ["alice", "bob", "charlie", "dave", "eve"]
         assert attrs["assignee"] == "charlie"
 
-    def test_attributes_include_all_frequency_types(self, mock_hass):
+    def test_attributes_include_all_frequency_types(self, mock_hass: MagicMock) -> None:
         """Test attributes for all frequency types."""
         for frequency in [
             ChoreFrequency.DAILY,
@@ -473,8 +484,8 @@ class TestSensorRemovalEdgeCases:
 
     @pytest.mark.asyncio
     async def test_manager_handles_removing_unregistered_sensor(
-        self, mock_hass, mock_config_loader
-    ):
+        self, mock_hass: MagicMock, mock_config_loader: MagicMock
+    ) -> None:
         """Test that manager can remove sensors that were never registered with HA."""
         initial_config = SimpleChoresConfig(
             chores=[

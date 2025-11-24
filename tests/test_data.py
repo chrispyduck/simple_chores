@@ -9,7 +9,7 @@ from custom_components.simple_chores.data import SimpleChoresData
 class TestSimpleChoresData:
     """Tests for SimpleChoresData dataclass."""
 
-    def test_data_init(self):
+    def test_data_init(self) -> None:
         """Test SimpleChoresData initialization."""
         mock_hass = MagicMock()
         mock_config_loader = MagicMock(spec=ConfigLoader)
@@ -22,13 +22,13 @@ class TestSimpleChoresData:
         assert data.config_loader == mock_config_loader
         assert data.hass == mock_hass
 
-    def test_data_is_dataclass(self):
+    def test_data_is_dataclass(self) -> None:
         """Test that SimpleChoresData is a dataclass."""
         from dataclasses import is_dataclass
 
         assert is_dataclass(SimpleChoresData)
 
-    def test_data_attributes_accessible(self):
+    def test_data_attributes_accessible(self) -> None:
         """Test that data attributes are accessible."""
         mock_hass = MagicMock()
         mock_config_loader = MagicMock(spec=ConfigLoader)

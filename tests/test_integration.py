@@ -1,6 +1,8 @@
 """Integration tests for simple_chores."""
 
 import asyncio
+from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -17,7 +19,7 @@ from custom_components.simple_chores.sensor import ChoreSensor
 
 
 @pytest.fixture
-def mock_hass():
+def mock_hass() -> MagicMock:
     """Create a mock Home Assistant instance."""
     hass = MagicMock()
     hass.data = {}
@@ -33,14 +35,14 @@ def mock_hass():
 
 
 @pytest.fixture
-def temp_config_file(tmp_path):
+def temp_config_file(tmp_path: Path) -> Path:
     """Create a temporary config file."""
     config_path = tmp_path / "simple_chores.yaml"
     return config_path
 
 
 @pytest.fixture
-def valid_config_data():
+def valid_config_data() -> dict[str, Any]:
     """Return valid config data."""
     return {
         "chores": [
@@ -67,8 +69,12 @@ class TestFullIntegrationSetup:
     @pytest.mark.asyncio
     @patch("custom_components.simple_chores.ConfigLoader")
     async def test_full_setup_flow(
-        self, mock_loader_class, mock_hass, temp_config_file, valid_config_data
-    ):
+        self,
+        mock_loader_class: MagicMock,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
         """Test complete setup flow from async_setup to sensor creation."""
         # Write config file
         temp_config_file.write_text(yaml.dump(valid_config_data))
@@ -102,8 +108,12 @@ class TestFullIntegrationSetup:
     @pytest.mark.asyncio
     @patch("custom_components.simple_chores.ConfigLoader")
     async def test_full_setup_and_unload_flow(
-        self, mock_loader_class, mock_hass, temp_config_file, valid_config_data
-    ):
+        self,
+        mock_loader_class: MagicMock,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
         """Test complete setup and unload flow."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
@@ -132,8 +142,11 @@ class TestFullIntegrationSetup:
 
     @pytest.mark.asyncio
     async def test_config_loader_with_file_watcher_integration(
-        self, mock_hass, temp_config_file, valid_config_data
-    ):
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
         """Test config loader with file watcher detecting changes."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
@@ -182,8 +195,11 @@ class TestConfigLoaderIntegration:
 
     @pytest.mark.asyncio
     async def test_loader_handles_malformed_yaml_then_fixed(
-        self, mock_hass, temp_config_file, valid_config_data
-    ):
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
         """Test loader recovering from malformed YAML."""
         # Start with malformed YAML
         temp_config_file.write_text("invalid: yaml: [")
@@ -205,8 +221,11 @@ class TestConfigLoaderIntegration:
 
     @pytest.mark.asyncio
     async def test_loader_handles_invalid_schema_then_fixed(
-        self, mock_hass, temp_config_file, valid_config_data
-    ):
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
         """Test loader recovering from invalid schema."""
         # Start with invalid schema
         invalid_data = {
@@ -238,7 +257,7 @@ class TestConfigLoaderIntegration:
 class TestModelValidationIntegration:
     """Integration tests for model validation."""
 
-    def test_config_validates_duplicate_slugs_across_chores(self):
+    def test_config_validates_duplicate_slugs_across_chores(self) -> None:
         """Test that duplicate slugs are caught across multiple chores."""
         from pydantic import ValidationError
 
@@ -263,7 +282,7 @@ class TestModelValidationIntegration:
         errors = exc_info.value.errors()
         assert any("Duplicate chore slugs" in str(err) for err in errors)
 
-    def test_config_allows_same_assignee_multiple_chores(self):
+    def test_config_allows_same_assignee_multiple_chores(self) -> None:
         """Test that same assignee can be assigned to multiple chores."""
         config = SimpleChoresConfig(
             chores=[
@@ -285,7 +304,7 @@ class TestModelValidationIntegration:
         alice_chores = config.get_chores_for_assignee("alice")
         assert len(alice_chores) == 2
 
-    def test_config_with_complex_assignee_distribution(self):
+    def test_config_with_complex_assignee_distribution(self) -> None:
         """Test config with complex assignee distribution."""
         config = SimpleChoresConfig(
             chores=[
@@ -331,7 +350,9 @@ class TestSensorManagerIntegration:
 
     @pytest.mark.asyncio
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
-    async def test_sensor_manager_lifecycle(self, mock_hass, temp_config_file):
+    async def test_sensor_manager_lifecycle(
+        self, mock_hass: MagicMock, temp_config_file: Path
+    ) -> None:
         """Test complete sensor manager lifecycle."""
         from custom_components.simple_chores.sensor import ChoreSensorManager
 
@@ -395,8 +416,8 @@ class TestSensorManagerIntegration:
     @pytest.mark.asyncio
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
     async def test_sensor_state_persistence_across_config_changes(
-        self, mock_hass, temp_config_file
-    ):
+        self, mock_hass: MagicMock, temp_config_file: Path
+    ) -> None:
         """Test that sensor states persist across config changes."""
         from custom_components.simple_chores.models import ChoreState
         from custom_components.simple_chores.sensor import ChoreSensor

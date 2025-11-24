@@ -56,3 +56,103 @@ mark_not_requested:
       example: "dishes"
       selector:
         text:
+
+create_chore:
+  name: Create Chore
+  description: Create a new chore in the YAML configuration
+  fields:
+    name:
+      name: Name
+      description: Display name of the chore
+      required: true
+      example: "Take out trash"
+      selector:
+        text:
+    slug:
+      name: Slug
+      description: Unique identifier for the chore (lowercase, alphanumeric, hyphens, underscores)
+      required: true
+      example: "take_out_trash"
+      selector:
+        text:
+    description:
+      name: Description
+      description: Description of the chore
+      required: false
+      example: "Take the trash and recycling to the curb"
+      selector:
+        text:
+    frequency:
+      name: Frequency
+      description: How often the chore should be done
+      required: true
+      example: "weekly"
+      selector:
+        select:
+          options:
+            - "daily"
+            - "weekly"
+            - "manual"
+    assignees:
+      name: Assignees
+      description: Comma-separated list of assignee usernames
+      required: true
+      example: "alice,bob"
+      selector:
+        text:
+
+update_chore:
+  name: Update Chore
+  description: Update an existing chore in the YAML configuration
+  fields:
+    slug:
+      name: Slug
+      description: Unique identifier of the chore to update
+      required: true
+      example: "take_out_trash"
+      selector:
+        text:
+    name:
+      name: Name
+      description: New display name (leave empty to keep current)
+      required: false
+      example: "Take out trash"
+      selector:
+        text:
+    description:
+      name: Description
+      description: New description (leave empty to keep current)
+      required: false
+      example: "Take the trash and recycling to the curb"
+      selector:
+        text:
+    frequency:
+      name: Frequency
+      description: New frequency (leave empty to keep current)
+      required: false
+      example: "weekly"
+      selector:
+        select:
+          options:
+            - "daily"
+            - "weekly"
+            - "manual"
+    assignees:
+      name: Assignees
+      description: New comma-separated list of assignee usernames (leave empty to keep current)
+      required: false
+      example: "alice,bob"
+      selector:
+        text:
+
+delete_chore:
+  name: Delete Chore
+  description: Delete a chore from the YAML configuration
+  fields:
+    slug:
+      name: Slug
+      description: Unique identifier of the chore to delete
+      required: true
+      example: "take_out_trash"
+      selector:
+        text:

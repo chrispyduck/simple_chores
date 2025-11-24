@@ -1,0 +1,427 @@
+"""
+Custom integration to integrate simple_chores with Home Assistant.
+
+For more details about this integration, please refer to
+https://github.com/chrispyduck/simple_chores
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import homeassistant.helpers.config_validation as cv
+import voluptuous as vol
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant, ServiceCall
+
+from .config_loader import ConfigLoader, ConfigLoadError
+from .const import (
+    ATTR_ASSIGNEES,
+    ATTR_CHORE_SLUG,
+    ATTR_DESCRIPTION,
+    ATTR_FREQUENCY,
+    ATTR_NAME,
+    ATTR_SLUG,
+    ATTR_USER,
+    CONFIG_FILE_NAME,
+    DOMAIN,
+    LOGGER,
+    SERVICE_CREATE_CHORE,
+    SERVICE_DELETE_CHORE,
+    SERVICE_MARK_COMPLETE,
+    SERVICE_MARK_NOT_REQUESTED,
+    SERVICE_MARK_PENDING,
+    SERVICE_UPDATE_CHORE,
+)
+from .data import SimpleChoresData as SimpleChoresData
+from .models import ChoreConfig, ChoreFrequency, ChoreState
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+]
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """
+    Set up the Simple Chores component from yaml configuration.
+
+    Args:
+        hass: Home Assistant instance
+        config: Configuration dict (unused - we use file-based config)
+
+    Returns:
+        True if setup was successful
+
+    """
+    # If there's a config entry, skip YAML setup to avoid duplicate sensors
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if entries:
+        LOGGER.info(
+            "Config entry exists (count: %d), skipping YAML setup to avoid duplicates",
+            len(entries),
+        )
+        return True
+
+    LOGGER.debug("No config entry found, proceeding with YAML setup")
+
+    # Get config file path
+    config_dir = Path(hass.config.path())
+    config_path = config_dir / CONFIG_FILE_NAME
+
+    # Initialize config loader
+    config_loader = ConfigLoader(hass, config_path)
+
+    try:
+        await config_loader.async_load()
+    except ConfigLoadError as err:
+        LOGGER.error("Failed to load configuration: %s", err)
+        return False
+
+    # Store in hass.data
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["config_loader"] = config_loader
+
+    # Start watching for config file changes
+    await config_loader.async_start_watching()
+
+    # Load sensor platform directly by importing and calling it
+    # This avoids the deprecated hass.helpers.discovery pattern
+    from .sensor import async_setup_platform
+
+    def add_entities(new_entities, update_before_add: bool = False) -> None:  # noqa: FBT001, FBT002
+        """Add entities callback (no-op for YAML setup)."""
+        ...
+
+    await async_setup_platform(hass, {}, add_entities, None)
+
+    # Register services
+    await async_setup_services(hass)
+
+    LOGGER.info("Simple Chores integration loaded successfully")
+    return True
+
+
+SERVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_USER): cv.string,
+        vol.Required(ATTR_CHORE_SLUG): cv.string,
+    }
+)
+
+CREATE_CHORE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_NAME): cv.string,
+        vol.Required(ATTR_SLUG): cv.string,
+        vol.Optional(ATTR_DESCRIPTION, default=""): cv.string,
+        vol.Required(ATTR_FREQUENCY): vol.In(["daily", "weekly", "manual"]),
+        vol.Required(ATTR_ASSIGNEES): cv.string,
+    }
+)
+
+UPDATE_CHORE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SLUG): cv.string,
+        vol.Optional(ATTR_NAME): cv.string,
+        vol.Optional(ATTR_DESCRIPTION): cv.string,
+        vol.Optional(ATTR_FREQUENCY): vol.In(["daily", "weekly", "manual"]),
+        vol.Optional(ATTR_ASSIGNEES): cv.string,
+    }
+)
+
+DELETE_CHORE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SLUG): cv.string,
+    }
+)
+
+
+async def async_setup_services(hass: HomeAssistant) -> None:
+    """
+    Set up services for the Simple Chores integration.
+
+    Args:
+        hass: Home Assistant instance
+
+    """
+
+    async def handle_mark_complete(call: ServiceCall) -> None:
+        """
+        Handle the mark_complete service call.
+
+        Args:
+            call: Service call data
+
+        """
+        user = call.data[ATTR_USER]
+        chore_slug = call.data[ATTR_CHORE_SLUG]
+
+        if DOMAIN not in hass.data:
+            LOGGER.error("Simple Chores integration not loaded")
+            return
+
+        # Find the sensor and update its state
+        sensor_id = f"{user}_{chore_slug}"
+        sensors = hass.data[DOMAIN].get("sensors", {})
+
+        if sensor_id not in sensors:
+            LOGGER.error(
+                "No sensor found for user '%s' and chore '%s'", user, chore_slug
+            )
+            return
+
+        sensor = sensors[sensor_id]
+        sensor.set_state(ChoreState.COMPLETE)
+        LOGGER.debug("Marked chore '%s' as complete for user '%s'", chore_slug, user)
+
+    async def handle_mark_pending(call: ServiceCall) -> None:
+        """
+        Handle the mark_pending service call.
+
+        Args:
+            call: Service call data
+
+        """
+        user = call.data[ATTR_USER]
+        chore_slug = call.data[ATTR_CHORE_SLUG]
+
+        if DOMAIN not in hass.data:
+            LOGGER.error("Simple Chores integration not loaded")
+            return
+
+        sensor_id = f"{user}_{chore_slug}"
+        sensors = hass.data[DOMAIN].get("sensors", {})
+
+        if sensor_id not in sensors:
+            LOGGER.error(
+                "No sensor found for user '%s' and chore '%s'", user, chore_slug
+            )
+            return
+
+        sensor = sensors[sensor_id]
+        sensor.set_state(ChoreState.PENDING)
+
+    async def handle_mark_not_requested(call: ServiceCall) -> None:
+        """
+        Handle the mark_not_requested service call.
+
+        Args:
+            call: Service call data
+
+        """
+        user = call.data[ATTR_USER]
+        chore_slug = call.data[ATTR_CHORE_SLUG]
+
+        if DOMAIN not in hass.data:
+            LOGGER.error("Simple Chores integration not loaded")
+            return
+
+        sensor_id = f"{user}_{chore_slug}"
+        sensors = hass.data[DOMAIN].get("sensors", {})
+
+        if sensor_id not in sensors:
+            LOGGER.error(
+                "No sensor found for user '%s' and chore '%s'", user, chore_slug
+            )
+            return
+
+        sensor = sensors[sensor_id]
+        sensor.set_state(ChoreState.NOT_REQUESTED)
+
+    async def handle_create_chore(call: ServiceCall) -> None:
+        """Handle the create_chore service call."""
+        if DOMAIN not in hass.data:
+            LOGGER.error("Simple Chores integration not loaded")
+            return
+
+        config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+        # Parse assignees from comma-separated string
+        assignees_str = call.data[ATTR_ASSIGNEES]
+        assignees = [a.strip() for a in assignees_str.split(",") if a.strip()]
+
+        try:
+            chore = ChoreConfig(
+                name=call.data[ATTR_NAME],
+                slug=call.data[ATTR_SLUG],
+                description=call.data.get(ATTR_DESCRIPTION, ""),
+                frequency=ChoreFrequency(call.data[ATTR_FREQUENCY]),
+                assignees=assignees,
+            )
+            await config_loader.async_create_chore(chore)
+            LOGGER.info("Created chore '%s'", chore.slug)
+        except Exception as err:
+            LOGGER.error("Failed to create chore: %s", err)
+            raise
+
+    async def handle_update_chore(call: ServiceCall) -> None:
+        """Handle the update_chore service call."""
+        if DOMAIN not in hass.data:
+            LOGGER.error("Simple Chores integration not loaded")
+            return
+
+        config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+        slug = call.data[ATTR_SLUG]
+        name = call.data.get(ATTR_NAME)
+        description = call.data.get(ATTR_DESCRIPTION)
+        frequency = call.data.get(ATTR_FREQUENCY)
+        assignees_str = call.data.get(ATTR_ASSIGNEES)
+
+        # Parse assignees if provided
+        assignees = None
+        if assignees_str:
+            assignees = [a.strip() for a in assignees_str.split(",") if a.strip()]
+
+        try:
+            await config_loader.async_update_chore(
+                slug=slug,
+                name=name,
+                description=description,
+                frequency=frequency,
+                assignees=assignees,
+            )
+            LOGGER.info("Updated chore '%s'", slug)
+        except Exception as err:
+            LOGGER.error("Failed to update chore: %s", err)
+            raise
+
+    async def handle_delete_chore(call: ServiceCall) -> None:
+        """Handle the delete_chore service call."""
+        if DOMAIN not in hass.data:
+            LOGGER.error("Simple Chores integration not loaded")
+            return
+
+        config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+        slug = call.data[ATTR_SLUG]
+
+        try:
+            await config_loader.async_delete_chore(slug)
+            LOGGER.info("Deleted chore '%s'", slug)
+        except Exception as err:
+            LOGGER.error("Failed to delete chore: %s", err)
+            raise
+
+    # Register all services
+    hass.services.async_register(
+        DOMAIN, SERVICE_MARK_COMPLETE, handle_mark_complete, schema=SERVICE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_MARK_PENDING, handle_mark_pending, schema=SERVICE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_MARK_NOT_REQUESTED,
+        handle_mark_not_requested,
+        schema=SERVICE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CREATE_CHORE,
+        handle_create_chore,
+        schema=CREATE_CHORE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UPDATE_CHORE,
+        handle_update_chore,
+        schema=UPDATE_CHORE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DELETE_CHORE,
+        handle_delete_chore,
+        schema=DELETE_CHORE_SCHEMA,
+    )
+
+    LOGGER.debug("Registered Simple Chores services")
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> bool:
+    """
+    Set up this integration using UI.
+
+    Args:
+        hass: Home Assistant instance
+        entry: Config entry
+
+    Returns:
+        True if setup was successful
+
+    """
+    # Get config file path
+    config_dir = Path(hass.config.path())
+    config_path = config_dir / CONFIG_FILE_NAME
+
+    # Initialize config loader
+    config_loader = ConfigLoader(hass, config_path)
+
+    try:
+        await config_loader.async_load()
+    except ConfigLoadError as err:
+        LOGGER.error("Failed to load configuration: %s", err)
+        return False
+
+    # Store in hass.data
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["config_loader"] = config_loader
+
+    # Start watching for config file changes
+    await config_loader.async_start_watching()
+
+    # Setup platforms
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Register services
+    await async_setup_services(hass)
+
+    LOGGER.info("Simple Chores integration loaded successfully")
+    return True
+
+
+async def async_unload_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> bool:
+    """
+    Handle removal of an entry.
+
+    Args:
+        hass: Home Assistant instance
+        entry: Config entry
+
+    Returns:
+        True if unload was successful
+
+    """
+    # Unload platforms
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+    # Stop watching config file
+    if unload_ok and DOMAIN in hass.data:
+        config_loader = hass.data[DOMAIN].get("config_loader")
+        if config_loader:
+            await config_loader.async_stop_watching()
+
+    return unload_ok
+
+
+async def async_reload_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """
+    Reload config entry.
+
+    Args:
+        hass: Home Assistant instance
+        entry: Config entry
+
+    """
+    await hass.config_entries.async_reload(entry.entry_id)

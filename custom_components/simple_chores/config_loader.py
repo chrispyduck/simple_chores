@@ -210,3 +210,169 @@ class ConfigLoader:
 
         self._watch_task = None
         LOGGER.info("Config file watcher stopped")
+
+    async def async_save(self, config: SimpleChoresConfig | None = None) -> None:
+        """
+        Save the configuration to the YAML file.
+
+        Args:
+            config: Configuration to save (uses current config if None)
+
+        Raises:
+            ConfigLoadError: If the configuration cannot be saved
+
+        """
+        if config is None:
+            config = self._config
+
+        if config is None:
+            msg = "No configuration to save"
+            raise ConfigLoadError(msg)
+
+        try:
+            # Convert config to dict
+            data = config.model_dump(mode="python")
+
+            # Write to file
+            yaml_content = yaml.safe_dump(
+                data,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+            )
+
+            await self.hass.async_add_executor_job(
+                self.config_path.write_text,
+                yaml_content,
+                "utf-8",
+            )
+
+            # Update internal state
+            self._config = config
+            self._last_mtime = await self.hass.async_add_executor_job(
+                lambda: self.config_path.stat().st_mtime,
+            )
+
+            LOGGER.info("Configuration saved to %s", self.config_path)
+
+        except Exception as err:
+            msg = f"Failed to save configuration: {err}"
+            LOGGER.exception(msg)
+            raise ConfigLoadError(msg) from err
+
+    async def async_create_chore(self, chore: ChoreConfig) -> None:
+        """
+        Create a new chore and save to YAML.
+
+        Args:
+            chore: Chore configuration to create
+
+        Raises:
+            ConfigLoadError: If chore already exists or save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        # Check if chore with this slug already exists
+        if self._config.get_chore_by_slug(chore.slug):
+            msg = f"Chore with slug '{chore.slug}' already exists"
+            raise ConfigLoadError(msg)
+
+        # Add chore to config
+        new_chores = list(self._config.chores) + [chore]
+        new_config = SimpleChoresConfig(chores=new_chores)
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Created chore '%s'", chore.slug)
+
+    async def async_update_chore(
+        self,
+        slug: str,
+        name: str | None = None,
+        description: str | None = None,
+        frequency: str | None = None,
+        assignees: list[str] | None = None,
+    ) -> None:
+        """
+        Update an existing chore and save to YAML.
+
+        Args:
+            slug: Slug of the chore to update
+            name: New name (None to keep current)
+            description: New description (None to keep current)
+            frequency: New frequency (None to keep current)
+            assignees: New assignees list (None to keep current)
+
+        Raises:
+            ConfigLoadError: If chore not found or save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        # Find the chore
+        chore = self._config.get_chore_by_slug(slug)
+        if not chore:
+            msg = f"Chore with slug '{slug}' not found"
+            raise ConfigLoadError(msg)
+
+        # Create updated chore
+        updated_data = chore.model_dump()
+        if name is not None:
+            updated_data["name"] = name
+        if description is not None:
+            updated_data["description"] = description
+        if frequency is not None:
+            updated_data["frequency"] = frequency
+        if assignees is not None:
+            updated_data["assignees"] = assignees
+
+        updated_chore = ChoreConfig(**updated_data)
+
+        # Replace in config
+        new_chores = [
+            updated_chore if c.slug == slug else c for c in self._config.chores
+        ]
+        new_config = SimpleChoresConfig(chores=new_chores)
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Updated chore '%s'", slug)
+
+    async def async_delete_chore(self, slug: str) -> None:
+        """
+        Delete a chore and save to YAML.
+
+        Args:
+            slug: Slug of the chore to delete
+
+        Raises:
+            ConfigLoadError: If chore not found or save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        # Check if chore exists
+        if not self._config.get_chore_by_slug(slug):
+            msg = f"Chore with slug '{slug}' not found"
+            raise ConfigLoadError(msg)
+
+        # Remove from config
+        new_chores = [c for c in self._config.chores if c.slug != slug]
+        new_config = SimpleChoresConfig(chores=new_chores)
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Deleted chore '%s'", slug)
