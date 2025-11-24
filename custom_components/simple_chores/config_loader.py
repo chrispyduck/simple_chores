@@ -11,7 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 from .const import LOGGER
-from .models import SimpleChoresConfig
+from .models import ChoreConfig, SimpleChoresConfig
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant

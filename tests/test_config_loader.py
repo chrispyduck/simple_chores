@@ -606,3 +606,103 @@ class TestConfigLoaderCreateChore:
         chore = loader.config.get_chore_by_slug("clean_kitchen")
         assert chore is not None
         assert chore.icon == "mdi:broom"
+
+
+class TestConfigLoaderUpdateChore:
+    """Tests for the async_update_chore method."""
+
+    @pytest.mark.asyncio
+    async def test_update_chore_name(
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test updating a chore's name."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
+
+        # Update chore name
+        await loader.async_update_chore(slug="dishes", name="Do The Dishes")
+
+        # Verify name was updated
+        chore = loader.config.get_chore_by_slug("dishes")
+        assert chore is not None
+        assert chore.name == "Do The Dishes"
+
+        # Verify it was saved
+        saved_data = yaml.safe_load(temp_config_file.read_text())
+        dishes_chore = next(c for c in saved_data["chores"] if c["slug"] == "dishes")
+        assert dishes_chore["name"] == "Do The Dishes"
+
+    @pytest.mark.asyncio
+    async def test_update_chore_icon(
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test updating a chore's icon."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
+
+        # Update chore icon
+        await loader.async_update_chore(slug="dishes", icon="mdi:dishwasher")
+
+        # Verify icon was updated
+        chore = loader.config.get_chore_by_slug("dishes")
+        assert chore is not None
+        assert chore.icon == "mdi:dishwasher"
+
+        # Verify it was saved
+        saved_data = yaml.safe_load(temp_config_file.read_text())
+        dishes_chore = next(c for c in saved_data["chores"] if c["slug"] == "dishes")
+        assert dishes_chore["icon"] == "mdi:dishwasher"
+
+    @pytest.mark.asyncio
+    async def test_update_chore_multiple_fields(
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test updating multiple chore fields at once."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
+
+        # Update multiple fields
+        await loader.async_update_chore(
+            slug="dishes",
+            name="Clean Dishes",
+            description="Wash all dishes and put them away",
+            icon="mdi:dishwasher",
+        )
+
+        # Verify all fields were updated
+        chore = loader.config.get_chore_by_slug("dishes")
+        assert chore is not None
+        assert chore.name == "Clean Dishes"
+        assert chore.description == "Wash all dishes and put them away"
+        assert chore.icon == "mdi:dishwasher"
+
+    @pytest.mark.asyncio
+    async def test_update_chore_not_found(
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test updating a non-existent chore fails."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
+
+        with pytest.raises(ConfigLoadError, match="not found"):
+            await loader.async_update_chore(slug="nonexistent", name="New Name")
