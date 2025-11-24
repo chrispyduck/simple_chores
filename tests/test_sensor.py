@@ -328,7 +328,7 @@ class TestChoreSensor:
         assert sensor.name == "Dishes - alice"
         assert sensor.entity_id == "sensor.simple_chore_alice_dishes"
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value
-        assert sensor.icon == "mdi:check-circle-outline"
+        assert sensor.icon == "mdi:clipboard-list-outline"
 
     def test_sensor_extra_state_attributes(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
@@ -376,7 +376,7 @@ class TestChoreSensor:
         sensor.set_state(ChoreState.PENDING)
 
         assert sensor.native_value == ChoreState.PENDING.value
-        assert sensor.icon == "mdi:clock-outline"
+        assert sensor.icon == "mdi:clipboard-list"
         sensor.async_write_ha_state.assert_called_once()
 
         # Check persistence
@@ -409,7 +409,7 @@ class TestChoreSensor:
         sensor.set_state(ChoreState.NOT_REQUESTED)
 
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value
-        assert sensor.icon == "mdi:check-circle-outline"
+        assert sensor.icon == "mdi:clipboard-list-outline"
         sensor.async_write_ha_state.assert_called_once()
 
     def test_state_persistence_on_init(

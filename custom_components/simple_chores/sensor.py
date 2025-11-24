@@ -240,7 +240,7 @@ class ChoreSensor(SensorEntity):
         # Set entity ID to match requirements: sensor.simple_chore_{assignee}_{slug}
         self.entity_id = f"sensor.simple_chore_{assignee}_{chore.slug}"
 
-        self._attr_icon = "mdi:check-circle-outline"
+        self._attr_icon = "mdi:clipboard-list-outline"
 
         # Set device info to group all chores for this person
         self._attr_device_info = DeviceInfo(
@@ -249,6 +249,7 @@ class ChoreSensor(SensorEntity):
             manufacturer="Simple Chores",
             model="Chore Tracker",
             entry_type=dr.DeviceEntryType.SERVICE,
+            suggested_area="Household",
         )
 
         # Initialize state - use restore state if available
@@ -313,8 +314,8 @@ class ChoreSensor(SensorEntity):
         if state == ChoreState.COMPLETE:
             self._attr_icon = "mdi:check-circle"
         elif state == ChoreState.PENDING:
-            self._attr_icon = "mdi:clock-outline"
+            self._attr_icon = "mdi:clipboard-list"
         else:  # NOT_REQUESTED
-            self._attr_icon = "mdi:check-circle-outline"
+            self._attr_icon = "mdi:clipboard-list-outline"
 
         self.async_write_ha_state()

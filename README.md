@@ -7,13 +7,13 @@ A Home Assistant custom integration for managing household chores.
 * All configuration is file-based, in a single yaml file. State is maintained within Home Assistant.
 * Chores consist of a name, description, frequency (daily, weekly, manual), list of assignees, and slug (used to identify the chore in code).
 * Assignees are Home Assistant users and are identified by name, not ID, in the config file.
-* Each chore is represented in Home Assistant as a sensor following the format `sensor.simple_chore_{assignee}_{slug}`.
-    * Attributes: the sensor includes all configured chore information (full name, description, frequency) as sensor attributes.
-    * State: chore state is one of: `Pending`, `Complete`, `Not Requested`
+* Each chore is represented in Home Assistant as a sensor following the format s`sensor.simple_chore_{assignee}_{slug}`.
+  * Attributes: the sensor includes all configured chore information (full name, description, frequency) as sensor attributes.
+  * State: chore state is one of: `Pending`, `Complete`, `Not Requested`
 * The following actions are defined for interacting with chores:
-    * `simple_chores.mark_complete` - Marks a chore as complete. Takes a user and chore slug as parameters.
-    * `simple_chores.mark_pending` - Markes a chore as pending. Takes a user and chore slug as parameters.
-    * `simple_chores.mark_not_requested` - Markes a chore as not requested. Takes a user and chore slug as parameters.
+  * `simple_chores.mark_complete` - Marks a chore as complete. Takes a user and chore slug as parameters.
+  * `simple_chores.mark_pending` - Markes a chore as pending. Takes a user and chore slug as parameters.
+  * `simple_chores.mark_not_requested` - Markes a chore as not requested. Takes a user and chore slug as parameters.s
 
 ## Installation
 
@@ -27,7 +27,7 @@ A Home Assistant custom integration for managing household chores.
 ### Manual Installation
 
 1. Copy the `custom_components/simple_chores` folder to your Home Assistant's `custom_components` directory
-2. Restart Home Assistant
+2s. Restart Home Assistant
 
 ## Configuration
 

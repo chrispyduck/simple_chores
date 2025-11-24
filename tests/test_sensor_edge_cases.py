@@ -400,11 +400,11 @@ class TestSensorIconStates:
         sensor = ChoreSensor(mock_hass, chore, "alice")
 
         # Initial state
-        assert sensor.icon == "mdi:check-circle-outline"
+        assert sensor.icon == "mdi:clipboard-list-outline"
 
         # Set to pending
         sensor.set_state(ChoreState.PENDING)
-        assert sensor.icon == "mdi:clock-outline"
+        assert sensor.icon == "mdi:clipboard-list"
 
         # Set to complete
         sensor.set_state(ChoreState.COMPLETE)
@@ -412,7 +412,7 @@ class TestSensorIconStates:
 
         # Set back to not requested
         sensor.set_state(ChoreState.NOT_REQUESTED)
-        assert sensor.icon == "mdi:check-circle-outline"
+        assert sensor.icon == "mdi:clipboard-list-outline"
 
 
 class TestSensorExtraAttributes:

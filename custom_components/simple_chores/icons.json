@@ -1,0 +1,22 @@
+{
+    "entity": {
+        "sensor": {
+            "chore": {
+                "default": "mdi:clipboard-list-outline",
+                "state": {
+                    "complete": "mdi:check-circle",
+                    "pending": "mdi:clipboard-list",
+                    "not_requested": "mdi:clipboard-list-outline"
+                }
+            }
+        }
+    },
+    "services": {
+        "mark_complete": "mdi:check-circle",
+        "mark_pending": "mdi:clipboard-list",
+        "mark_not_requested": "mdi:close-circle-outline",
+        "create_chore": "mdi:plus-circle",
+        "update_chore": "mdi:pencil-circle",
+        "delete_chore": "mdi:delete-circle"
+    }
+}
