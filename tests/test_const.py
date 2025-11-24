@@ -1,7 +1,5 @@
 """Tests for simple_chores constants."""
 
-import pytest
-
 from custom_components.simple_chores.const import (
     ATTR_CHORE_SLUG,
     ATTR_USER,

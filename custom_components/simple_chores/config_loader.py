@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
 import yaml
 from pydantic import ValidationError
@@ -24,7 +25,8 @@ class ConfigLoader:
     """Loads and watches the simple_chores configuration file."""
 
     def __init__(self, hass: HomeAssistant, config_path: Path) -> None:
-        """Initialize the config loader.
+        """
+        Initialize the config loader.
 
         Args:
             hass: Home Assistant instance
@@ -43,7 +45,8 @@ class ConfigLoader:
 
     @property
     def config(self) -> SimpleChoresConfig:
-        """Get the current configuration.
+        """
+        Get the current configuration.
 
         Returns:
             Current configuration
@@ -58,7 +61,8 @@ class ConfigLoader:
         return self._config
 
     async def async_load(self) -> SimpleChoresConfig:
-        """Load the configuration file.
+        """
+        Load the configuration file.
 
         Returns:
             Loaded configuration
@@ -111,7 +115,8 @@ class ConfigLoader:
         callback: Callable[[SimpleChoresConfig], None]
         | Callable[[SimpleChoresConfig], Awaitable[None]],
     ) -> None:
-        """Register a callback to be called when config changes.
+        """
+        Register a callback to be called when config changes.
 
         Args:
             callback: Callback function to call with new config (can be sync or async)
@@ -134,7 +139,8 @@ class ConfigLoader:
                 LOGGER.exception("Error in config change callback")
 
     async def _check_for_changes(self) -> bool:
-        """Check if the config file has changed.
+        """
+        Check if the config file has changed.
 
         Returns:
             True if the file has changed, False otherwise

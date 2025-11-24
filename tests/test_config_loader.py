@@ -1,20 +1,16 @@
 """Tests for simple_chores config_loader."""
 
 import asyncio
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 import yaml
-from pydantic import ValidationError
 
 from custom_components.simple_chores.config_loader import (
-    ConfigLoadError,
     ConfigLoader,
+    ConfigLoadError,
 )
 from custom_components.simple_chores.models import (
-    ChoreConfig,
-    ChoreFrequency,
     SimpleChoresConfig,
 )
 
@@ -268,8 +264,6 @@ class TestConfigLoaderFileWatching:
 
         loader = ConfigLoader(mock_hass, temp_config_file)
         await loader.async_load()
-
-        original_mtime = loader._last_mtime
 
         # Modify file
         await asyncio.sleep(0.01)  # Ensure mtime is different

@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from custom_components.simple_chores.config_loader import ConfigLoader
 from custom_components.simple_chores.data import SimpleChoresData
 

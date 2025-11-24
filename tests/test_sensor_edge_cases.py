@@ -1,6 +1,5 @@
 """Edge case tests for simple_chores sensor platform."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -467,3 +466,44 @@ class TestSensorExtraAttributes:
 
             attrs = sensor.extra_state_attributes
             assert attrs["frequency"] == frequency.value
+
+
+class TestSensorRemovalEdgeCases:
+    """Tests for edge cases when removing sensors."""
+
+    @pytest.mark.asyncio
+    async def test_manager_handles_removing_unregistered_sensor(
+        self, mock_hass, mock_config_loader
+    ):
+        """Test that manager can remove sensors that were never registered with HA."""
+        initial_config = SimpleChoresConfig(
+            chores=[
+                ChoreConfig(
+                    name="Dishes",
+                    slug="dishes",
+                    frequency=ChoreFrequency.DAILY,
+                    assignees=["alice", "bob"],
+                ),
+            ]
+        )
+        mock_config_loader.config = initial_config
+        async_add_entities = Mock()
+
+        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+
+        # Create sensors manually without going through async_setup
+        # This simulates sensors that exist but aren't properly registered
+        for assignee in ["alice", "bob"]:
+            sensor = ChoreSensor(mock_hass, initial_config.chores[0], assignee)
+            # Deliberately set hass to None to simulate unregistered sensor
+            sensor.hass = None
+            manager.sensors[f"{assignee}_dishes"] = sensor
+
+        assert len(manager.sensors) == 2
+
+        # Update config to remove all chores - should handle unregistered sensors gracefully
+        empty_config = SimpleChoresConfig(chores=[])
+        await manager.async_config_changed(empty_config)
+
+        # All sensors should be removed without error
+        assert len(manager.sensors) == 0

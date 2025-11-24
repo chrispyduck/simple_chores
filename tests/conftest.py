@@ -5,7 +5,8 @@ import pytest
 
 @pytest.fixture
 def mock_hass():
-    """Create a mock Home Assistant instance.
+    """
+    Create a mock Home Assistant instance.
 
     This is a shared fixture that can be imported by test modules.
     Individual test modules may also define their own mock_hass with

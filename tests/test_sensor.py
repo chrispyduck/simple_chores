@@ -1,6 +1,5 @@
 """Tests for simple_chores sensor platform."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -353,7 +352,7 @@ class TestChoreSensor:
         sensor.async_write_ha_state.assert_called_once()
 
         # Check persistence
-        state_key = f"alice_dishes"
+        state_key = "alice_dishes"
         assert (
             mock_hass.data["simple_chores"]["states"][state_key]
             == ChoreState.PENDING.value

@@ -22,6 +22,10 @@ def mock_hass():
     hass.config.path = Mock(return_value="/config")
     hass.helpers.discovery.async_load_platform = AsyncMock()
     hass.config_entries.async_reload = AsyncMock()
+    hass.config_entries.async_forward_entry_setups = AsyncMock(return_value=True)
+    hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
+    hass.config_entries.async_entries = Mock(return_value=[])
+    hass.async_add_executor_job = AsyncMock(side_effect=lambda func, *args: func(*args))
     return hass
 
 
@@ -41,6 +45,28 @@ def mock_config_entry():
     entry = MagicMock()
     entry.entry_id = "test_entry_id"
     return entry
+
+
+@pytest.fixture
+def temp_config_file(tmp_path):
+    """Create a temporary config file."""
+    config_path = tmp_path / "simple_chores.yaml"
+    return config_path
+
+
+@pytest.fixture
+def valid_config_data():
+    """Return valid config data."""
+    return {
+        "chores": [
+            {
+                "name": "Dishes",
+                "slug": "dishes",
+                "frequency": "daily",
+                "assignees": ["alice"],
+            },
+        ]
+    }
 
 
 class TestAsyncSetup:
@@ -73,10 +99,25 @@ class TestAsyncSetup:
         # Verify watcher was started
         mock_config_loader.async_start_watching.assert_called_once()
 
-        # Verify sensor platform was loaded
-        mock_hass.helpers.discovery.async_load_platform.assert_called_once_with(
-            "sensor", "simple_chores", {}, {}
-        )
+    @pytest.mark.asyncio
+    @patch("custom_components.simple_chores.sensor.async_setup_platform")
+    @patch("custom_components.simple_chores.ConfigLoader")
+    async def test_setup_with_sensor_platform(
+        self, mock_loader_class, mock_sensor_setup, mock_hass, mock_config_loader
+    ):
+        """Test setup loads sensor platform."""
+        mock_loader_class.return_value = mock_config_loader
+
+        result = await async_setup(mock_hass, {})
+
+        assert result is True
+        # Verify sensor platform setup was called
+        mock_sensor_setup.assert_called_once()
+        call_args = mock_sensor_setup.call_args
+        assert call_args[0][0] == mock_hass
+        assert call_args[0][1] == {}
+        assert callable(call_args[0][2])  # add_entities callback
+        assert call_args[0][3] is None  # discovery_info
 
     @pytest.mark.asyncio
     @patch("custom_components.simple_chores.ConfigLoader")
@@ -134,9 +175,44 @@ class TestAsyncSetupEntry:
     """Tests for async_setup_entry."""
 
     @pytest.mark.asyncio
-    async def test_setup_entry_not_supported(self, mock_hass, mock_config_entry):
-        """Test that UI-based setup returns False."""
+    async def test_setup_entry_success(
+        self, mock_hass, mock_config_entry, temp_config_file, valid_config_data
+    ):
+        """Test successful entry setup."""
+        import yaml
+
+        # Create config file
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        # Mock the config path
+        mock_hass.config.path = MagicMock(return_value=str(temp_config_file.parent))
+
+        # Mock the forward entry setups
+        mock_hass.config_entries.async_forward_entry_setups = AsyncMock(
+            return_value=True
+        )
+
         result = await async_setup_entry(mock_hass, mock_config_entry)
+
+        assert result is True
+        assert "simple_chores" in mock_hass.data
+        assert "config_loader" in mock_hass.data["simple_chores"]
+
+        # Clean up
+        await mock_hass.data["simple_chores"]["config_loader"].async_stop_watching()
+
+    @pytest.mark.asyncio
+    async def test_setup_entry_config_load_error(self, mock_hass, mock_config_entry):
+        """Test setup entry with config load error."""
+        # Mock config path to non-existent file with invalid content
+        mock_hass.config.path = MagicMock(return_value="/nonexistent")
+
+        # This should handle the error gracefully
+        with patch(
+            "custom_components.simple_chores.ConfigLoader.async_load",
+            side_effect=ConfigLoadError("Test error"),
+        ):
+            result = await async_setup_entry(mock_hass, mock_config_entry)
 
         assert result is False
 

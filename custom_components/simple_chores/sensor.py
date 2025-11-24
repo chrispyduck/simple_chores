@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, LOGGER
@@ -16,13 +19,45 @@ if TYPE_CHECKING:
     from .config_loader import ConfigLoader
 
 
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """
+    Set up the sensor platform from a config entry.
+
+    Args:
+        hass: Home Assistant instance
+        entry: Config entry
+        async_add_entities: Callback to add entities
+
+    """
+    if DOMAIN not in hass.data:
+        LOGGER.error("Simple Chores integration not loaded")
+        return
+
+    config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+    # Create entity manager
+    manager = ChoreSensorManager(hass, async_add_entities, config_loader)
+    await manager.async_setup()
+
+    # Store sensors in hass.data for service access
+    hass.data[DOMAIN]["sensors"] = manager.sensors
+
+    # Register callback for config changes
+    config_loader.register_callback(manager.async_config_changed)
+
+
 async def async_setup_platform(
     hass: HomeAssistant,
     config: dict,
     async_add_entities: AddEntitiesCallback,
     discovery_info: dict | None = None,
 ) -> None:
-    """Set up the sensor platform from YAML configuration.
+    """
+    Set up the sensor platform from YAML configuration.
 
     Args:
         hass: Home Assistant instance
@@ -57,7 +92,8 @@ class ChoreSensorManager:
         async_add_entities: AddEntitiesCallback,
         config_loader: ConfigLoader,
     ) -> None:
-        """Initialize the sensor manager.
+        """
+        Initialize the sensor manager.
 
         Args:
             hass: Home Assistant instance
@@ -76,7 +112,8 @@ class ChoreSensorManager:
         await self._create_sensors_from_config(config)
 
     async def async_config_changed(self, config: SimpleChoresConfig) -> None:
-        """Handle configuration changes.
+        """
+        Handle configuration changes.
 
         Args:
             config: New configuration
@@ -86,7 +123,8 @@ class ChoreSensorManager:
         await self._update_sensors_from_config(config)
 
     async def _create_sensors_from_config(self, config: SimpleChoresConfig) -> None:
-        """Create sensors from configuration.
+        """
+        Create sensors from configuration.
 
         Args:
             config: Configuration to create sensors from
@@ -113,7 +151,8 @@ class ChoreSensorManager:
             LOGGER.info("Added %d chore sensor(s)", len(sensors_to_add))
 
     async def _update_sensors_from_config(self, config: SimpleChoresConfig) -> None:
-        """Update sensors based on new configuration.
+        """
+        Update sensors based on new configuration.
 
         Args:
             config: New configuration
@@ -130,9 +169,17 @@ class ChoreSensorManager:
         for entity_id, sensor in self.sensors.items():
             if entity_id not in expected_entities:
                 sensors_to_remove.append(entity_id)
-                # Remove the entity
-                await sensor.async_remove()
-                LOGGER.debug("Removed sensor %s", entity_id)
+                # Remove the entity - only if it's properly initialized
+                if sensor.hass is not None and hasattr(sensor, "platform"):
+                    try:
+                        await sensor.async_remove()
+                        LOGGER.debug("Removed sensor %s", entity_id)
+                    except Exception as err:
+                        LOGGER.warning("Failed to remove sensor %s: %s", entity_id, err)
+                else:
+                    LOGGER.debug(
+                        "Sensor %s not yet registered, skipping removal", entity_id
+                    )
 
         for entity_id in sensors_to_remove:
             del self.sensors[entity_id]
@@ -175,7 +222,8 @@ class ChoreSensor(SensorEntity):
         chore: ChoreConfig,
         assignee: str,
     ) -> None:
-        """Initialize the chore sensor.
+        """
+        Initialize the chore sensor.
 
         Args:
             hass: Home Assistant instance
@@ -194,6 +242,15 @@ class ChoreSensor(SensorEntity):
 
         self._attr_icon = "mdi:check-circle-outline"
 
+        # Set device info to group all chores for this person
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, assignee)},
+            name=f"{assignee.title()} - Chores",
+            manufacturer="Simple Chores",
+            model="Chore Tracker",
+            entry_type=dr.DeviceEntryType.SERVICE,
+        )
+
         # Initialize state - use restore state if available
         self._attr_native_value = ChoreState.NOT_REQUESTED.value
 
@@ -210,7 +267,8 @@ class ChoreSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes.
+        """
+        Return the state attributes.
 
         Returns:
             Dictionary of state attributes
@@ -226,7 +284,8 @@ class ChoreSensor(SensorEntity):
         }
 
     def update_chore_config(self, chore: ChoreConfig) -> None:
-        """Update the chore configuration.
+        """
+        Update the chore configuration.
 
         Args:
             chore: New chore configuration
@@ -237,7 +296,8 @@ class ChoreSensor(SensorEntity):
         self.async_write_ha_state()
 
     def set_state(self, state: ChoreState) -> None:
-        """Set the chore state.
+        """
+        Set the chore state.
 
         Args:
             state: New state for the chore
