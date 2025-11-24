@@ -1,0 +1,58 @@
+# Services for Simple Chores integration
+
+mark_complete:
+  name: Mark Complete
+  description: Mark a chore as complete for a specific user
+  fields:
+    user:
+      name: User
+      description: The username of the assignee
+      required: true
+      example: "alice"
+      selector:
+        text:
+    chore_slug:
+      name: Chore Slug
+      description: The slug identifier of the chore
+      required: true
+      example: "dishes"
+      selector:
+        text:
+
+mark_pending:
+  name: Mark Pending
+  description: Mark a chore as pending for a specific user
+  fields:
+    user:
+      name: User
+      description: The username of the assignee
+      required: true
+      example: "alice"
+      selector:
+        text:
+    chore_slug:
+      name: Chore Slug
+      description: The slug identifier of the chore
+      required: true
+      example: "dishes"
+      selector:
+        text:
+
+mark_not_requested:
+  name: Mark Not Requested
+  description: Mark a chore as not requested for a specific user
+  fields:
+    user:
+      name: User
+      description: The username of the assignee
+      required: true
+      example: "alice"
+      selector:
+        text:
+    chore_slug:
+      name: Chore Slug
+      description: The slug identifier of the chore
+      required: true
+      example: "dishes"
+      selector:
+        text:

@@ -1,0 +1,13 @@
+{
+  "domain": "simple_chores",
+  "name": "Simple Chores",
+  "codeowners": [
+    "@chrispyduck"
+  ],
+  "config_flow": false,
+  "documentation": "https://github.com/chrispyduck/simple_chores",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/chrispyduck/simple_chores/issues",
+  "requirements": ["pydantic>=2.0.0", "pyyaml>=6.0.0"],
+  "version": "0.1.0"
+}

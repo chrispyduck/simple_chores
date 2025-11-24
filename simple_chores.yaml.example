@@ -1,0 +1,35 @@
+# Example configuration for Simple Chores integration
+# Copy this file to your Home Assistant config directory as simple_chores.yaml
+
+chores:
+  - name: "Take Out Trash"
+    slug: "take_out_trash"
+    description: "Take the trash and recycling bins to the curb"
+    frequency: "weekly"
+    assignees:
+      - "john"
+      - "jane"
+
+  - name: "Wash Dishes"
+    slug: "wash_dishes"
+    description: "Wash and put away dishes from dinner"
+    frequency: "daily"
+    assignees:
+      - "john"
+      - "jane"
+      - "kid1"
+
+  - name: "Vacuum Living Room"
+    slug: "vacuum_living_room"
+    description: "Vacuum the living room and dining area"
+    frequency: "weekly"
+    assignees:
+      - "jane"
+
+  - name: "Clean Bathroom"
+    slug: "clean_bathroom"
+    description: "Deep clean the bathroom including toilet, shower, and sink"
+    frequency: "manual"
+    assignees:
+      - "john"
+      - "jane"
