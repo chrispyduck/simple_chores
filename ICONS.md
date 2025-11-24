@@ -54,8 +54,9 @@ This Material Design Icon shows in the Home Assistant integrations list.
 
 ### Service Icons
 
-Defined in `services.yaml`:
+**Note:** Home Assistant does not currently support custom icons in service definitions. Services will use default icons in the UI.
 
+The following icons were originally planned but are not supported by Home Assistant's service schema:
 - `mark_complete` - `mdi:check-circle` ✓
 - `mark_pending` - `mdi:clipboard-list` 📋
 - `mark_not_requested` - `mdi:close-circle-outline` ⊘
@@ -63,7 +64,7 @@ Defined in `services.yaml`:
 - `update_chore` - `mdi:pencil-circle` ✏️
 - `delete_chore` - `mdi:delete-circle` 🗑️
 
-These icons appear in the Home Assistant services UI.
+These are documented here for reference, but cannot be applied in `services.yaml`.
 
 ### Entity/Sensor Icons
 
@@ -93,7 +94,7 @@ This displays the cleaning tools logo for each chore sensor entity, giving them 
 To use different MDI icons, edit:
 
 1. **Integration:** Change `icon` in `manifest.json`
-2. **Services:** Change `icon` values in `services.yaml`
+2. **Services:** Not supported by Home Assistant
 3. **Entities:** Change `_attr_icon` values in `sensor.py`
 
 Browse available icons at: https://pictogrammers.com/library/mdi/

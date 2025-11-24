@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import homeassistant.helpers.config_validation as cv
+import voluptuous as vol
 from homeassistant.const import Platform
 
 from .config_loader import ConfigLoader, ConfigLoadError
@@ -25,6 +27,12 @@ if TYPE_CHECKING:
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
 ]
+
+# Configuration schema - accepts empty config since we use file-based configuration
+CONFIG_SCHEMA = vol.Schema(
+    {DOMAIN: cv.empty_config_schema(DOMAIN)},
+    extra=vol.ALLOW_EXTRA,
+)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:

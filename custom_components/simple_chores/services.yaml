@@ -3,7 +3,6 @@
 mark_complete:
   name: Mark Complete
   description: Mark a chore as complete for a specific user
-  icon: mdi:check-circle
   fields:
     user:
       name: User
@@ -23,7 +22,6 @@ mark_complete:
 mark_pending:
   name: Mark Pending
   description: Mark a chore as pending for a specific user
-  icon: mdi:clipboard-list
   fields:
     user:
       name: User
@@ -43,7 +41,6 @@ mark_pending:
 mark_not_requested:
   name: Mark Not Requested
   description: Mark a chore as not requested for a specific user
-  icon: mdi:close-circle-outline
   fields:
     user:
       name: User
@@ -63,7 +60,6 @@ mark_not_requested:
 create_chore:
   name: Create Chore
   description: Create a new chore in the YAML configuration
-  icon: mdi:plus-circle
   fields:
     name:
       name: Name
@@ -108,7 +104,6 @@ create_chore:
 update_chore:
   name: Update Chore
   description: Update an existing chore in the YAML configuration
-  icon: mdi:pencil-circle
   fields:
     slug:
       name: Slug
@@ -153,7 +148,6 @@ update_chore:
 delete_chore:
   name: Delete Chore
   description: Delete a chore from the YAML configuration
-  icon: mdi:delete-circle
   fields:
     slug:
       name: Slug

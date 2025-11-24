@@ -97,3 +97,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to th
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Disclaimer
+
+This entire integration was written by Claude Sonnet 4.5. I had no hand in it other than writing prompts. I write enough code in my day job that I'm happy supervising an agent in my downtime.
