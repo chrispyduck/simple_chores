@@ -2,6 +2,8 @@
 
 A Home Assistant custom integration for managing household chores.
 
+Why? Because the Grocy integration isn't working and KidsChores is buggy. I'll add features as needed to motivate the kiddos, but this is for adults, too.
+
 ## Basics
 
 * All configuration is file-based, in a single yaml file. State is maintained within Home Assistant.
