@@ -117,7 +117,8 @@ class TestChoreSummarySensor:
 
         alice_summary = manager.summary_sensors["alice"]
 
-        # Set different states (directly set state)
+        # Set different states for alice's chores
+        # alice has: alice_dishes, alice_vacuum (bob_dishes is bob's)
         manager.sensors["alice_dishes"]._attr_native_value = ChoreState.PENDING.value
         manager.sensors["alice_vacuum"]._attr_native_value = ChoreState.COMPLETE.value
 
@@ -126,7 +127,22 @@ class TestChoreSummarySensor:
         assert attrs["assignee"] == "alice"
         assert "sensor.simple_chore_alice_dishes" in attrs["pending_chores"]
         assert "sensor.simple_chore_alice_vacuum" in attrs["complete_chores"]
+        # No not_requested chores since we set states for both of alice's chores
+        assert len(attrs["pending_chores"]) == 1
+        assert len(attrs["complete_chores"]) == 1
+        assert len(attrs["not_requested_chores"]) == 0
         assert attrs["total_chores"] == 2
+
+        # Test with bob to verify not_requested_chores attribute exists
+        bob_summary = manager.summary_sensors["bob"]
+        bob_attrs = bob_summary.extra_state_attributes
+
+        # bob has: bob_dishes, bob_laundry (both default to NOT_REQUESTED)
+        assert bob_attrs["assignee"] == "bob"
+        assert "sensor.simple_chore_bob_dishes" in bob_attrs["not_requested_chores"]
+        assert "sensor.simple_chore_bob_laundry" in bob_attrs["not_requested_chores"]
+        assert len(bob_attrs["not_requested_chores"]) == 2
+        assert bob_attrs["total_chores"] == 2
 
     @pytest.mark.asyncio
     async def test_summary_sensor_only_counts_own_chores(

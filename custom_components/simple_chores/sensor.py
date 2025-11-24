@@ -481,6 +481,7 @@ class ChoreSummarySensor(SensorEntity):
         """
         pending_entities = []
         complete_entities = []
+        not_requested_entities = []
 
         for entity_id, sensor in self._manager.sensors.items():
             if sensor._assignee == self._assignee:
@@ -489,10 +490,15 @@ class ChoreSummarySensor(SensorEntity):
                     pending_entities.append(full_entity_id)
                 elif sensor.native_value == ChoreState.COMPLETE.value:
                     complete_entities.append(full_entity_id)
+                elif sensor.native_value == ChoreState.NOT_REQUESTED.value:
+                    not_requested_entities.append(full_entity_id)
 
         return {
             "assignee": self._assignee,
             "pending_chores": pending_entities,
             "complete_chores": complete_entities,
-            "total_chores": len(pending_entities) + len(complete_entities),
+            "not_requested_chores": not_requested_entities,
+            "total_chores": len(pending_entities)
+            + len(complete_entities)
+            + len(not_requested_entities),
         }
