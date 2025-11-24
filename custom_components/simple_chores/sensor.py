@@ -240,7 +240,8 @@ class ChoreSensor(SensorEntity):
         # Set entity ID to match requirements: sensor.simple_chore_{assignee}_{slug}
         self.entity_id = f"sensor.simple_chore_{assignee}_{chore.slug}"
 
-        self._attr_icon = "mdi:clipboard-list-outline"
+        # Use chore-specific icon
+        self._attr_icon = chore.icon
 
         # Set device info to group all chores for this person
         self._attr_device_info = DeviceInfo(
@@ -282,6 +283,7 @@ class ChoreSensor(SensorEntity):
             "frequency": self._chore.frequency.value,
             "assignee": self._assignee,
             "all_assignees": self._chore.assignees,
+            "icon": self._chore.icon,
         }
 
     def update_chore_config(self, chore: ChoreConfig) -> None:
@@ -294,6 +296,7 @@ class ChoreSensor(SensorEntity):
         """
         self._chore = chore
         self._attr_name = f"{chore.name} - {self._assignee}"
+        self._attr_icon = chore.icon
         self.async_write_ha_state()
 
     def set_state(self, state: ChoreState) -> None:

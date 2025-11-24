@@ -13,6 +13,7 @@ from .const import (
     ATTR_CHORE_SLUG,
     ATTR_DESCRIPTION,
     ATTR_FREQUENCY,
+    ATTR_ICON,
     ATTR_NAME,
     ATTR_SLUG,
     ATTR_USER,
@@ -47,6 +48,7 @@ CREATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_DESCRIPTION, default=""): cv.string,
         vol.Required(ATTR_FREQUENCY): vol.In(["daily", "weekly", "manual"]),
         vol.Required(ATTR_ASSIGNEES): cv.string,
+        vol.Optional(ATTR_ICON, default="mdi:clipboard-list-outline"): cv.string,
     }
 )
 
@@ -57,6 +59,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_DESCRIPTION): cv.string,
         vol.Optional(ATTR_FREQUENCY): vol.In(["daily", "weekly", "manual"]),
         vol.Optional(ATTR_ASSIGNEES): cv.string,
+        vol.Optional(ATTR_ICON): cv.string,
     }
 )
 
@@ -147,6 +150,7 @@ async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             description=call.data.get(ATTR_DESCRIPTION, ""),
             frequency=ChoreFrequency(call.data[ATTR_FREQUENCY]),
             assignees=assignees,
+            icon=call.data.get(ATTR_ICON, "mdi:clipboard-list-outline"),
         )
         await config_loader.async_create_chore(chore)
         LOGGER.info("Created chore '%s'", chore.slug)
@@ -168,6 +172,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     description = call.data.get(ATTR_DESCRIPTION)
     frequency = call.data.get(ATTR_FREQUENCY)
     assignees_str = call.data.get(ATTR_ASSIGNEES)
+    icon = call.data.get(ATTR_ICON)
 
     # Parse assignees if provided
     assignees = None
@@ -181,6 +186,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             description=description,
             frequency=frequency,
             assignees=assignees,
+            icon=icon,
         )
         LOGGER.info("Updated chore '%s'", slug)
     except Exception as err:

@@ -344,6 +344,22 @@ class TestChoreSensor:
         assert attrs["frequency"] == "daily"
         assert attrs["assignee"] == "alice"
         assert attrs["all_assignees"] == ["alice", "bob"]
+        assert attrs["icon"] == "mdi:clipboard-list-outline"
+
+    def test_sensor_custom_icon(self, mock_hass: MagicMock) -> None:
+        """Test sensor with custom icon."""
+        chore = ChoreConfig(
+            name="Clean Kitchen",
+            slug="clean_kitchen",
+            description="Clean the kitchen",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            icon="mdi:broom",
+        )
+        sensor = ChoreSensor(mock_hass, chore, "alice")
+
+        assert sensor.icon == "mdi:broom"
+        assert sensor.extra_state_attributes["icon"] == "mdi:broom"
 
     def test_update_chore_config(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
@@ -355,15 +371,17 @@ class TestChoreSensor:
         new_chore = ChoreConfig(
             name="Dishes (Updated)",
             slug="dishes",
-            description="New description",
+            description="Updated description",
             frequency=ChoreFrequency.WEEKLY,
             assignees=["alice"],
+            icon="mdi:dishwasher",
         )
 
         sensor.update_chore_config(new_chore)
 
         assert sensor._chore == new_chore
         assert sensor.name == "Dishes (Updated) - alice"
+        assert sensor.icon == "mdi:dishwasher"
         sensor.async_write_ha_state.assert_called_once()
 
     def test_set_state_pending(

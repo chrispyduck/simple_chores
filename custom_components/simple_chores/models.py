@@ -35,6 +35,10 @@ class ChoreConfig(BaseModel):
     assignees: list[str] = Field(
         default_factory=list, description="List of assignee usernames"
     )
+    icon: str = Field(
+        default="mdi:clipboard-list-outline",
+        description="Material Design Icon for the chore",
+    )
 
     @field_validator("slug")
     @classmethod

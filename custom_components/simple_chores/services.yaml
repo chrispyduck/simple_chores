@@ -100,6 +100,14 @@ create_chore:
       example: "alice,bob"
       selector:
         text:
+    icon:
+      name: Icon
+      description: Material Design Icon for the chore (e.g., mdi:broom)
+      required: false
+      default: "mdi:clipboard-list-outline"
+      example: "mdi:broom"
+      selector:
+        text:
 
 update_chore:
   name: Update Chore
@@ -142,6 +150,13 @@ update_chore:
       description: New comma-separated list of assignee usernames (leave empty to keep current)
       required: false
       example: "alice,bob"
+      selector:
+        text:
+    icon:
+      name: Icon
+      description: New Material Design Icon for the chore (leave empty to keep current)
+      required: false
+      example: "mdi:broom"
       selector:
         text:
 

@@ -297,6 +297,7 @@ class ConfigLoader:
         description: str | None = None,
         frequency: str | None = None,
         assignees: list[str] | None = None,
+        icon: str | None = None,
     ) -> None:
         """
         Update an existing chore and save to YAML.
@@ -307,6 +308,7 @@ class ConfigLoader:
             description: New description (None to keep current)
             frequency: New frequency (None to keep current)
             assignees: New assignees list (None to keep current)
+            icon: New icon (None to keep current)
 
         Raises:
             ConfigLoadError: If chore not found or save fails
@@ -332,6 +334,8 @@ class ConfigLoader:
             updated_data["frequency"] = frequency
         if assignees is not None:
             updated_data["assignees"] = assignees
+        if icon is not None:
+            updated_data["icon"] = icon
 
         updated_chore = ChoreConfig(**updated_data)
 

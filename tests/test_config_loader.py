@@ -569,3 +569,40 @@ class TestConfigLoaderCreateChore:
 
         with pytest.raises(ConfigLoadError, match="already exists"):
             await loader.async_create_chore(duplicate_chore)
+
+    @pytest.mark.asyncio
+    async def test_create_chore_with_custom_icon(
+        self,
+        mock_hass: MagicMock,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test creating a chore with custom icon."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
+
+        # Create chore with custom icon
+        new_chore = ChoreConfig(
+            name="Clean Kitchen",
+            slug="clean_kitchen",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            icon="mdi:broom",
+        )
+
+        await loader.async_create_chore(new_chore)
+
+        # Verify icon was saved correctly
+        saved_data = yaml.safe_load(temp_config_file.read_text())
+        kitchen_chore = next(
+            c for c in saved_data["chores"] if c["slug"] == "clean_kitchen"
+        )
+        assert kitchen_chore["icon"] == "mdi:broom"
+
+        # Verify it loads back correctly
+        await loader.async_load()
+        chore = loader.config.get_chore_by_slug("clean_kitchen")
+        assert chore is not None
+        assert chore.icon == "mdi:broom"
