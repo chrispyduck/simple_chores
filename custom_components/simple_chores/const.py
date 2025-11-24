@@ -32,3 +32,26 @@ ATTR_DESCRIPTION = "description"
 ATTR_FREQUENCY = "frequency"
 ATTR_ASSIGNEES = "assignees"
 ATTR_ICON = "icon"
+
+
+def sanitize_entity_id(value: str) -> str:
+    """
+    Sanitize a string for use in entity IDs.
+
+    Converts hyphens to underscores and removes any characters
+    that are not alphanumeric or underscores.
+
+    Args:
+        value: String to sanitize
+
+    Returns:
+        Sanitized string safe for entity IDs
+
+    """
+    # Convert to lowercase
+    value = value.lower()
+    # Replace hyphens with underscores
+    value = value.replace("-", "_")
+    # Keep only alphanumeric and underscores
+    value = "".join(c for c in value if c.isalnum() or c == "_")
+    return value

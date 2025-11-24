@@ -78,18 +78,16 @@ class TestChoreConfig:
         errors = exc_info.value.errors()
         assert any("Slug cannot be empty" in str(err) for err in errors)
 
-    def test_slug_validation_invalid_characters(self) -> None:
-        """Test that slug with invalid characters raises validation error."""
-        with pytest.raises(ValidationError) as exc_info:
-            ChoreConfig(
-                name="Test",
-                slug="invalid slug!",
-                frequency=ChoreFrequency.DAILY,
-                assignees=["alice"],
-            )
-
-        errors = exc_info.value.errors()
-        assert any("must contain only alphanumeric" in str(err) for err in errors)
+    def test_slug_sanitization_invalid_characters(self) -> None:
+        """Test that slug with invalid characters is sanitized."""
+        chore = ChoreConfig(
+            name="Test",
+            slug="invalid slug!",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+        # Spaces and special characters should be stripped
+        assert chore.slug == "invalidslug"
 
     def test_slug_normalized_to_lowercase(self) -> None:
         """Test that slug is normalized to lowercase."""
@@ -102,16 +100,16 @@ class TestChoreConfig:
 
         assert chore.slug == "mychore"
 
-    def test_slug_allows_hyphens_and_underscores(self) -> None:
-        """Test that slug allows hyphens and underscores."""
+    def test_slug_converts_hyphens_to_underscores(self) -> None:
+        """Test that slug converts hyphens to underscores."""
         chore = ChoreConfig(
             name="Test",
             slug="my-chore_name",
             frequency=ChoreFrequency.DAILY,
             assignees=["alice"],
         )
-
-        assert chore.slug == "my-chore_name"
+        # Hyphens should be converted to underscores
+        assert chore.slug == "my_chore_name"
 
     def test_assignees_validation_empty(self) -> None:
         """Test that empty assignees list raises validation error."""

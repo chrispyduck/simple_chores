@@ -121,28 +121,27 @@ class TestConfigLoaderLoad:
         assert "Invalid YAML" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_load_invalid_config_schema(
+    async def test_load_config_with_sanitized_slug(
         self, mock_hass: MagicMock, temp_config_file: Path
     ) -> None:
-        """Test loading config with invalid schema."""
-        invalid_data = {
+        """Test loading config where slug gets sanitized."""
+        data = {
             "chores": [
                 {
                     "name": "Test",
-                    "slug": "invalid slug!",  # Invalid characters
+                    "slug": "invalid slug!",  # Will be sanitized to "invalidslug"
                     "frequency": "daily",
                     "assignees": ["alice"],
                 }
             ]
         }
-        temp_config_file.write_text(yaml.dump(invalid_data))
+        temp_config_file.write_text(yaml.dump(data))
 
         loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
 
-        with pytest.raises(ConfigLoadError) as exc_info:
-            await loader.async_load()
-
-        assert "Invalid configuration" in str(exc_info.value)
+        # Verify slug was sanitized
+        assert loader.config.chores[0].slug == "invalidslug"
 
     @pytest.mark.asyncio
     async def test_load_empty_yaml(

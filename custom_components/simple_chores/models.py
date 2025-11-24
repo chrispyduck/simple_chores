@@ -6,6 +6,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
 
+from .const import sanitize_entity_id
+
 
 class ChoreFrequency(str, Enum):
     """Frequency for chores."""
@@ -43,18 +45,16 @@ class ChoreConfig(BaseModel):
     @field_validator("slug")
     @classmethod
     def validate_slug(cls, v: str) -> str:
-        """Validate slug format."""
+        """Validate and sanitize slug format."""
         if not v:
             msg = "Slug cannot be empty"
             raise ValueError(msg)
-        # Ensure slug is lowercase and contains only valid characters
-        if not v.replace("_", "").replace("-", "").isalnum():
-            msg = (
-                f"Slug '{v}' must contain only alphanumeric characters, "
-                "hyphens, and underscores"
-            )
+        # Sanitize: convert to lowercase, hyphens to underscores, remove invalid chars
+        sanitized = sanitize_entity_id(v)
+        if not sanitized:
+            msg = f"Slug '{v}' must contain at least one alphanumeric character"
             raise ValueError(msg)
-        return v.lower()
+        return sanitized
 
     @field_validator("assignees")
     @classmethod

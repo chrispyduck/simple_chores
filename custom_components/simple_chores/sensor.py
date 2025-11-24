@@ -10,7 +10,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, LOGGER
+from .const import DOMAIN, LOGGER, sanitize_entity_id
 from .models import ChoreConfig, ChoreState, SimpleChoresConfig
 
 if TYPE_CHECKING:
@@ -137,7 +137,9 @@ class ChoreSensorManager:
 
         for chore in config.chores:
             for assignee in chore.assignees:
-                entity_id = f"{assignee}_{chore.slug}"
+                entity_id = (
+                    f"{sanitize_entity_id(assignee)}_{sanitize_entity_id(chore.slug)}"
+                )
 
                 if entity_id not in self.sensors:
                     sensor = ChoreSensor(self.hass, chore, assignee)
@@ -165,7 +167,9 @@ class ChoreSensorManager:
         expected_entities = set()
         for chore in config.chores:
             for assignee in chore.assignees:
-                expected_entities.add(f"{assignee}_{chore.slug}")
+                expected_entities.add(
+                    f"{sanitize_entity_id(assignee)}_{sanitize_entity_id(chore.slug)}"
+                )
 
         # Remove sensors that are no longer in config
         sensors_to_remove = []
@@ -312,11 +316,13 @@ class ChoreSensor(SensorEntity):
         self.hass = hass
         self._chore = chore
         self._assignee = assignee
-        self._attr_unique_id = f"{DOMAIN}_{assignee}_{chore.slug}"
+        sanitized_assignee = sanitize_entity_id(assignee)
+        sanitized_slug = sanitize_entity_id(chore.slug)
+        self._attr_unique_id = f"{DOMAIN}_{sanitized_assignee}_{sanitized_slug}"
         self._attr_name = f"{chore.name} - {assignee}"
 
         # Set entity ID to match requirements: sensor.simple_chore_{assignee}_{slug}
-        self.entity_id = f"sensor.simple_chore_{assignee}_{chore.slug}"
+        self.entity_id = f"sensor.simple_chore_{sanitized_assignee}_{sanitized_slug}"
 
         # Use chore-specific icon
         self._attr_icon = chore.icon
@@ -341,7 +347,7 @@ class ChoreSensor(SensorEntity):
             self.hass.data[DOMAIN]["states"] = {}
 
         # Restore previous state if it exists
-        state_key = f"{assignee}_{chore.slug}"
+        state_key = f"{sanitized_assignee}_{sanitized_slug}"
         if state_key in self.hass.data[DOMAIN]["states"]:
             self._attr_native_value = self.hass.data[DOMAIN]["states"][state_key]
 
@@ -388,7 +394,10 @@ class ChoreSensor(SensorEntity):
         self._attr_native_value = state.value
 
         # Persist state
-        state_key = f"{self._assignee}_{self._chore.slug}"
+        state_key = (
+            f"{sanitize_entity_id(self._assignee)}_"
+            f"{sanitize_entity_id(self._chore.slug)}"
+        )
         self.hass.data[DOMAIN]["states"][state_key] = state.value
 
         # Update icon based on state
@@ -436,11 +445,12 @@ class ChoreSummarySensor(SensorEntity):
         self.hass = hass
         self._assignee = assignee
         self._manager = manager
-        self._attr_unique_id = f"{DOMAIN}_meta_{assignee}_summary"
+        sanitized_assignee = sanitize_entity_id(assignee)
+        self._attr_unique_id = f"{DOMAIN}_meta_{sanitized_assignee}_summary"
         self._attr_name = "Summary"
 
         # Set entity ID
-        self.entity_id = f"sensor.simple_chore_meta_{assignee}_summary"
+        self.entity_id = f"sensor.simple_chore_meta_{sanitized_assignee}_summary"
 
         # Set device info to group with other chores for this person
         self._attr_device_info = DeviceInfo(

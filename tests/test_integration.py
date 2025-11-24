@@ -223,30 +223,31 @@ class TestConfigLoaderIntegration:
         assert len(config.chores) == 2
 
     @pytest.mark.asyncio
-    async def test_loader_handles_invalid_schema_then_fixed(
+    async def test_loader_handles_slug_sanitization(
         self,
         mock_hass: MagicMock,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
-        """Test loader recovering from invalid schema."""
-        # Start with invalid schema
-        invalid_data = {
+        """Test loader sanitizes slugs automatically."""
+        # Start with slug that needs sanitization
+        data_with_bad_slug = {
             "chores": [
                 {
                     "name": "Test",
-                    "slug": "invalid slug!",  # Invalid characters
+                    "slug": "invalid slug!",  # Will be sanitized
                     "frequency": "daily",
                     "assignees": ["alice"],
                 }
             ]
         }
-        temp_config_file.write_text(yaml.dump(invalid_data))
+        temp_config_file.write_text(yaml.dump(data_with_bad_slug))
 
         loader = ConfigLoader(mock_hass, temp_config_file)
+        await loader.async_load()
 
-        with pytest.raises(ConfigLoadError):
-            await loader.async_load()
+        # Verify slug was sanitized
+        assert loader.config.chores[0].slug == "invalidslug"
 
         # Fix the schema
         temp_config_file.write_text(yaml.dump(valid_config_data))
