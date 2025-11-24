@@ -1,10 +1,11 @@
-"""Tests for simple_chores __init__."""
+"""Tests for simple_chores __init__.py."""
 
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+import yaml
 
 from custom_components.simple_chores import (
     async_reload_entry,
@@ -104,7 +105,7 @@ class TestAsyncSetup:
         mock_config_loader.async_start_watching.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("custom_components.simple_chores.sensor.async_setup_platform")
+    @patch("custom_components.simple_chores.async_setup_platform")
     @patch("custom_components.simple_chores.ConfigLoader")
     async def test_setup_with_sensor_platform(
         self,
@@ -200,8 +201,6 @@ class TestAsyncSetupEntry:
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test successful entry setup."""
-        import yaml
-
         # Create config file
         temp_config_file.write_text(yaml.dump(valid_config_data))
 

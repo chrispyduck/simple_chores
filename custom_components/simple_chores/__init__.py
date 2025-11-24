@@ -17,6 +17,7 @@ from homeassistant.const import Platform
 from .config_loader import ConfigLoader, ConfigLoadError
 from .const import CONFIG_FILE_NAME, DOMAIN, LOGGER
 from .data import SimpleChoresData as SimpleChoresData
+from .sensor import async_setup_platform
 from .services import async_setup_services
 
 if TYPE_CHECKING:
@@ -80,8 +81,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     # Load sensor platform directly by importing and calling it
     # This avoids the deprecated hass.helpers.discovery pattern
-    from .sensor import async_setup_platform
-
     def add_entities(new_entities, update_before_add: bool = False) -> None:  # noqa: FBT001, FBT002
         """Add entities callback (no-op for YAML setup)."""
         ...

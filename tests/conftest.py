@@ -1,5 +1,7 @@
 """Shared fixtures for simple_chores tests."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 
@@ -12,8 +14,6 @@ def mock_hass():
     Individual test modules may also define their own mock_hass with
     specific requirements.
     """
-    from unittest.mock import AsyncMock, MagicMock
-
     hass = MagicMock()
     hass.data = {}
     hass.config.path = lambda: "/config"

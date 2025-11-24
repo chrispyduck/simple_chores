@@ -13,6 +13,8 @@ from custom_components.simple_chores.config_loader import (
     ConfigLoadError,
 )
 from custom_components.simple_chores.models import (
+    ChoreConfig,
+    ChoreFrequency,
     SimpleChoresConfig,
 )
 
@@ -487,8 +489,6 @@ class TestConfigLoaderCreateChore:
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test creating a new chore successfully."""
-        from custom_components.simple_chores.models import ChoreConfig, ChoreFrequency
-
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
         loader = ConfigLoader(mock_hass, temp_config_file)
@@ -525,8 +525,6 @@ class TestConfigLoaderCreateChore:
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test creating a chore with manual frequency (the problematic enum value)."""
-        from custom_components.simple_chores.models import ChoreConfig, ChoreFrequency
-
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
         loader = ConfigLoader(mock_hass, temp_config_file)
@@ -556,8 +554,6 @@ class TestConfigLoaderCreateChore:
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test creating a chore with duplicate slug fails."""
-        from custom_components.simple_chores.models import ChoreConfig, ChoreFrequency
-
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
         loader = ConfigLoader(mock_hass, temp_config_file)

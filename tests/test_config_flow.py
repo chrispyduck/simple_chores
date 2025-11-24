@@ -6,7 +6,10 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.simple_chores.config_flow import SimpleChoresConfigFlow
+from custom_components.simple_chores.config_flow import (
+    SimpleChoresConfigFlow,
+    SimpleChoresOptionsFlow,
+)
 from custom_components.simple_chores.const import DOMAIN
 
 
@@ -45,10 +48,6 @@ class TestConfigFlow:
     @pytest.mark.asyncio
     async def test_options_flow(self, hass: HomeAssistant) -> None:
         """Test the options flow."""
-        from custom_components.simple_chores.config_flow import (
-            SimpleChoresOptionsFlow,
-        )
-
         # Create a config entry
         entry = MagicMock()
         entry.domain = DOMAIN
@@ -81,10 +80,6 @@ class TestConfigFlowUI:
     @pytest.mark.asyncio
     async def test_options_shows_config_file_path(self, hass: HomeAssistant) -> None:
         """Test that options flow shows config file path."""
-        from custom_components.simple_chores.config_flow import (
-            SimpleChoresOptionsFlow,
-        )
-
         entry = MagicMock()
         entry.domain = DOMAIN
         entry.entry_id = "test_entry"

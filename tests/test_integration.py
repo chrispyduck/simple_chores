@@ -7,15 +7,20 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from custom_components.simple_chores import async_setup, async_unload_entry
-from custom_components.simple_chores.config_loader import ConfigLoader
+from custom_components.simple_chores.config_loader import (
+    ConfigLoader,
+    ConfigLoadError,
+)
 from custom_components.simple_chores.models import (
     ChoreConfig,
     ChoreFrequency,
+    ChoreState,
     SimpleChoresConfig,
 )
-from custom_components.simple_chores.sensor import ChoreSensor
+from custom_components.simple_chores.sensor import ChoreSensor, ChoreSensorManager
 
 
 @pytest.fixture
@@ -207,8 +212,6 @@ class TestConfigLoaderIntegration:
         loader = ConfigLoader(mock_hass, temp_config_file)
 
         # First load should fail
-        from custom_components.simple_chores.config_loader import ConfigLoadError
-
         with pytest.raises(ConfigLoadError):
             await loader.async_load()
 
@@ -242,8 +245,6 @@ class TestConfigLoaderIntegration:
 
         loader = ConfigLoader(mock_hass, temp_config_file)
 
-        from custom_components.simple_chores.config_loader import ConfigLoadError
-
         with pytest.raises(ConfigLoadError):
             await loader.async_load()
 
@@ -259,8 +260,6 @@ class TestModelValidationIntegration:
 
     def test_config_validates_duplicate_slugs_across_chores(self) -> None:
         """Test that duplicate slugs are caught across multiple chores."""
-        from pydantic import ValidationError
-
         with pytest.raises(ValidationError) as exc_info:
             SimpleChoresConfig(
                 chores=[
@@ -354,8 +353,6 @@ class TestSensorManagerIntegration:
         self, mock_hass: MagicMock, temp_config_file: Path
     ) -> None:
         """Test complete sensor manager lifecycle."""
-        from custom_components.simple_chores.sensor import ChoreSensorManager
-
         # Initial config
         initial_data = {
             "chores": [
@@ -419,9 +416,6 @@ class TestSensorManagerIntegration:
         self, mock_hass: MagicMock, temp_config_file: Path
     ) -> None:
         """Test that sensor states persist across config changes."""
-        from custom_components.simple_chores.models import ChoreState
-        from custom_components.simple_chores.sensor import ChoreSensor
-
         chore1 = ChoreConfig(
             name="Dishes",
             slug="dishes",

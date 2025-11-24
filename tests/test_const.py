@@ -1,5 +1,7 @@
 """Tests for simple_chores constants."""
 
+from logging import Logger
+
 from custom_components.simple_chores.const import (
     ATTR_CHORE_SLUG,
     ATTR_USER,
@@ -67,8 +69,6 @@ class TestConstants:
 
     def test_logger_exists(self) -> None:
         """Test that LOGGER is properly configured."""
-        from logging import Logger
-
         assert isinstance(LOGGER, Logger)
         assert LOGGER.name == "custom_components.simple_chores"
 

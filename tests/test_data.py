@@ -1,5 +1,6 @@
 """Tests for simple_chores data structures."""
 
+from dataclasses import is_dataclass
 from unittest.mock import MagicMock
 
 from custom_components.simple_chores.config_loader import ConfigLoader
@@ -24,8 +25,6 @@ class TestSimpleChoresData:
 
     def test_data_is_dataclass(self) -> None:
         """Test that SimpleChoresData is a dataclass."""
-        from dataclasses import is_dataclass
-
         assert is_dataclass(SimpleChoresData)
 
     def test_data_attributes_accessible(self) -> None:
