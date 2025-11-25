@@ -78,6 +78,7 @@ async def async_setup_platform(
 
     # Store sensors in hass.data for service access
     hass.data[DOMAIN]["sensors"] = manager.sensors
+    hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
 
     # Register callback for config changes
     config_loader.register_callback(manager.async_config_changed)
@@ -400,13 +401,8 @@ class ChoreSensor(SensorEntity):
         )
         self.hass.data[DOMAIN]["states"][state_key] = state.value
 
-        # Update icon based on state
-        if state == ChoreState.COMPLETE:
-            self._attr_icon = "mdi:check-circle"
-        elif state == ChoreState.PENDING:
-            self._attr_icon = "mdi:clipboard-list"
-        else:  # NOT_REQUESTED
-            self._attr_icon = "mdi:clipboard-list-outline"
+        # Icon stays as configured in chore (self._chore.icon)
+        # Do not change icon based on state
 
         self.async_write_ha_state()
 

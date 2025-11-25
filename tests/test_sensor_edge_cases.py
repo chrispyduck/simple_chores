@@ -390,7 +390,7 @@ class TestSensorIconStates:
     """Tests for sensor icon based on state."""
 
     def test_icon_changes_with_state(self, mock_hass: MagicMock) -> None:
-        """Test that icon changes correctly with state."""
+        """Test that icon is preserved from chore config regardless of state."""
         chore = ChoreConfig(
             name="Dishes",
             slug="dishes",
@@ -399,18 +399,18 @@ class TestSensorIconStates:
         )
         sensor = ChoreSensor(mock_hass, chore, "alice")
 
-        # Initial state
+        # Initial state - uses default icon from chore
         assert sensor.icon == "mdi:clipboard-list-outline"
 
-        # Set to pending
+        # Set to pending - icon should NOT change
         sensor.set_state(ChoreState.PENDING)
-        assert sensor.icon == "mdi:clipboard-list"
+        assert sensor.icon == "mdi:clipboard-list-outline"
 
-        # Set to complete
+        # Set to complete - icon should NOT change
         sensor.set_state(ChoreState.COMPLETE)
-        assert sensor.icon == "mdi:check-circle"
+        assert sensor.icon == "mdi:clipboard-list-outline"
 
-        # Set back to not requested
+        # Set back to not requested - icon should remain the same
         sensor.set_state(ChoreState.NOT_REQUESTED)
         assert sensor.icon == "mdi:clipboard-list-outline"
 

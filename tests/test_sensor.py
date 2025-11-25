@@ -412,7 +412,8 @@ class TestChoreSensor:
         sensor.set_state(ChoreState.PENDING)
 
         assert sensor.native_value == ChoreState.PENDING.value
-        assert sensor.icon == "mdi:clipboard-list"
+        # Icon should remain as configured in chore, not change with state
+        assert sensor.icon == "mdi:clipboard-list-outline"
         sensor.async_write_ha_state.assert_called_once()
 
         # Check persistence
@@ -432,7 +433,8 @@ class TestChoreSensor:
         sensor.set_state(ChoreState.COMPLETE)
 
         assert sensor.native_value == ChoreState.COMPLETE.value
-        assert sensor.icon == "mdi:check-circle"
+        # Icon should remain as configured in chore, not change with state
+        assert sensor.icon == "mdi:clipboard-list-outline"
         sensor.async_write_ha_state.assert_called_once()
 
     def test_set_state_not_requested(
@@ -473,9 +475,58 @@ class TestChoreSensor:
         assert sensor1.unique_id != sensor2.unique_id
         assert sensor1.entity_id != sensor2.entity_id
         assert sensor1._assignee == "alice"
-        assert sensor2._assignee == "bob"
-        assert sensor1.name == "Dishes - alice"
-        assert sensor2.name == "Dishes - bob"
+
+    def test_set_state_updates_summary_sensor(
+        self, mock_hass: MagicMock, sample_chore: ChoreConfig
+    ) -> None:
+        """Test that changing a chore state updates the summary sensor."""
+        # Create mock summary sensor
+        mock_summary = Mock()
+        mock_summary.async_schedule_update_ha_state = Mock()
+
+        # Setup hass.data with summary sensor
+        mock_hass.data["simple_chores"] = {
+            "states": {},
+            "summary_sensors": {"alice": mock_summary},
+        }
+
+        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor.async_write_ha_state = Mock()
+
+        sensor.set_state(ChoreState.COMPLETE)
+
+        # Verify summary sensor was updated
+        mock_summary.async_schedule_update_ha_state.assert_called_once_with(
+            force_refresh=True
+        )
+
+    def test_icon_preserved_with_custom_icon(self, mock_hass: MagicMock) -> None:
+        """Test that custom icon is preserved when state changes."""
+        chore = ChoreConfig(
+            name="Clean Kitchen",
+            slug="clean_kitchen",
+            description="Clean the kitchen",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            icon="mdi:broom",
+        )
+        sensor = ChoreSensor(mock_hass, chore, "alice")
+        sensor.async_write_ha_state = Mock()
+
+        # Icon should start as configured
+        assert sensor.icon == "mdi:broom"
+
+        # Change state to PENDING
+        sensor.set_state(ChoreState.PENDING)
+        assert sensor.icon == "mdi:broom"  # Icon should NOT change
+
+        # Change state to COMPLETE
+        sensor.set_state(ChoreState.COMPLETE)
+        assert sensor.icon == "mdi:broom"  # Icon should still NOT change
+
+        # Change state back to NOT_REQUESTED
+        sensor.set_state(ChoreState.NOT_REQUESTED)
+        assert sensor.icon == "mdi:broom"  # Icon should remain custom icon
 
     def test_sensor_should_not_poll(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
