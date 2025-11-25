@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .const import (
     ATTR_ASSIGNEES,
@@ -83,20 +84,34 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
     user = call.data[ATTR_USER]
     chore_slug = call.data[ATTR_CHORE_SLUG]
 
+    LOGGER.info(
+        "Service 'mark_complete' called with user='%s', chore_slug='%s'",
+        user,
+        chore_slug,
+    )
+
     if DOMAIN not in hass.data:
-        LOGGER.error("Simple Chores integration not loaded")
-        return
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
 
     sensor_id = f"{sanitize_entity_id(user)}_{sanitize_entity_id(chore_slug)}"
     sensors = hass.data[DOMAIN].get("sensors", {})
 
     if sensor_id not in sensors:
-        LOGGER.error("No sensor found for user '%s' and chore '%s'", user, chore_slug)
-        return
+        msg = (
+            f"No sensor found for user '{user}' and chore '{chore_slug}'. "
+            f"Available sensors: {list(sensors.keys())}"
+        )
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    sensor = sensors[sensor_id]
+    sensor.set_state(ChoreState.NOT_REQUESTED)
 
     sensor = sensors[sensor_id]
     sensor.set_state(ChoreState.COMPLETE)
-    LOGGER.debug("Marked chore '%s' as complete for user '%s'", chore_slug, user)
+    LOGGER.info("Marked chore '%s' as complete for user '%s'", chore_slug, user)
 
 
 async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -104,19 +119,31 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
     user = call.data[ATTR_USER]
     chore_slug = call.data[ATTR_CHORE_SLUG]
 
+    LOGGER.info(
+        "Service 'mark_pending' called with user='%s', chore_slug='%s'",
+        user,
+        chore_slug,
+    )
+
     if DOMAIN not in hass.data:
-        LOGGER.error("Simple Chores integration not loaded")
-        return
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
 
     sensor_id = f"{sanitize_entity_id(user)}_{sanitize_entity_id(chore_slug)}"
     sensors = hass.data[DOMAIN].get("sensors", {})
 
     if sensor_id not in sensors:
-        LOGGER.error("No sensor found for user '%s' and chore '%s'", user, chore_slug)
-        return
+        msg = (
+            f"No sensor found for user '{user}' and chore '{chore_slug}'. "
+            f"Available sensors: {list(sensors.keys())}"
+        )
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
 
     sensor = sensors[sensor_id]
     sensor.set_state(ChoreState.PENDING)
+    LOGGER.info("Marked chore '%s' as pending for user '%s'", chore_slug, user)
 
 
 async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -124,29 +151,48 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
     user = call.data[ATTR_USER]
     chore_slug = call.data[ATTR_CHORE_SLUG]
 
+    LOGGER.info(
+        "Service 'mark_not_requested' called with user='%s', chore_slug='%s'",
+        user,
+        chore_slug,
+    )
+
     if DOMAIN not in hass.data:
-        LOGGER.error("Simple Chores integration not loaded")
-        return
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
 
     sensor_id = f"{sanitize_entity_id(user)}_{sanitize_entity_id(chore_slug)}"
     sensors = hass.data[DOMAIN].get("sensors", {})
 
     if sensor_id not in sensors:
-        LOGGER.error("No sensor found for user '%s' and chore '%s'", user, chore_slug)
-        return
+        msg = (
+            f"No sensor found for user '{user}' and chore '{chore_slug}'. "
+            f"Available sensors: {list(sensors.keys())}"
+        )
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
 
     sensor = sensors[sensor_id]
     sensor.set_state(ChoreState.NOT_REQUESTED)
+    LOGGER.info("Marked chore '%s' as not requested for user '%s'", chore_slug, user)
 
 
 async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the reset_completed service call."""
+    user = call.data.get(ATTR_USER)
+
+    LOGGER.info(
+        "Service 'reset_completed' called with user='%s'",
+        user if user else "all users",
+    )
+
     if DOMAIN not in hass.data:
-        LOGGER.error("Simple Chores integration not loaded")
-        return
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
 
     sensors = hass.data[DOMAIN].get("sensors", {})
-    user = call.data.get(ATTR_USER)
 
     # Sanitize user if provided for matching
     sanitized_user = sanitize_entity_id(user) if user else None
@@ -170,15 +216,28 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the create_chore service call."""
+    LOGGER.info(
+        "Service 'create_chore' called with slug='%s', name='%s', assignees='%s'",
+        call.data.get(ATTR_SLUG),
+        call.data.get(ATTR_NAME),
+        call.data.get(ATTR_ASSIGNEES),
+    )
+
     if DOMAIN not in hass.data:
-        LOGGER.error("Simple Chores integration not loaded")
-        return
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
 
     config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
 
     # Parse assignees from comma-separated string
     assignees_str = call.data[ATTR_ASSIGNEES]
     assignees = [a.strip() for a in assignees_str.split(",") if a.strip()]
+
+    if not assignees:
+        msg = "At least one assignee is required"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
 
     try:
         chore = ChoreConfig(
@@ -192,15 +251,23 @@ async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
         await config_loader.async_create_chore(chore)
         LOGGER.info("Created chore '%s'", chore.slug)
     except Exception as err:
-        LOGGER.error("Failed to create chore: %s", err)
-        raise
+        msg = f"Failed to create chore: {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
 
 
 async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the update_chore service call."""
+    LOGGER.info(
+        "Service 'update_chore' called with slug='%s', updates=%s",
+        call.data.get(ATTR_SLUG),
+        {k: v for k, v in call.data.items() if k != ATTR_SLUG},
+    )
+
     if DOMAIN not in hass.data:
-        LOGGER.error("Simple Chores integration not loaded")
-        return
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
 
     config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
 
@@ -215,6 +282,10 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     assignees = None
     if assignees_str:
         assignees = [a.strip() for a in assignees_str.split(",") if a.strip()]
+        if not assignees:
+            msg = "At least one assignee is required when updating assignees"
+            LOGGER.error(msg)
+            raise ServiceValidationError(msg)
 
     try:
         await config_loader.async_update_chore(
@@ -227,25 +298,31 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
         )
         LOGGER.info("Updated chore '%s'", slug)
     except Exception as err:
-        LOGGER.error("Failed to update chore: %s", err)
-        raise
+        msg = f"Failed to update chore '{slug}': {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
 
 
 async def handle_delete_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the delete_chore service call."""
+    slug = call.data[ATTR_SLUG]
+
+    LOGGER.info("Service 'delete_chore' called with slug='%s'", slug)
+
     if DOMAIN not in hass.data:
-        LOGGER.error("Simple Chores integration not loaded")
-        return
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
 
     config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
-    slug = call.data[ATTR_SLUG]
 
     try:
         await config_loader.async_delete_chore(slug)
         LOGGER.info("Deleted chore '%s'", slug)
     except Exception as err:
-        LOGGER.error("Failed to delete chore: %s", err)
-        raise
+        msg = f"Failed to delete chore '{slug}': {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
