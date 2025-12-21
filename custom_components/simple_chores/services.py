@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 SERVICE_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_USER): cv.string,
+        vol.Optional(ATTR_USER): cv.string,
         vol.Required(ATTR_CHORE_SLUG): cv.string,
     }
 )
@@ -82,12 +82,12 @@ RESET_COMPLETED_SCHEMA = vol.Schema(
 
 async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the mark_complete service call."""
-    user = call.data[ATTR_USER]
+    user = call.data.get(ATTR_USER)
     chore_slug = call.data[ATTR_CHORE_SLUG]
 
     LOGGER.info(
         "Service 'mark_complete' called with user='%s', chore_slug='%s'",
-        user,
+        user if user else "all assignees",
         chore_slug,
     )
 
@@ -96,30 +96,58 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.error(msg)
         raise HomeAssistantError(msg)
 
-    sensor_id = f"{sanitize_entity_id(user)}_{sanitize_entity_id(chore_slug)}"
     sensors = hass.data[DOMAIN].get("sensors", {})
+    sanitized_chore = sanitize_entity_id(chore_slug)
 
-    if sensor_id not in sensors:
-        msg = (
-            f"No sensor found for user '{user}' and chore '{chore_slug}'. "
-            f"Available sensors: {list(sensors.keys())}"
-        )
+    # Find all sensors for this chore (optionally filtered by user)
+    matching_sensors = []
+    if user:
+        # Specific user
+        sensor_id = f"{sanitize_entity_id(user)}_{sanitized_chore}"
+        if sensor_id in sensors:
+            matching_sensors.append(sensors[sensor_id])
+    else:
+        # All assignees for this chore
+        for sensor_id, sensor in sensors.items():
+            if (
+                sensor_id.endswith(f"_{sanitized_chore}")
+                and sensor._chore.slug == chore_slug
+            ):
+                matching_sensors.append(sensor)
+
+    if not matching_sensors:
+        if user:
+            msg = (
+                f"No sensor found for user '{user}' and chore '{chore_slug}'. "
+                f"Available sensors: {list(sensors.keys())}"
+            )
+        else:
+            msg = f"No sensors found for chore '{chore_slug}'"
         LOGGER.error(msg)
         raise ServiceValidationError(msg)
 
-    sensor = sensors[sensor_id]
-    await sensor.set_state(ChoreState.COMPLETE)
-    LOGGER.info("Marked chore '%s' as complete for user '%s'", chore_slug, user)
+    # Mark all matching sensors as complete
+    for sensor in matching_sensors:
+        await sensor.set_state(ChoreState.COMPLETE)
+
+    if user:
+        LOGGER.info("Marked chore '%s' as complete for user '%s'", chore_slug, user)
+    else:
+        LOGGER.info(
+            "Marked chore '%s' as complete for %d assignee(s)",
+            chore_slug,
+            len(matching_sensors),
+        )
 
 
 async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the mark_pending service call."""
-    user = call.data[ATTR_USER]
+    user = call.data.get(ATTR_USER)
     chore_slug = call.data[ATTR_CHORE_SLUG]
 
     LOGGER.info(
         "Service 'mark_pending' called with user='%s', chore_slug='%s'",
-        user,
+        user if user else "all assignees",
         chore_slug,
     )
 
@@ -128,30 +156,58 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.error(msg)
         raise HomeAssistantError(msg)
 
-    sensor_id = f"{sanitize_entity_id(user)}_{sanitize_entity_id(chore_slug)}"
     sensors = hass.data[DOMAIN].get("sensors", {})
+    sanitized_chore = sanitize_entity_id(chore_slug)
 
-    if sensor_id not in sensors:
-        msg = (
-            f"No sensor found for user '{user}' and chore '{chore_slug}'. "
-            f"Available sensors: {list(sensors.keys())}"
-        )
+    # Find all sensors for this chore (optionally filtered by user)
+    matching_sensors = []
+    if user:
+        # Specific user
+        sensor_id = f"{sanitize_entity_id(user)}_{sanitized_chore}"
+        if sensor_id in sensors:
+            matching_sensors.append(sensors[sensor_id])
+    else:
+        # All assignees for this chore
+        for sensor_id, sensor in sensors.items():
+            if (
+                sensor_id.endswith(f"_{sanitized_chore}")
+                and sensor._chore.slug == chore_slug
+            ):
+                matching_sensors.append(sensor)
+
+    if not matching_sensors:
+        if user:
+            msg = (
+                f"No sensor found for user '{user}' and chore '{chore_slug}'. "
+                f"Available sensors: {list(sensors.keys())}"
+            )
+        else:
+            msg = f"No sensors found for chore '{chore_slug}'"
         LOGGER.error(msg)
         raise ServiceValidationError(msg)
 
-    sensor = sensors[sensor_id]
-    await sensor.set_state(ChoreState.PENDING)
-    LOGGER.info("Marked chore '%s' as pending for user '%s'", chore_slug, user)
+    # Mark all matching sensors as pending
+    for sensor in matching_sensors:
+        await sensor.set_state(ChoreState.PENDING)
+
+    if user:
+        LOGGER.info("Marked chore '%s' as pending for user '%s'", chore_slug, user)
+    else:
+        LOGGER.info(
+            "Marked chore '%s' as pending for %d assignee(s)",
+            chore_slug,
+            len(matching_sensors),
+        )
 
 
 async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the mark_not_requested service call."""
-    user = call.data[ATTR_USER]
+    user = call.data.get(ATTR_USER)
     chore_slug = call.data[ATTR_CHORE_SLUG]
 
     LOGGER.info(
         "Service 'mark_not_requested' called with user='%s', chore_slug='%s'",
-        user,
+        user if user else "all assignees",
         chore_slug,
     )
 
@@ -160,20 +216,50 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
         LOGGER.error(msg)
         raise HomeAssistantError(msg)
 
-    sensor_id = f"{sanitize_entity_id(user)}_{sanitize_entity_id(chore_slug)}"
     sensors = hass.data[DOMAIN].get("sensors", {})
+    sanitized_chore = sanitize_entity_id(chore_slug)
 
-    if sensor_id not in sensors:
-        msg = (
-            f"No sensor found for user '{user}' and chore '{chore_slug}'. "
-            f"Available sensors: {list(sensors.keys())}"
-        )
+    # Find all sensors for this chore (optionally filtered by user)
+    matching_sensors = []
+    if user:
+        # Specific user
+        sensor_id = f"{sanitize_entity_id(user)}_{sanitized_chore}"
+        if sensor_id in sensors:
+            matching_sensors.append(sensors[sensor_id])
+    else:
+        # All assignees for this chore
+        for sensor_id, sensor in sensors.items():
+            if (
+                sensor_id.endswith(f"_{sanitized_chore}")
+                and sensor._chore.slug == chore_slug
+            ):
+                matching_sensors.append(sensor)
+
+    if not matching_sensors:
+        if user:
+            msg = (
+                f"No sensor found for user '{user}' and chore '{chore_slug}'. "
+                f"Available sensors: {list(sensors.keys())}"
+            )
+        else:
+            msg = f"No sensors found for chore '{chore_slug}'"
         LOGGER.error(msg)
         raise ServiceValidationError(msg)
 
-    sensor = sensors[sensor_id]
-    await sensor.set_state(ChoreState.NOT_REQUESTED)
-    LOGGER.info("Marked chore '%s' as not requested for user '%s'", chore_slug, user)
+    # Mark all matching sensors as not requested
+    for sensor in matching_sensors:
+        await sensor.set_state(ChoreState.NOT_REQUESTED)
+
+    if user:
+        LOGGER.info(
+            "Marked chore '%s' as not requested for user '%s'", chore_slug, user
+        )
+    else:
+        LOGGER.info(
+            "Marked chore '%s' as not requested for %d assignee(s)",
+            chore_slug,
+            len(matching_sensors),
+        )
 
 
 async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None:

@@ -2,12 +2,12 @@
 
 mark_complete:
   name: Mark Complete
-  description: Mark a chore as complete for a specific user
+  description: Mark a chore as complete. If user is not specified, marks it complete for all assignees.
   fields:
     user:
       name: User
-      description: The username of the assignee
-      required: true
+      description: The username of the assignee (optional - if not provided, marks complete for all assignees)
+      required: false
       example: "alice"
       selector:
         text:
@@ -21,12 +21,12 @@ mark_complete:
 
 mark_pending:
   name: Mark Pending
-  description: Mark a chore as pending for a specific user
+  description: Mark a chore as pending. If user is not specified, marks it pending for all assignees.
   fields:
     user:
       name: User
-      description: The username of the assignee
-      required: true
+      description: The username of the assignee (optional - if not provided, marks pending for all assignees)
+      required: false
       example: "alice"
       selector:
         text:
@@ -40,12 +40,12 @@ mark_pending:
 
 mark_not_requested:
   name: Mark Not Requested
-  description: Mark a chore as not requested for a specific user
+  description: Mark a chore as not requested. If user is not specified, marks it not requested for all assignees.
   fields:
     user:
       name: User
-      description: The username of the assignee
-      required: true
+      description: The username of the assignee (optional - if not provided, marks not requested for all assignees)
+      required: false
       example: "alice"
       selector:
         text:

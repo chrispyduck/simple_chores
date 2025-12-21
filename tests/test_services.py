@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.simple_chores.const import (
     ATTR_CHORE_SLUG,
@@ -610,6 +611,201 @@ class TestServiceIntegration:
         await handler(call)
 
         sensor.set_state.assert_called_with(ChoreState.COMPLETE)
+
+
+class TestMarkAllAssignees:
+    """Tests for mark_* services without user parameter (all assignees)."""
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_all_assignees(self, mock_hass: MagicMock) -> None:
+        """Test mark_complete without user marks all assignees as complete."""
+        # Create a chore with multiple assignees
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob", "charlie"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_alice = ChoreSensor(mock_hass, chore, "alice")
+            sensor_alice.async_write_ha_state = Mock()
+            sensor_bob = ChoreSensor(mock_hass, chore, "bob")
+            sensor_bob.async_write_ha_state = Mock()
+            sensor_charlie = ChoreSensor(mock_hass, chore, "charlie")
+            sensor_charlie.async_write_ha_state = Mock()
+
+        # All start as NOT_REQUESTED
+        assert sensor_alice.native_value == ChoreState.NOT_REQUESTED.value
+        assert sensor_bob.native_value == ChoreState.NOT_REQUESTED.value
+        assert sensor_charlie.native_value == ChoreState.NOT_REQUESTED.value
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_dishes": sensor_alice,
+                "bob_dishes": sensor_bob,
+                "charlie_dishes": sensor_charlie,
+            },
+            "states": {},
+        }
+        await async_setup_services(mock_hass)
+
+        # Call mark_complete without user
+        handler = mock_hass.services.async_register.call_args_list[0][0][2]
+        call = MagicMock()
+        call.data = {ATTR_CHORE_SLUG: "dishes"}  # No user specified
+
+        await handler(call)
+
+        # All assignees should be marked complete
+        assert sensor_alice.native_value == ChoreState.COMPLETE.value
+        assert sensor_bob.native_value == ChoreState.COMPLETE.value
+        assert sensor_charlie.native_value == ChoreState.COMPLETE.value
+
+    @pytest.mark.asyncio
+    async def test_mark_pending_all_assignees(self, mock_hass: MagicMock) -> None:
+        """Test mark_pending without user marks all assignees as pending."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_alice = ChoreSensor(mock_hass, chore, "alice")
+            sensor_alice.async_write_ha_state = Mock()
+            sensor_bob = ChoreSensor(mock_hass, chore, "bob")
+            sensor_bob.async_write_ha_state = Mock()
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_dishes": sensor_alice,
+                "bob_dishes": sensor_bob,
+            },
+            "states": {},
+        }
+        await async_setup_services(mock_hass)
+
+        # Call mark_pending without user
+        handler = mock_hass.services.async_register.call_args_list[1][0][2]
+        call = MagicMock()
+        call.data = {ATTR_CHORE_SLUG: "dishes"}
+
+        await handler(call)
+
+        # All assignees should be marked pending
+        assert sensor_alice.native_value == ChoreState.PENDING.value
+        assert sensor_bob.native_value == ChoreState.PENDING.value
+
+    @pytest.mark.asyncio
+    async def test_mark_not_requested_all_assignees(self, mock_hass: MagicMock) -> None:
+        """Test mark_not_requested without user marks all assignees as not requested."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_alice = ChoreSensor(mock_hass, chore, "alice")
+            sensor_alice.async_write_ha_state = Mock()
+            sensor_alice._attr_native_value = ChoreState.COMPLETE.value
+            sensor_bob = ChoreSensor(mock_hass, chore, "bob")
+            sensor_bob.async_write_ha_state = Mock()
+            sensor_bob._attr_native_value = ChoreState.PENDING.value
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_dishes": sensor_alice,
+                "bob_dishes": sensor_bob,
+            },
+            "states": {},
+        }
+        await async_setup_services(mock_hass)
+
+        # Call mark_not_requested without user
+        handler = mock_hass.services.async_register.call_args_list[2][0][2]
+        call = MagicMock()
+        call.data = {ATTR_CHORE_SLUG: "dishes"}
+
+        await handler(call)
+
+        # All assignees should be marked not requested
+        assert sensor_alice.native_value == ChoreState.NOT_REQUESTED.value
+        assert sensor_bob.native_value == ChoreState.NOT_REQUESTED.value
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_all_assignees_with_multiple_chores(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test mark_complete all assignees only affects the specified chore."""
+        chore_dishes = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+        )
+        chore_vacuum = ChoreConfig(
+            name="Vacuum",
+            slug="vacuum",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_alice_dishes = ChoreSensor(mock_hass, chore_dishes, "alice")
+            sensor_alice_dishes.async_write_ha_state = Mock()
+            sensor_bob_dishes = ChoreSensor(mock_hass, chore_dishes, "bob")
+            sensor_bob_dishes.async_write_ha_state = Mock()
+            sensor_alice_vacuum = ChoreSensor(mock_hass, chore_vacuum, "alice")
+            sensor_alice_vacuum.async_write_ha_state = Mock()
+            sensor_bob_vacuum = ChoreSensor(mock_hass, chore_vacuum, "bob")
+            sensor_bob_vacuum.async_write_ha_state = Mock()
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_dishes": sensor_alice_dishes,
+                "bob_dishes": sensor_bob_dishes,
+                "alice_vacuum": sensor_alice_vacuum,
+                "bob_vacuum": sensor_bob_vacuum,
+            },
+            "states": {},
+        }
+        await async_setup_services(mock_hass)
+
+        # Mark dishes complete for all assignees
+        handler = mock_hass.services.async_register.call_args_list[0][0][2]
+        call = MagicMock()
+        call.data = {ATTR_CHORE_SLUG: "dishes"}
+
+        await handler(call)
+
+        # Only dishes sensors should be complete
+        assert sensor_alice_dishes.native_value == ChoreState.COMPLETE.value
+        assert sensor_bob_dishes.native_value == ChoreState.COMPLETE.value
+        # Vacuum sensors should remain NOT_REQUESTED
+        assert sensor_alice_vacuum.native_value == ChoreState.NOT_REQUESTED.value
+        assert sensor_bob_vacuum.native_value == ChoreState.NOT_REQUESTED.value
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_no_assignees_raises_error(
+        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test mark_complete without user raises error when chore has no assignees."""
+        mock_hass.data[DOMAIN] = {"sensors": {}, "states": {}}
+        await async_setup_services(mock_hass)
+
+        handler = mock_hass.services.async_register.call_args_list[0][0][2]
+        call = MagicMock()
+        call.data = {ATTR_CHORE_SLUG: "nonexistent"}
+
+        with caplog.at_level("ERROR"):
+            with pytest.raises(ServiceValidationError, match="No sensors found"):
+                await handler(call)
+
+        assert "No sensors found for chore 'nonexistent'" in caplog.text
 
 
 class TestResetCompletedService:
