@@ -4,18 +4,24 @@ This document describes the service actions implemented for the Simple Chores Ho
 
 ## Overview
 
-Three service actions have been implemented to allow external automation and scripts to update chore states:
+Five service actions have been implemented to allow external automation and scripts to update chore states:
 
-1. `simple_chores.mark_complete` - Mark a chore as complete
-2. `simple_chores.mark_pending` - Mark a chore as pending
-3. `simple_chores.mark_not_requested` - Mark a chore as not requested
+1. `simple_chores.mark_complete` - Mark a chore as complete for a specific user or all assignees
+2. `simple_chores.mark_pending` - Mark a chore as pending for a specific user or all assignees
+3. `simple_chores.mark_not_requested` - Mark a chore as not requested for a specific user or all assignees
+4. `simple_chores.reset_completed` - Reset all completed chores to not requested (optionally for a specific user)
+5. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, daily chores to pending
 
 ## Service Parameters
 
-All services accept the same parameters:
+### mark_complete, mark_pending, mark_not_requested
 
-- `user` (required, string): The assignee/user for the chore
+- `user` (optional, string): The assignee/user for the chore. If not provided, applies to all assignees of the chore.
 - `chore_slug` (required, string): The slug identifier for the chore
+
+### reset_completed, start_new_day
+
+- `user` (optional, string): The assignee/user to reset chores for. If not provided, applies to all users.
 
 ## Usage Examples
 
@@ -49,10 +55,29 @@ script:
 ### Service Call in Developer Tools
 
 ```yaml
+# Mark complete for specific user
 service: simple_chores.mark_complete
 data:
   user: alice
   chore_slug: vacuum
+
+# Mark complete for all assignees
+service: simple_chores.mark_complete
+data:
+  chore_slug: dishes
+
+# Reset completed chores for all users
+service: simple_chores.reset_completed
+data: {}
+
+# Start new day (reset based on frequency)
+service: simple_chores.start_new_day
+data: {}
+
+# Start new day for specific user
+service: simple_chores.start_new_day
+data:
+  user: alice
 ```
 
 ## Implementation Details
@@ -63,10 +88,11 @@ data:
    - Service definitions with parameter schemas
    - User-friendly descriptions for Home Assistant UI
 
-2. **custom_components/simple_chores/__init__.py**
+2. **custom_components/simple_chores/services.py**
    - `async_setup_services()` function to register services
-   - Three service handlers: `handle_mark_complete`, `handle_mark_pending`, `handle_mark_not_requested`
+   - Five service handlers: `handle_mark_complete`, `handle_mark_pending`, `handle_mark_not_requested`, `handle_reset_completed`, `handle_start_new_day`
    - Voluptuous schema validation for service parameters
+   - Support for optional `user` parameter to apply actions to all assignees/users
    - Error handling and logging
 
 3. **custom_components/simple_chores/sensor.py**
@@ -85,21 +111,23 @@ All errors are logged but do not raise exceptions, allowing automations to conti
 
 ## Testing
 
-Comprehensive test coverage (118 tests, 96% coverage) includes:
+Comprehensive test coverage (161 tests, 84% coverage) includes:
 
 ### Service-Specific Tests (tests/test_services.py)
 
-- **Service Registration**: Verifies all three services are registered with correct domain
+- **Service Registration**: Verifies all five services are registered with correct domain
 - **State Updates**: Tests each service correctly updates sensor state
 - **Error Cases**: Tests behavior when sensor not found or integration not loaded
 - **Integration**: Tests with multiple sensors, different users, and special characters in slugs
+- **All Assignees**: Tests marking all assignees when user parameter is omitted
+- **Frequency-Based Reset**: Tests start_new_day correctly handles manual vs daily chores
 
 ### Test Coverage Summary
 
-- 12 service-specific tests
+- 31 service-specific tests
 - Tests for success cases and error conditions
 - Integration tests with real sensor setup
-- Tests for edge cases (special characters, multiple users)
+- Tests for edge cases (special characters, multiple users, all assignees)
 
 ## Service Lookup Pattern
 

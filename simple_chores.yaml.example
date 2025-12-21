@@ -5,7 +5,7 @@ chores:
   - name: "Take Out Trash"
     slug: "take_out_trash"
     description: "Take the trash and recycling bins to the curb"
-    frequency: "weekly"
+    frequency: "manual"
     icon: "mdi:trash-can"  # Optional: Custom Material Design Icon
     assignees:
       - "john"
@@ -24,7 +24,7 @@ chores:
   - name: "Vacuum Living Room"
     slug: "vacuum_living_room"
     description: "Vacuum the living room and dining area"
-    frequency: "weekly"
+    frequency: "manual"
     icon: "mdi:vacuum"
     assignees:
       - "jane"

@@ -44,7 +44,7 @@ In your `simple_chores.yaml` file:
 chores:
   - name: Take Out Trash
     slug: take_out_trash
-    frequency: weekly
+    frequency: manual
     assignees:
       - alice
       - bob

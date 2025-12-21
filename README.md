@@ -14,9 +14,11 @@ Why? Because the Grocy integration isn't working and KidsChores is buggy. I'll a
   * State: chore state is one of: `Pending`, `Complete`, `Not Requested`
   * **Note**: A daily chore must be requested at least once (marked as Pending or Complete) before it becomes a daily chore. Until then, it behaves like a manual chore.
 * The following actions are defined for interacting with chores:
-  * `simple_chores.mark_complete` - Marks a chore as complete. Takes a user and chore slug as parameters.
-  * `simple_chores.mark_pending` - Markes a chore as pending. Takes a user and chore slug as parameters.
-  * `simple_chores.mark_not_requested` - Markes a chore as not requested. Takes a user and chore slug as parameters.s
+  * `simple_chores.mark_complete` - Marks a chore as complete. Takes a chore slug and optional user as parameters. If user is not specified, marks complete for all assignees.
+  * `simple_chores.mark_pending` - Marks a chore as pending. Takes a chore slug and optional user as parameters. If user is not specified, marks pending for all assignees.
+  * `simple_chores.mark_not_requested` - Marks a chore as not requested. Takes a chore slug and optional user as parameters. If user is not specified, marks not requested for all assignees.
+  * `simple_chores.reset_completed` - Resets all completed chores to not requested. Takes an optional user parameter to reset only that user's chores.
+  * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending. Takes an optional user parameter.
 
 ## Installation
 
@@ -81,6 +83,14 @@ chores:
 - `assignees`: List of Home Assistant usernames who can be assigned this chore (required, at least one)
 
 The configuration file is automatically reloaded when changes are detected (checked every 5 seconds).
+
+## Automation Examples
+
+An example automation for daily chore reset is provided in `automations/start_new_day.yaml`. This automation calls the `start_new_day` service at 2:00 AM each day to:
+- Reset manual chores from Complete to Not Requested
+- Reset daily chores from Complete to Pending (only if they were previously requested)
+
+You can copy this to your Home Assistant automations directory or use it as a reference for creating your own automations.
 
 ## Development
 
