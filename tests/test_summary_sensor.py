@@ -132,6 +132,10 @@ class TestChoreSummarySensor:
         assert len(attrs["complete_chores"]) == 1
         assert len(attrs["not_requested_chores"]) == 0
         assert attrs["total_chores"] == 2
+        # Test all_chores attribute
+        assert "sensor.simple_chore_alice_dishes" in attrs["all_chores"]
+        assert "sensor.simple_chore_alice_vacuum" in attrs["all_chores"]
+        assert len(attrs["all_chores"]) == 2
 
         # Test with bob to verify not_requested_chores attribute exists
         bob_summary = manager.summary_sensors["bob"]
@@ -143,6 +147,10 @@ class TestChoreSummarySensor:
         assert "sensor.simple_chore_bob_laundry" in bob_attrs["not_requested_chores"]
         assert len(bob_attrs["not_requested_chores"]) == 2
         assert bob_attrs["total_chores"] == 2
+        # Test all_chores attribute for bob
+        assert "sensor.simple_chore_bob_dishes" in bob_attrs["all_chores"]
+        assert "sensor.simple_chore_bob_laundry" in bob_attrs["all_chores"]
+        assert len(bob_attrs["all_chores"]) == 2
 
     @pytest.mark.asyncio
     async def test_summary_sensor_only_counts_own_chores(
