@@ -69,6 +69,18 @@ reset_completed:
       selector:
         text:
 
+start_new_day:
+  name: Start New Day
+  description: Reset completed chores based on their frequency. Manual chores are reset to Not Requested, daily chores are reset to Pending, and weekly chores are not reset.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, resets for all users)
+      required: false
+      example: "alice"
+      selector:
+        text:
+
 create_chore:
   name: Create Chore
   description: Create a new chore in the YAML configuration

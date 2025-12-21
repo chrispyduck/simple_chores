@@ -26,6 +26,7 @@ from .const import (
     SERVICE_MARK_NOT_REQUESTED,
     SERVICE_MARK_PENDING,
     SERVICE_RESET_COMPLETED,
+    SERVICE_START_NEW_DAY,
     SERVICE_UPDATE_CHORE,
     sanitize_entity_id,
 )
@@ -211,6 +212,71 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
         LOGGER.info("Reset %d completed chore(s) for all users", reset_count)
 
 
+async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the start_new_day service call.
+
+    Resets completed chores based on their frequency:
+    - manual: Reset to NOT_REQUESTED
+    - daily: Reset to PENDING
+    - weekly: No change (not reset)
+    """
+    user = call.data.get(ATTR_USER)
+
+    LOGGER.info(
+        "Service 'start_new_day' called with user='%s'",
+        user if user else "all users",
+    )
+
+    if DOMAIN not in hass.data:
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
+
+    sensors = hass.data[DOMAIN].get("sensors", {})
+
+    # Sanitize user if provided for matching
+    sanitized_user = sanitize_entity_id(user) if user else None
+
+    reset_count = 0
+    manual_count = 0
+    daily_count = 0
+
+    for sensor_id, sensor in sensors.items():
+        # If user specified, only reset their chores
+        if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
+            continue
+
+        # Only reset sensors that are currently COMPLETE
+        if sensor.native_value == ChoreState.COMPLETE.value:
+            chore_frequency = sensor._chore.frequency
+
+            if chore_frequency == ChoreFrequency.MANUAL:
+                await sensor.set_state(ChoreState.NOT_REQUESTED)
+                reset_count += 1
+                manual_count += 1
+            elif chore_frequency == ChoreFrequency.DAILY:
+                await sensor.set_state(ChoreState.PENDING)
+                reset_count += 1
+                daily_count += 1
+            # Weekly chores are not reset
+
+    if user:
+        LOGGER.info(
+            "Reset %d completed chore(s) for user '%s' (%d manual to not_requested, %d daily to pending)",
+            reset_count,
+            user,
+            manual_count,
+            daily_count,
+        )
+    else:
+        LOGGER.info(
+            "Reset %d completed chore(s) for all users (%d manual to not_requested, %d daily to pending)",
+            reset_count,
+            manual_count,
+            daily_count,
+        )
+
+
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the create_chore service call."""
     LOGGER.info(
@@ -347,6 +413,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_RESET_COMPLETED,
         partial(handle_reset_completed, hass),
         schema=RESET_COMPLETED_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_START_NEW_DAY,
+        partial(handle_start_new_day, hass),
+        schema=RESET_COMPLETED_SCHEMA,  # Same schema as reset_completed (optional user)
     )
     hass.services.async_register(
         DOMAIN,

@@ -14,6 +14,7 @@ from custom_components.simple_chores.const import (
     SERVICE_MARK_NOT_REQUESTED,
     SERVICE_MARK_PENDING,
     SERVICE_RESET_COMPLETED,
+    SERVICE_START_NEW_DAY,
     SERVICE_UPDATE_CHORE,
 )
 from custom_components.simple_chores.models import (
@@ -61,7 +62,7 @@ class TestServiceSetup:
         """Test that all services are registered."""
         await async_setup_services(mock_hass)
 
-        assert mock_hass.services.async_register.call_count == 7
+        assert mock_hass.services.async_register.call_count == 8
 
         # Check that each service was registered
         calls = mock_hass.services.async_register.call_args_list
@@ -71,6 +72,7 @@ class TestServiceSetup:
         assert SERVICE_MARK_PENDING in registered_services
         assert SERVICE_MARK_NOT_REQUESTED in registered_services
         assert SERVICE_RESET_COMPLETED in registered_services
+        assert SERVICE_START_NEW_DAY in registered_services
         assert SERVICE_CREATE_CHORE in registered_services
         assert SERVICE_UPDATE_CHORE in registered_services
         assert SERVICE_DELETE_CHORE in registered_services
@@ -751,3 +753,208 @@ class TestResetCompletedService:
 
         # Sensor should not be reset since it's not COMPLETE
         sensor.set_state.assert_not_called()
+
+
+"""Test code for reset_by_frequency service - will be added to test_services.py"""
+
+
+class TestStartNewDayService:
+    """Tests for start_new_day service."""
+
+    @pytest.mark.asyncio
+    async def test_start_new_day_manual_and_daily(self, mock_hass: MagicMock) -> None:
+        """Test that manual chores go to NOT_REQUESTED and daily to PENDING."""
+        # Create sensors with different frequencies
+        chore_manual = ChoreConfig(
+            name="Manual Task",
+            slug="manual_task",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["alice"],
+        )
+        chore_daily = ChoreConfig(
+            name="Daily Task",
+            slug="daily_task",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+        chore_weekly = ChoreConfig(
+            name="Weekly Task",
+            slug="weekly_task",
+            frequency=ChoreFrequency.WEEKLY,
+            assignees=["alice"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_manual = ChoreSensor(mock_hass, chore_manual, "alice")
+            sensor_manual.set_state = AsyncMock()
+            sensor_manual._attr_native_value = ChoreState.COMPLETE.value
+
+            sensor_daily = ChoreSensor(mock_hass, chore_daily, "alice")
+            sensor_daily.set_state = AsyncMock()
+            sensor_daily._attr_native_value = ChoreState.COMPLETE.value
+
+            sensor_weekly = ChoreSensor(mock_hass, chore_weekly, "alice")
+            sensor_weekly.set_state = AsyncMock()
+            sensor_weekly._attr_native_value = ChoreState.COMPLETE.value
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_manual_task": sensor_manual,
+                "alice_daily_task": sensor_daily,
+                "alice_weekly_task": sensor_weekly,
+            }
+        }
+
+        await async_setup_services(mock_hass)
+
+        # Get the start_new_day handler (should be 5th registered service)
+        handler = mock_hass.services.async_register.call_args_list[4][0][2]
+
+        # Create service call without user (reset all)
+        call = MagicMock()
+        call.data = {}
+
+        await handler(call)
+
+        # Manual should be reset to NOT_REQUESTED
+        sensor_manual.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
+        # Daily should be reset to PENDING
+        sensor_daily.set_state.assert_called_once_with(ChoreState.PENDING)
+        # Weekly should not be reset
+        sensor_weekly.set_state.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_start_new_day_specific_user(self, mock_hass: MagicMock) -> None:
+        """Test start_new_day only resets specified user's chores."""
+        chore1 = ChoreConfig(
+            name="Manual Task",
+            slug="manual_task",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["alice"],
+        )
+        chore2 = ChoreConfig(
+            name="Daily Task",
+            slug="daily_task",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["bob"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_alice = ChoreSensor(mock_hass, chore1, "alice")
+            sensor_alice.set_state = AsyncMock()
+            sensor_alice._attr_native_value = ChoreState.COMPLETE.value
+
+            sensor_bob = ChoreSensor(mock_hass, chore2, "bob")
+            sensor_bob.set_state = AsyncMock()
+            sensor_bob._attr_native_value = ChoreState.COMPLETE.value
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_manual_task": sensor_alice,
+                "bob_daily_task": sensor_bob,
+            }
+        }
+
+        await async_setup_services(mock_hass)
+
+        handler = mock_hass.services.async_register.call_args_list[4][0][2]
+
+        # Create service call for alice only
+        call = MagicMock()
+        call.data = {ATTR_USER: "alice"}
+
+        await handler(call)
+
+        # Only alice's sensor should be reset
+        sensor_alice.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
+        sensor_bob.set_state.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_start_new_day_ignores_non_complete(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test start_new_day only affects completed chores."""
+        chore = ChoreConfig(
+            name="Manual Task",
+            slug="manual_task",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["alice"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor.set_state = AsyncMock()
+            sensor._attr_native_value = ChoreState.PENDING.value
+
+        mock_hass.data[DOMAIN] = {"sensors": {"alice_manual_task": sensor}}
+
+        await async_setup_services(mock_hass)
+
+        handler = mock_hass.services.async_register.call_args_list[4][0][2]
+
+        call = MagicMock()
+        call.data = {}
+
+        await handler(call)
+
+        # Sensor should not be reset since it's not COMPLETE
+        sensor.set_state.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_start_new_day_mixed_states(self, mock_hass: MagicMock) -> None:
+        """Test start_new_day with mixed states and frequencies."""
+        chore1 = ChoreConfig(
+            name="Manual Complete",
+            slug="manual_complete",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["alice"],
+        )
+        chore2 = ChoreConfig(
+            name="Manual Pending",
+            slug="manual_pending",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["alice"],
+        )
+        chore3 = ChoreConfig(
+            name="Daily Complete",
+            slug="daily_complete",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor1 = ChoreSensor(mock_hass, chore1, "alice")
+            sensor1.set_state = AsyncMock()
+            sensor1._attr_native_value = ChoreState.COMPLETE.value
+
+            sensor2 = ChoreSensor(mock_hass, chore2, "alice")
+            sensor2.set_state = AsyncMock()
+            sensor2._attr_native_value = ChoreState.PENDING.value
+
+            sensor3 = ChoreSensor(mock_hass, chore3, "alice")
+            sensor3.set_state = AsyncMock()
+            sensor3._attr_native_value = ChoreState.COMPLETE.value
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_manual_complete": sensor1,
+                "alice_manual_pending": sensor2,
+                "alice_daily_complete": sensor3,
+            }
+        }
+
+        await async_setup_services(mock_hass)
+
+        handler = mock_hass.services.async_register.call_args_list[4][0][2]
+
+        call = MagicMock()
+        call.data = {}
+
+        await handler(call)
+
+        # Manual complete should be reset to NOT_REQUESTED
+        sensor1.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
+        # Manual pending should not be reset
+        sensor2.set_state.assert_not_called()
+        # Daily complete should be reset to PENDING
+        sensor3.set_state.assert_called_once_with(ChoreState.PENDING)
