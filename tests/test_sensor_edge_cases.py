@@ -110,7 +110,7 @@ class TestSensorStatePersistence:
         chore2 = ChoreConfig(
             name="Vacuum",
             slug="vacuum",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["alice"],
         )
 
@@ -347,7 +347,7 @@ class TestSensorManagerEdgeCases:
                 ChoreConfig(
                     name="Vacuum",
                     slug="vacuum",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["bob"],
                 ),
             ]
@@ -370,13 +370,13 @@ class TestSensorManagerEdgeCases:
                 ChoreConfig(
                     name="Dishes (Updated)",
                     slug="dishes",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["alice", "bob"],  # Added assignee
                 ),
                 ChoreConfig(
                     name="Laundry",
                     slug="laundry",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["charlie"],
                 ),
             ]
@@ -470,7 +470,6 @@ class TestSensorExtraAttributes:
         """Test attributes for all frequency types."""
         for frequency in [
             ChoreFrequency.DAILY,
-            ChoreFrequency.WEEKLY,
             ChoreFrequency.MANUAL,
         ]:
             chore = ChoreConfig(

@@ -48,7 +48,7 @@ def valid_config_data() -> dict[str, Any]:
             {
                 "name": "Vacuum",
                 "slug": "vacuum",
-                "frequency": "weekly",
+                "frequency": "daily",
                 "assignees": ["bob"],
             },
         ]
@@ -422,7 +422,7 @@ class TestConfigLoaderFileWatching:
             {
                 "name": "Laundry",
                 "slug": "laundry",
-                "frequency": "weekly",
+                "frequency": "daily",
                 "assignees": ["charlie"],
             }
         )
@@ -498,7 +498,7 @@ class TestConfigLoaderCreateChore:
             name="Take Out Trash",
             slug="take_out_trash",
             description="Take the trash to the curb",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["alice", "bob"],
         )
 
@@ -513,7 +513,7 @@ class TestConfigLoaderCreateChore:
             c for c in saved_data["chores"] if c["slug"] == "take_out_trash"
         )
         assert trash_chore["name"] == "Take Out Trash"
-        assert trash_chore["frequency"] == "weekly"  # Should be serialized as string
+        assert trash_chore["frequency"] == "daily"  # Should be serialized as string
         assert trash_chore["assignees"] == ["alice", "bob"]
 
     @pytest.mark.asyncio

@@ -17,7 +17,6 @@ class TestChoreFrequency:
     def test_frequency_values(self) -> None:
         """Test that frequency enum has expected values."""
         assert ChoreFrequency.DAILY.value == "daily"
-        assert ChoreFrequency.WEEKLY.value == "weekly"
         assert ChoreFrequency.MANUAL.value == "manual"
 
 
@@ -55,14 +54,14 @@ class TestChoreConfig:
         chore = ChoreConfig(
             name="Vacuum",
             slug="vacuum",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["alice"],
         )
 
         assert chore.name == "Vacuum"
         assert chore.slug == "vacuum"
         assert chore.description == ""  # default value
-        assert chore.frequency == ChoreFrequency.WEEKLY
+        assert chore.frequency == ChoreFrequency.DAILY
         assert chore.assignees == ["alice"]
 
     def test_slug_validation_empty(self) -> None:
@@ -158,7 +157,7 @@ class TestSimpleChoresConfig:
         chore2 = ChoreConfig(
             name="Vacuum",
             slug="vacuum",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["bob"],
         )
 
@@ -178,7 +177,7 @@ class TestSimpleChoresConfig:
         chore2 = ChoreConfig(
             name="Dishes 2",
             slug="dishes",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["bob"],
         )
 
@@ -200,7 +199,7 @@ class TestSimpleChoresConfig:
         chore2 = ChoreConfig(
             name="Vacuum",
             slug="vacuum",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["bob"],
         )
 
@@ -236,13 +235,13 @@ class TestSimpleChoresConfig:
         chore2 = ChoreConfig(
             name="Vacuum",
             slug="vacuum",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["alice"],
         )
         chore3 = ChoreConfig(
             name="Laundry",
             slug="laundry",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["bob"],
         )
 

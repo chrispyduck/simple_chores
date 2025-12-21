@@ -71,7 +71,7 @@ reset_completed:
 
 start_new_day:
   name: Start New Day
-  description: Reset completed chores based on their frequency. Manual chores are reset to Not Requested, daily chores are reset to Pending, and weekly chores are not reset.
+  description: Reset completed chores based on their frequency. Manual chores are reset to Not Requested, and daily chores are reset to Pending (note that a daily chore must be requested at least once before it becomes daily).
   fields:
     user:
       name: User
@@ -109,15 +109,13 @@ create_chore:
     frequency:
       name: Frequency
       description: How often the chore should be done
-      required: true
-      example: "weekly"
+      required: false
+      example: "daily"
       selector:
         select:
           options:
             - "daily"
-            - "weekly"
             - "manual"
-    assignees:
       name: Assignees
       description: Comma-separated list of assignee usernames
       required: true

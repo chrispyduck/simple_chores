@@ -61,7 +61,7 @@ def valid_config_data() -> dict[str, Any]:
             {
                 "name": "Vacuum",
                 "slug": "vacuum",
-                "frequency": "weekly",
+                "frequency": "daily",
                 "assignees": ["charlie"],
             },
         ]
@@ -174,7 +174,7 @@ class TestFullIntegrationSetup:
             {
                 "name": "Laundry",
                 "slug": "laundry",
-                "frequency": "weekly",
+                "frequency": "daily",
                 "assignees": ["dave"],
             }
         )
@@ -273,7 +273,7 @@ class TestModelValidationIntegration:
                     ChoreConfig(
                         name="Chore 2",
                         slug="duplicate",
-                        frequency=ChoreFrequency.WEEKLY,
+                        frequency=ChoreFrequency.DAILY,
                         assignees=["bob"],
                     ),
                 ]
@@ -295,7 +295,7 @@ class TestModelValidationIntegration:
                 ChoreConfig(
                     name="Vacuum",
                     slug="vacuum",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["alice"],
                 ),
             ]
@@ -317,13 +317,13 @@ class TestModelValidationIntegration:
                 ChoreConfig(
                     name="Vacuum",
                     slug="vacuum",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["bob", "charlie"],
                 ),
                 ChoreConfig(
                     name="Laundry",
                     slug="laundry",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["alice", "charlie"],
                 ),
             ]
@@ -392,7 +392,7 @@ class TestSensorManagerIntegration:
                 {
                     "name": "Vacuum",
                     "slug": "vacuum",
-                    "frequency": "weekly",
+                    "frequency": "daily",
                     "assignees": ["charlie"],
                 },
             ]

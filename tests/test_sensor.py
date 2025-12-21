@@ -65,7 +65,7 @@ def sample_config() -> SimpleChoresConfig:
             ChoreConfig(
                 name="Vacuum",
                 slug="vacuum",
-                frequency=ChoreFrequency.WEEKLY,
+                frequency=ChoreFrequency.DAILY,
                 assignees=["bob"],
             ),
         ]
@@ -222,7 +222,7 @@ class TestChoreSensorManager:
                 ChoreConfig(
                     name="Vacuum",
                     slug="vacuum",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["bob"],
                 ),
             ]
@@ -311,13 +311,13 @@ class TestChoreSensorManager:
                     name="Dishes (Updated)",
                     slug="dishes",
                     description="Updated description",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["alice"],
                 ),
                 ChoreConfig(
                     name="Vacuum",
                     slug="vacuum",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["bob"],
                 ),
             ]
@@ -390,7 +390,7 @@ class TestChoreSensor:
             name="Dishes (Updated)",
             slug="dishes",
             description="Updated description",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["alice"],
             icon="mdi:dishwasher",
         )

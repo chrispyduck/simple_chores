@@ -1,0 +1,44 @@
+# Example automation to start a new day at 2am
+# This automation calls the simple_chores.start_new_day service daily at 2:00 AM
+# to reset completed chores based on their frequency settings.
+#
+# - Manual chores: Reset from Complete to Not Requested
+# - Daily chores: Reset from Complete to Pending (only if previously requested)
+#
+# To use this automation in Home Assistant:
+# 1. Copy this file to your Home Assistant config/automations directory, or
+# 2. Add the automation to your automations.yaml file, or
+# 3. Create it through the Home Assistant UI (Settings > Automations & Scenes > Create Automation)
+
+automation:
+  - alias: "Simple Chores: Start New Day"
+    description: "Reset chores daily at 2:00 AM based on their frequency settings"
+
+    trigger:
+      - platform: time
+        at: "02:00:00"
+
+    action:
+      - service: simple_chores.start_new_day
+        data: {}
+
+    mode: single
+
+# Alternative: Reset chores for a specific user only
+# Uncomment and modify the automation below if you want to reset chores
+# for specific users at different times
+#
+# automation:
+#   - alias: "Simple Chores: Start New Day for Alice"
+#     description: "Reset Alice's chores daily at 6:00 AM"
+#
+#     trigger:
+#       - platform: time
+#         at: "06:00:00"
+#
+#     action:
+#       - service: simple_chores.start_new_day
+#         data:
+#           user: "alice"
+#
+#     mode: single

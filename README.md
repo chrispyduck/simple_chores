@@ -7,11 +7,12 @@ Why? Because the Grocy integration isn't working and KidsChores is buggy. I'll a
 ## Basics
 
 * All configuration is file-based, in a single yaml file. State is maintained within Home Assistant.
-* Chores consist of a name, description, frequency (daily, weekly, manual), list of assignees, and slug (used to identify the chore in code).
+* Chores consist of a name, description, frequency (daily, manual), list of assignees, and slug (used to identify the chore in code).
 * Assignees are Home Assistant users and are identified by name, not ID, in the config file.
 * Each chore is represented in Home Assistant as a sensor following the format s`sensor.simple_chore_{assignee}_{slug}`.
   * Attributes: the sensor includes all configured chore information (full name, description, frequency) as sensor attributes.
   * State: chore state is one of: `Pending`, `Complete`, `Not Requested`
+  * **Note**: A daily chore must be requested at least once (marked as Pending or Complete) before it becomes a daily chore. Until then, it behaves like a manual chore.
 * The following actions are defined for interacting with chores:
   * `simple_chores.mark_complete` - Marks a chore as complete. Takes a user and chore slug as parameters.
   * `simple_chores.mark_pending` - Markes a chore as pending. Takes a user and chore slug as parameters.
@@ -56,7 +57,7 @@ chores:
   - name: "Take Out Trash"
     slug: "take_out_trash"
     description: "Take the trash and recycling bins to the curb"
-    frequency: "weekly"
+    frequency: "manual"
     assignees:
       - "john"
       - "jane"
@@ -74,7 +75,9 @@ chores:
 - `name`: Display name of the chore (required)
 - `slug`: Unique identifier for the chore, used in entity IDs (required, lowercase alphanumeric with hyphens/underscores)
 - `description`: Description of what the chore involves (optional)
-- `frequency`: How often the chore should be done - `daily`, `weekly`, or `manual` (required)
+- `frequency`: How often the chore should be done - `daily` or `manual` (required)
+  - `daily`: Chore will be reset to Pending each day after being completed (must be requested at least once first)
+  - `manual`: Chore will be reset to Not Requested each day after being completed
 - `assignees`: List of Home Assistant usernames who can be assigned this chore (required, at least one)
 
 The configuration file is automatically reloaded when changes are detected (checked every 5 seconds).

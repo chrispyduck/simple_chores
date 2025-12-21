@@ -37,13 +37,13 @@ class TestChoreSummarySensor:
                 ChoreConfig(
                     name="Vacuum",
                     slug="vacuum",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["alice"],
                 ),
                 ChoreConfig(
                     name="Laundry",
                     slug="laundry",
-                    frequency=ChoreFrequency.WEEKLY,
+                    frequency=ChoreFrequency.DAILY,
                     assignees=["bob"],
                 ),
             ]

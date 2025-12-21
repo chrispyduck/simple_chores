@@ -50,7 +50,7 @@ CREATE_CHORE_SCHEMA = vol.Schema(
         vol.Required(ATTR_NAME): cv.string,
         vol.Required(ATTR_SLUG): cv.string,
         vol.Optional(ATTR_DESCRIPTION, default=""): cv.string,
-        vol.Required(ATTR_FREQUENCY): vol.In(["daily", "weekly", "manual"]),
+        vol.Required(ATTR_FREQUENCY): vol.In(["daily", "manual"]),
         vol.Required(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON, default="mdi:clipboard-list-outline"): cv.string,
     }
@@ -61,7 +61,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Required(ATTR_SLUG): cv.string,
         vol.Optional(ATTR_NAME): cv.string,
         vol.Optional(ATTR_DESCRIPTION): cv.string,
-        vol.Optional(ATTR_FREQUENCY): vol.In(["daily", "weekly", "manual"]),
+        vol.Optional(ATTR_FREQUENCY): vol.In(["daily", "manual"]),
         vol.Optional(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON): cv.string,
     }
@@ -218,7 +218,6 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     Resets completed chores based on their frequency:
     - manual: Reset to NOT_REQUESTED
     - daily: Reset to PENDING
-    - weekly: No change (not reset)
     """
     user = call.data.get(ATTR_USER)
 
@@ -258,7 +257,6 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
                 await sensor.set_state(ChoreState.PENDING)
                 reset_count += 1
                 daily_count += 1
-            # Weekly chores are not reset
 
     if user:
         LOGGER.info(

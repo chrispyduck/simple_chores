@@ -628,13 +628,13 @@ class TestResetCompletedService:
         chore2 = ChoreConfig(
             name="Vacuum",
             slug="vacuum",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["bob"],
         )
         chore3 = ChoreConfig(
             name="Laundry",
             slug="laundry",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["alice"],
         )
 
@@ -689,7 +689,7 @@ class TestResetCompletedService:
         chore2 = ChoreConfig(
             name="Vacuum",
             slug="vacuum",
-            frequency=ChoreFrequency.WEEKLY,
+            frequency=ChoreFrequency.DAILY,
             assignees=["bob"],
         )
 
@@ -777,12 +777,6 @@ class TestStartNewDayService:
             frequency=ChoreFrequency.DAILY,
             assignees=["alice"],
         )
-        chore_weekly = ChoreConfig(
-            name="Weekly Task",
-            slug="weekly_task",
-            frequency=ChoreFrequency.WEEKLY,
-            assignees=["alice"],
-        )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor_manual = ChoreSensor(mock_hass, chore_manual, "alice")
@@ -793,15 +787,10 @@ class TestStartNewDayService:
             sensor_daily.set_state = AsyncMock()
             sensor_daily._attr_native_value = ChoreState.COMPLETE.value
 
-            sensor_weekly = ChoreSensor(mock_hass, chore_weekly, "alice")
-            sensor_weekly.set_state = AsyncMock()
-            sensor_weekly._attr_native_value = ChoreState.COMPLETE.value
-
         mock_hass.data[DOMAIN] = {
             "sensors": {
                 "alice_manual_task": sensor_manual,
                 "alice_daily_task": sensor_daily,
-                "alice_weekly_task": sensor_weekly,
             }
         }
 
@@ -820,8 +809,6 @@ class TestStartNewDayService:
         sensor_manual.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
         # Daily should be reset to PENDING
         sensor_daily.set_state.assert_called_once_with(ChoreState.PENDING)
-        # Weekly should not be reset
-        sensor_weekly.set_state.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_start_new_day_specific_user(self, mock_hass: MagicMock) -> None:

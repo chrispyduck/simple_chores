@@ -13,7 +13,6 @@ class ChoreFrequency(str, Enum):
     """Frequency for chores."""
 
     DAILY = "daily"
-    WEEKLY = "weekly"
     MANUAL = "manual"
 
 
