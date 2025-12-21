@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
@@ -290,8 +291,13 @@ class ChoreSensorManager:
             LOGGER.info("Added %d summary sensor(s)", len(summary_sensors_to_add))
 
         # Update all existing summary sensors
-        for summary_sensor in self.summary_sensors.values():
-            summary_sensor.async_schedule_update_ha_state(force_refresh=True)
+        if self.summary_sensors:
+            await asyncio.gather(
+                *[
+                    summary_sensor.async_update_ha_state(force_refresh=True)
+                    for summary_sensor in self.summary_sensors.values()
+                ]
+            )
 
 
 class ChoreSensor(RestoreEntity, SensorEntity):
@@ -432,7 +438,7 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         if DOMAIN in self.hass.data and "summary_sensors" in self.hass.data[DOMAIN]:
             summary_sensors = self.hass.data[DOMAIN]["summary_sensors"]
             if self._assignee in summary_sensors:
-                summary_sensors[self._assignee].async_schedule_update_ha_state(
+                await summary_sensors[self._assignee].async_update_ha_state(
                     force_refresh=True
                 )
 
