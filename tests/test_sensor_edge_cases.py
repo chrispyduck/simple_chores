@@ -67,8 +67,14 @@ class TestSensorStatePersistence:
         sensor1 = ChoreSensor(mock_hass, chore, "alice")
         await sensor1.set_state(ChoreState.COMPLETE)
 
+        # Create mock last state with the saved value
+        mock_last_state = MagicMock()
+        mock_last_state.state = ChoreState.COMPLETE.value
+
         # Create second sensor with same parameters
         sensor2 = ChoreSensor(mock_hass, chore, "alice")
+        sensor2.async_get_last_state = AsyncMock(return_value=mock_last_state)
+        await sensor2.async_added_to_hass()
 
         # State should be restored
         assert sensor2.native_value == ChoreState.COMPLETE.value
@@ -140,7 +146,14 @@ class TestSensorStatePersistence:
         sensor1 = ChoreSensor(mock_hass, chore, "alice")
         await sensor1.set_state(ChoreState.COMPLETE)
 
+        # Create mock last state
+        mock_last_state = MagicMock()
+        mock_last_state.state = ChoreState.COMPLETE.value
+
         sensor2 = ChoreSensor(mock_hass, chore, "alice")
+        sensor2.async_get_last_state = AsyncMock(return_value=mock_last_state)
+        await sensor2.async_added_to_hass()
+
         assert sensor2.native_value == ChoreState.COMPLETE.value
 
     @pytest.mark.asyncio
@@ -158,7 +171,14 @@ class TestSensorStatePersistence:
         sensor1 = ChoreSensor(mock_hass, chore, "alice.smith")
         await sensor1.set_state(ChoreState.COMPLETE)
 
+        # Create mock last state
+        mock_last_state = MagicMock()
+        mock_last_state.state = ChoreState.COMPLETE.value
+
         sensor2 = ChoreSensor(mock_hass, chore, "alice.smith")
+        sensor2.async_get_last_state = AsyncMock(return_value=mock_last_state)
+        await sensor2.async_added_to_hass()
+
         assert sensor2.native_value == ChoreState.COMPLETE.value
 
 

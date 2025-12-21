@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, LOGGER, sanitize_entity_id
 from .models import ChoreConfig, ChoreState, SimpleChoresConfig
@@ -293,7 +294,7 @@ class ChoreSensorManager:
             summary_sensor.async_schedule_update_ha_state(force_refresh=True)
 
 
-class ChoreSensor(SensorEntity):
+class ChoreSensor(RestoreEntity, SensorEntity):
     """Sensor representing a chore for a specific assignee."""
 
     _attr_has_entity_name = False
@@ -338,19 +339,39 @@ class ChoreSensor(SensorEntity):
             suggested_area="Household",
         )
 
-        # Initialize state - use restore state if available
+        # Initialize state - will be restored in async_added_to_hass if available
         self._attr_native_value = ChoreState.NOT_REQUESTED.value
 
-        # Store state in hass.data for persistence across reloads
+        # Store state in hass.data for service access
         if DOMAIN not in self.hass.data:
             self.hass.data[DOMAIN] = {}
         if "states" not in self.hass.data[DOMAIN]:
             self.hass.data[DOMAIN]["states"] = {}
 
-        # Restore previous state if it exists
-        state_key = f"{sanitized_assignee}_{sanitized_slug}"
-        if state_key in self.hass.data[DOMAIN]["states"]:
-            self._attr_native_value = self.hass.data[DOMAIN]["states"][state_key]
+    async def async_added_to_hass(self) -> None:
+        """Restore previous state when entity is added to hass."""
+        await super().async_added_to_hass()
+
+        # Restore state from previous session
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in [
+            ChoreState.NOT_REQUESTED.value,
+            ChoreState.PENDING.value,
+            ChoreState.COMPLETE.value,
+        ]:
+            self._attr_native_value = last_state.state
+            LOGGER.debug(
+                "Restored state for %s: %s",
+                self.entity_id,
+                last_state.state,
+            )
+
+        # Update in-memory state tracking for services
+        state_key = (
+            f"{sanitize_entity_id(self._assignee)}_"
+            f"{sanitize_entity_id(self._chore.slug)}"
+        )
+        self.hass.data[DOMAIN]["states"][state_key] = self._attr_native_value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

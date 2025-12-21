@@ -444,8 +444,14 @@ class TestSensorManagerIntegration:
         # State should be preserved
         assert sensor1.native_value == ChoreState.COMPLETE.value
 
+        # Create mock last state
+        mock_last_state = MagicMock()
+        mock_last_state.state = ChoreState.COMPLETE.value
+
         # Create new sensor with same slug/assignee (simulating recreation)
         sensor2 = ChoreSensor(mock_hass, chore2, "alice")
+        sensor2.async_get_last_state = AsyncMock(return_value=mock_last_state)
+        await sensor2.async_added_to_hass()
 
         # State should be restored
         assert sensor2.native_value == ChoreState.COMPLETE.value

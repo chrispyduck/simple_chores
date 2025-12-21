@@ -453,18 +453,22 @@ class TestChoreSensor:
         assert sensor.icon == "mdi:clipboard-list-outline"
         sensor.async_update_ha_state.assert_called_once()
 
-    def test_state_persistence_on_init(
+    @pytest.mark.asyncio
+    async def test_state_persistence_on_init(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
     ) -> None:
         """Test that sensor restores previous state on init."""
-        # Pre-populate state
-        mock_hass.data["simple_chores"] = {
-            "states": {
-                "alice_dishes": ChoreState.COMPLETE.value,
-            }
-        }
+        # Create a mock last state
+        mock_last_state = MagicMock()
+        mock_last_state.state = ChoreState.COMPLETE.value
 
         sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+
+        # Mock async_get_last_state to return our mock state
+        sensor.async_get_last_state = AsyncMock(return_value=mock_last_state)
+
+        # Trigger state restoration
+        await sensor.async_added_to_hass()
 
         assert sensor.native_value == ChoreState.COMPLETE.value
 
