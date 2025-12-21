@@ -107,10 +107,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         raise ServiceValidationError(msg)
 
     sensor = sensors[sensor_id]
-    sensor.set_state(ChoreState.NOT_REQUESTED)
-
-    sensor = sensors[sensor_id]
-    sensor.set_state(ChoreState.COMPLETE)
+    await sensor.set_state(ChoreState.COMPLETE)
     LOGGER.info("Marked chore '%s' as complete for user '%s'", chore_slug, user)
 
 
@@ -142,7 +139,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
         raise ServiceValidationError(msg)
 
     sensor = sensors[sensor_id]
-    sensor.set_state(ChoreState.PENDING)
+    await sensor.set_state(ChoreState.PENDING)
     LOGGER.info("Marked chore '%s' as pending for user '%s'", chore_slug, user)
 
 
@@ -174,7 +171,7 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
         raise ServiceValidationError(msg)
 
     sensor = sensors[sensor_id]
-    sensor.set_state(ChoreState.NOT_REQUESTED)
+    await sensor.set_state(ChoreState.NOT_REQUESTED)
     LOGGER.info("Marked chore '%s' as not requested for user '%s'", chore_slug, user)
 
 
@@ -205,7 +202,7 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
 
         # Only reset sensors that are currently COMPLETE
         if sensor.native_value == ChoreState.COMPLETE.value:
-            sensor.set_state(ChoreState.NOT_REQUESTED)
+            await sensor.set_state(ChoreState.NOT_REQUESTED)
             reset_count += 1
 
     if user:

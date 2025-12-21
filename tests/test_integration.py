@@ -428,7 +428,7 @@ class TestSensorManagerIntegration:
 
         # Create sensor and set state
         sensor1 = ChoreSensor(mock_hass, chore1, "alice")
-        sensor1.set_state(ChoreState.COMPLETE)
+        await sensor1.set_state(ChoreState.COMPLETE)
 
         # Simulate config change - chore name updated
         chore2 = ChoreConfig(

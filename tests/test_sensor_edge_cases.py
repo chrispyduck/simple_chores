@@ -51,7 +51,8 @@ def mock_config_loader(mock_hass: MagicMock) -> MagicMock:
 class TestSensorStatePersistence:
     """Tests for sensor state persistence edge cases."""
 
-    def test_state_persists_across_sensor_recreation(
+    @pytest.mark.asyncio
+    async def test_state_persists_across_sensor_recreation(
         self, mock_hass: MagicMock
     ) -> None:
         """Test that state persists when sensor is recreated."""
@@ -64,7 +65,7 @@ class TestSensorStatePersistence:
 
         # Create first sensor and set state
         sensor1 = ChoreSensor(mock_hass, chore, "alice")
-        sensor1.set_state(ChoreState.COMPLETE)
+        await sensor1.set_state(ChoreState.COMPLETE)
 
         # Create second sensor with same parameters
         sensor2 = ChoreSensor(mock_hass, chore, "alice")
@@ -72,7 +73,8 @@ class TestSensorStatePersistence:
         # State should be restored
         assert sensor2.native_value == ChoreState.COMPLETE.value
 
-    def test_state_isolated_between_different_assignees(
+    @pytest.mark.asyncio
+    async def test_state_isolated_between_different_assignees(
         self, mock_hass: MagicMock
     ) -> None:
         """Test that state is isolated between different assignees."""
@@ -87,14 +89,15 @@ class TestSensorStatePersistence:
         sensor_bob = ChoreSensor(mock_hass, chore, "bob")
 
         # Set different states
-        sensor_alice.set_state(ChoreState.COMPLETE)
-        sensor_bob.set_state(ChoreState.PENDING)
+        await sensor_alice.set_state(ChoreState.COMPLETE)
+        await sensor_bob.set_state(ChoreState.PENDING)
 
         # States should be independent
         assert sensor_alice.native_value == ChoreState.COMPLETE.value
         assert sensor_bob.native_value == ChoreState.PENDING.value
 
-    def test_state_isolated_between_different_chores(
+    @pytest.mark.asyncio
+    async def test_state_isolated_between_different_chores(
         self, mock_hass: MagicMock
     ) -> None:
         """Test that states are isolated between different chores."""
@@ -115,14 +118,15 @@ class TestSensorStatePersistence:
         sensor2 = ChoreSensor(mock_hass, chore2, "alice")
 
         # Set different states
-        sensor1.set_state(ChoreState.COMPLETE)
-        sensor2.set_state(ChoreState.PENDING)
+        await sensor1.set_state(ChoreState.COMPLETE)
+        await sensor2.set_state(ChoreState.PENDING)
 
         # States should be independent
         assert sensor1.native_value == ChoreState.COMPLETE.value
         assert sensor2.native_value == ChoreState.PENDING.value
 
-    def test_state_persistence_with_special_characters_in_slug(
+    @pytest.mark.asyncio
+    async def test_state_persistence_with_special_characters_in_slug(
         self, mock_hass: MagicMock
     ) -> None:
         """Test state persistence with special characters in slug."""
@@ -134,12 +138,13 @@ class TestSensorStatePersistence:
         )
 
         sensor1 = ChoreSensor(mock_hass, chore, "alice")
-        sensor1.set_state(ChoreState.COMPLETE)
+        await sensor1.set_state(ChoreState.COMPLETE)
 
         sensor2 = ChoreSensor(mock_hass, chore, "alice")
         assert sensor2.native_value == ChoreState.COMPLETE.value
 
-    def test_state_persistence_with_special_characters_in_assignee(
+    @pytest.mark.asyncio
+    async def test_state_persistence_with_special_characters_in_assignee(
         self, mock_hass: MagicMock
     ) -> None:
         """Test state persistence with special characters in assignee."""
@@ -151,7 +156,7 @@ class TestSensorStatePersistence:
         )
 
         sensor1 = ChoreSensor(mock_hass, chore, "alice.smith")
-        sensor1.set_state(ChoreState.COMPLETE)
+        await sensor1.set_state(ChoreState.COMPLETE)
 
         sensor2 = ChoreSensor(mock_hass, chore, "alice.smith")
         assert sensor2.native_value == ChoreState.COMPLETE.value
@@ -389,7 +394,8 @@ class TestSensorManagerEdgeCases:
 class TestSensorIconStates:
     """Tests for sensor icon based on state."""
 
-    def test_icon_changes_with_state(self, mock_hass: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_icon_changes_with_state(self, mock_hass: MagicMock) -> None:
         """Test that icon is preserved from chore config regardless of state."""
         chore = ChoreConfig(
             name="Dishes",
@@ -403,15 +409,15 @@ class TestSensorIconStates:
         assert sensor.icon == "mdi:clipboard-list-outline"
 
         # Set to pending - icon should NOT change
-        sensor.set_state(ChoreState.PENDING)
+        await sensor.set_state(ChoreState.PENDING)
         assert sensor.icon == "mdi:clipboard-list-outline"
 
         # Set to complete - icon should NOT change
-        sensor.set_state(ChoreState.COMPLETE)
+        await sensor.set_state(ChoreState.COMPLETE)
         assert sensor.icon == "mdi:clipboard-list-outline"
 
         # Set back to not requested - icon should remain the same
-        sensor.set_state(ChoreState.NOT_REQUESTED)
+        await sensor.set_state(ChoreState.NOT_REQUESTED)
         assert sensor.icon == "mdi:clipboard-list-outline"
 
 

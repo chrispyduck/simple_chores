@@ -384,7 +384,7 @@ class ChoreSensor(SensorEntity):
         self._attr_icon = chore.icon
         self.async_write_ha_state()
 
-    def set_state(self, state: ChoreState) -> None:
+    async def set_state(self, state: ChoreState) -> None:
         """
         Set the chore state.
 
@@ -404,7 +404,8 @@ class ChoreSensor(SensorEntity):
         # Icon stays as configured in chore (self._chore.icon)
         # Do not change icon based on state
 
-        self.async_write_ha_state()
+        # Use async_update_ha_state to ensure the state is written before returning
+        await self.async_update_ha_state(force_refresh=True)
 
         # Update summary sensor for this assignee
         if DOMAIN in self.hass.data and "summary_sensors" in self.hass.data[DOMAIN]:

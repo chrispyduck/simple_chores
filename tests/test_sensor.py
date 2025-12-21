@@ -402,19 +402,20 @@ class TestChoreSensor:
         assert sensor.icon == "mdi:dishwasher"
         sensor.async_write_ha_state.assert_called_once()
 
-    def test_set_state_pending(
+    @pytest.mark.asyncio
+    async def test_set_state_pending(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
     ) -> None:
         """Test setting sensor state to pending."""
         sensor = ChoreSensor(mock_hass, sample_chore, "alice")
-        sensor.async_write_ha_state = Mock()
+        sensor.async_update_ha_state = AsyncMock()
 
-        sensor.set_state(ChoreState.PENDING)
+        await sensor.set_state(ChoreState.PENDING)
 
         assert sensor.native_value == ChoreState.PENDING.value
         # Icon should remain as configured in chore, not change with state
         assert sensor.icon == "mdi:clipboard-list-outline"
-        sensor.async_write_ha_state.assert_called_once()
+        sensor.async_update_ha_state.assert_called_once()
 
         # Check persistence
         state_key = "alice_dishes"
@@ -423,32 +424,34 @@ class TestChoreSensor:
             == ChoreState.PENDING.value
         )
 
-    def test_set_state_complete(
+    @pytest.mark.asyncio
+    async def test_set_state_complete(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
     ) -> None:
         """Test setting sensor state to complete."""
         sensor = ChoreSensor(mock_hass, sample_chore, "alice")
-        sensor.async_write_ha_state = Mock()
+        sensor.async_update_ha_state = AsyncMock()
 
-        sensor.set_state(ChoreState.COMPLETE)
+        await sensor.set_state(ChoreState.COMPLETE)
 
         assert sensor.native_value == ChoreState.COMPLETE.value
         # Icon should remain as configured in chore, not change with state
         assert sensor.icon == "mdi:clipboard-list-outline"
-        sensor.async_write_ha_state.assert_called_once()
+        sensor.async_update_ha_state.assert_called_once()
 
-    def test_set_state_not_requested(
+    @pytest.mark.asyncio
+    async def test_set_state_not_requested(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
     ) -> None:
         """Test setting sensor state to not requested."""
         sensor = ChoreSensor(mock_hass, sample_chore, "alice")
-        sensor.async_write_ha_state = Mock()
+        sensor.async_update_ha_state = AsyncMock()
 
-        sensor.set_state(ChoreState.NOT_REQUESTED)
+        await sensor.set_state(ChoreState.NOT_REQUESTED)
 
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value
         assert sensor.icon == "mdi:clipboard-list-outline"
-        sensor.async_write_ha_state.assert_called_once()
+        sensor.async_update_ha_state.assert_called_once()
 
     def test_state_persistence_on_init(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
@@ -476,7 +479,8 @@ class TestChoreSensor:
         assert sensor1.entity_id != sensor2.entity_id
         assert sensor1._assignee == "alice"
 
-    def test_set_state_updates_summary_sensor(
+    @pytest.mark.asyncio
+    async def test_set_state_updates_summary_sensor(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
     ) -> None:
         """Test that changing a chore state updates the summary sensor."""
@@ -491,16 +495,17 @@ class TestChoreSensor:
         }
 
         sensor = ChoreSensor(mock_hass, sample_chore, "alice")
-        sensor.async_write_ha_state = Mock()
+        sensor.async_update_ha_state = AsyncMock()
 
-        sensor.set_state(ChoreState.COMPLETE)
+        await sensor.set_state(ChoreState.COMPLETE)
 
         # Verify summary sensor was updated
         mock_summary.async_schedule_update_ha_state.assert_called_once_with(
             force_refresh=True
         )
 
-    def test_icon_preserved_with_custom_icon(self, mock_hass: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_icon_preserved_with_custom_icon(self, mock_hass: MagicMock) -> None:
         """Test that custom icon is preserved when state changes."""
         chore = ChoreConfig(
             name="Clean Kitchen",
@@ -511,21 +516,21 @@ class TestChoreSensor:
             icon="mdi:broom",
         )
         sensor = ChoreSensor(mock_hass, chore, "alice")
-        sensor.async_write_ha_state = Mock()
+        sensor.async_update_ha_state = AsyncMock()
 
         # Icon should start as configured
         assert sensor.icon == "mdi:broom"
 
         # Change state to PENDING
-        sensor.set_state(ChoreState.PENDING)
+        await sensor.set_state(ChoreState.PENDING)
         assert sensor.icon == "mdi:broom"  # Icon should NOT change
 
         # Change state to COMPLETE
-        sensor.set_state(ChoreState.COMPLETE)
+        await sensor.set_state(ChoreState.COMPLETE)
         assert sensor.icon == "mdi:broom"  # Icon should still NOT change
 
         # Change state back to NOT_REQUESTED
-        sensor.set_state(ChoreState.NOT_REQUESTED)
+        await sensor.set_state(ChoreState.NOT_REQUESTED)
         assert sensor.icon == "mdi:broom"  # Icon should remain custom icon
 
     def test_sensor_should_not_poll(

@@ -1,6 +1,6 @@
 """Tests for simple_chores services."""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -47,7 +47,7 @@ def mock_sensor(mock_hass: MagicMock) -> ChoreSensor:
     )
     with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
         sensor = ChoreSensor(mock_hass, chore, "alice")
-        sensor.set_state = Mock()
+        sensor.set_state = AsyncMock()
     return sensor
 
 
@@ -507,7 +507,7 @@ class TestServiceIntegration:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(mock_hass, chore, "alice")
-            sensor.set_state = Mock()
+            sensor.set_state = AsyncMock()
 
         # Simulate sensor platform setup storing sensors
         mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}}
@@ -543,8 +543,8 @@ class TestServiceIntegration:
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor_alice = ChoreSensor(mock_hass, chore, "alice")
             sensor_bob = ChoreSensor(mock_hass, chore, "bob")
-            sensor_alice.set_state = Mock()
-            sensor_bob.set_state = Mock()
+            sensor_alice.set_state = AsyncMock()
+            sensor_bob.set_state = AsyncMock()
 
         mock_hass.data[DOMAIN] = {
             "sensors": {"alice_dishes": sensor_alice, "bob_dishes": sensor_bob}
@@ -591,7 +591,7 @@ class TestServiceIntegration:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(mock_hass, chore, "alice")
-            sensor.set_state = Mock()
+            sensor.set_state = AsyncMock()
 
         # Key should be sanitized: hyphens converted to underscores
         mock_hass.data[DOMAIN] = {"sensors": {"alice_test_chore_123": sensor}}
@@ -638,15 +638,15 @@ class TestResetCompletedService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor1 = ChoreSensor(mock_hass, chore1, "alice")
-            sensor1.set_state = Mock()
+            sensor1.set_state = AsyncMock()
             sensor1._attr_native_value = ChoreState.COMPLETE.value
 
             sensor2 = ChoreSensor(mock_hass, chore2, "bob")
-            sensor2.set_state = Mock()
+            sensor2.set_state = AsyncMock()
             sensor2._attr_native_value = ChoreState.COMPLETE.value
 
             sensor3 = ChoreSensor(mock_hass, chore3, "alice")
-            sensor3.set_state = Mock()
+            sensor3.set_state = AsyncMock()
             sensor3._attr_native_value = ChoreState.PENDING.value
 
         mock_hass.data[DOMAIN] = {
@@ -693,11 +693,11 @@ class TestResetCompletedService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor_alice = ChoreSensor(mock_hass, chore1, "alice")
-            sensor_alice.set_state = Mock()
+            sensor_alice.set_state = AsyncMock()
             sensor_alice._attr_native_value = ChoreState.COMPLETE.value
 
             sensor_bob = ChoreSensor(mock_hass, chore2, "bob")
-            sensor_bob.set_state = Mock()
+            sensor_bob.set_state = AsyncMock()
             sensor_bob._attr_native_value = ChoreState.COMPLETE.value
 
         mock_hass.data[DOMAIN] = {
@@ -735,7 +735,7 @@ class TestResetCompletedService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(mock_hass, chore, "alice")
-            sensor.set_state = Mock()
+            sensor.set_state = AsyncMock()
             sensor._attr_native_value = ChoreState.PENDING.value
 
         mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}}
