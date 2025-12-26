@@ -25,6 +25,7 @@ from .const import (
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_NOT_REQUESTED,
     SERVICE_MARK_PENDING,
+    SERVICE_REFRESH_SUMMARY,
     SERVICE_RESET_COMPLETED,
     SERVICE_START_NEW_DAY,
     SERVICE_UPDATE_CHORE,
@@ -472,6 +473,47 @@ async def handle_delete_chore(hass: HomeAssistant, call: ServiceCall) -> None:
         raise ServiceValidationError(msg) from err
 
 
+async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the refresh_summary service call."""
+    user = call.data.get(ATTR_USER)
+
+    LOGGER.info(
+        "Service 'refresh_summary' called with user='%s'",
+        user if user else "all users",
+    )
+
+    if DOMAIN not in hass.data:
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
+
+    summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
+
+    if not summary_sensors:
+        LOGGER.warning("No summary sensors found")
+        return
+
+    # Refresh specific user's summary sensor or all summary sensors
+    if user:
+        from .const import sanitize_entity_id
+
+        sanitized_user = sanitize_entity_id(user)
+        if sanitized_user in summary_sensors:
+            summary_sensors[sanitized_user].async_schedule_update_ha_state(
+                force_refresh=True
+            )
+            LOGGER.info("Refreshed summary sensor for user '%s'", user)
+        else:
+            msg = f"No summary sensor found for user '{user}'"
+            LOGGER.error(msg)
+            raise ServiceValidationError(msg)
+    else:
+        # Refresh all summary sensors
+        for summary_sensor in summary_sensors.values():
+            summary_sensor.async_schedule_update_ha_state(force_refresh=True)
+        LOGGER.info("Refreshed %d summary sensor(s)", len(summary_sensors))
+
+
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up services for the Simple Chores integration."""
     hass.services.async_register(
@@ -521,6 +563,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_DELETE_CHORE,
         partial(handle_delete_chore, hass),
         schema=DELETE_CHORE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REFRESH_SUMMARY,
+        partial(handle_refresh_summary, hass),
+        schema=RESET_COMPLETED_SCHEMA,  # Same schema as reset_completed (optional user)
     )
 
     LOGGER.debug("Registered Simple Chores services")

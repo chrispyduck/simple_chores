@@ -14,6 +14,7 @@ from custom_components.simple_chores.const import (
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_NOT_REQUESTED,
     SERVICE_MARK_PENDING,
+    SERVICE_REFRESH_SUMMARY,
     SERVICE_RESET_COMPLETED,
     SERVICE_START_NEW_DAY,
     SERVICE_UPDATE_CHORE,
@@ -63,7 +64,7 @@ class TestServiceSetup:
         """Test that all services are registered."""
         await async_setup_services(mock_hass)
 
-        assert mock_hass.services.async_register.call_count == 8
+        assert mock_hass.services.async_register.call_count == 9
 
         # Check that each service was registered
         calls = mock_hass.services.async_register.call_args_list
@@ -77,6 +78,7 @@ class TestServiceSetup:
         assert SERVICE_CREATE_CHORE in registered_services
         assert SERVICE_UPDATE_CHORE in registered_services
         assert SERVICE_DELETE_CHORE in registered_services
+        assert SERVICE_REFRESH_SUMMARY in registered_services
 
     @pytest.mark.asyncio
     async def test_setup_services_uses_correct_domain(
@@ -1374,3 +1376,80 @@ class TestSummarySensorUpdates:
         # Verify both summary sensors were updated
         mock_summary_alice.async_schedule_update_ha_state.assert_called_once()
         mock_summary_bob.async_schedule_update_ha_state.assert_called_once()
+
+
+class TestRefreshSummaryService:
+    """Tests for refresh_summary service."""
+
+    @pytest.mark.asyncio
+    async def test_refresh_summary_all_users(self, mock_hass: MagicMock) -> None:
+        """Test refresh_summary refreshes all summary sensors when no user specified."""
+        mock_summary_alice = Mock()
+        mock_summary_alice.async_schedule_update_ha_state = Mock()
+        mock_summary_bob = Mock()
+        mock_summary_bob.async_schedule_update_ha_state = Mock()
+
+        mock_hass.data[DOMAIN] = {
+            "summary_sensors": {"alice": mock_summary_alice, "bob": mock_summary_bob}
+        }
+
+        await async_setup_services(mock_hass)
+
+        # Get refresh_summary handler (should be the 9th service registered)
+        handler = mock_hass.services.async_register.call_args_list[8][0][2]
+        call = MagicMock()
+        call.data = {}
+
+        await handler(call)
+
+        # Verify both summary sensors were refreshed
+        mock_summary_alice.async_schedule_update_ha_state.assert_called_once_with(
+            force_refresh=True
+        )
+        mock_summary_bob.async_schedule_update_ha_state.assert_called_once_with(
+            force_refresh=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_refresh_summary_specific_user(self, mock_hass: MagicMock) -> None:
+        """Test refresh_summary refreshes only specified user's summary sensor."""
+        mock_summary_alice = Mock()
+        mock_summary_alice.async_schedule_update_ha_state = Mock()
+        mock_summary_bob = Mock()
+        mock_summary_bob.async_schedule_update_ha_state = Mock()
+
+        mock_hass.data[DOMAIN] = {
+            "summary_sensors": {"alice": mock_summary_alice, "bob": mock_summary_bob}
+        }
+
+        await async_setup_services(mock_hass)
+
+        # Get refresh_summary handler
+        handler = mock_hass.services.async_register.call_args_list[8][0][2]
+        call = MagicMock()
+        call.data = {ATTR_USER: "alice"}
+
+        await handler(call)
+
+        # Verify only Alice's summary sensor was refreshed
+        mock_summary_alice.async_schedule_update_ha_state.assert_called_once_with(
+            force_refresh=True
+        )
+        mock_summary_bob.async_schedule_update_ha_state.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_refresh_summary_nonexistent_user(self, mock_hass: MagicMock) -> None:
+        """Test refresh_summary raises error for nonexistent user."""
+        mock_summary_alice = Mock()
+
+        mock_hass.data[DOMAIN] = {"summary_sensors": {"alice": mock_summary_alice}}
+
+        await async_setup_services(mock_hass)
+
+        # Get refresh_summary handler
+        handler = mock_hass.services.async_register.call_args_list[8][0][2]
+        call = MagicMock()
+        call.data = {ATTR_USER: "charlie"}
+
+        with pytest.raises(ServiceValidationError, match="No summary sensor found"):
+            await handler(call)

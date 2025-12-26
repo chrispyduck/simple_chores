@@ -193,3 +193,15 @@ delete_chore:
       example: "take_out_trash"
       selector:
         text:
+
+refresh_summary:
+  name: Refresh Summary
+  description: Force an immediate refresh of summary sensor attributes. Use this if summary sensors are not updating correctly after state changes.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, refreshes all summary sensors)
+      required: false
+      example: "alice"
+      selector:
+        text:

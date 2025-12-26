@@ -24,6 +24,7 @@ SERVICE_START_NEW_DAY = "start_new_day"
 SERVICE_CREATE_CHORE = "create_chore"
 SERVICE_UPDATE_CHORE = "update_chore"
 SERVICE_DELETE_CHORE = "delete_chore"
+SERVICE_REFRESH_SUMMARY = "refresh_summary"
 
 # Service parameters
 ATTR_USER = "user"

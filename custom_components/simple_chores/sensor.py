@@ -430,11 +430,11 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         # Use async_update_ha_state to ensure the state is written before returning
         await self.async_update_ha_state(force_refresh=True)
 
-        # Update summary sensor for this assignee - schedule write immediately
+        # Update summary sensor for this assignee
         if DOMAIN in self.hass.data and "summary_sensors" in self.hass.data[DOMAIN]:
             summary_sensors = self.hass.data[DOMAIN]["summary_sensors"]
             if self._assignee in summary_sensors:
-                # Use async_schedule to trigger immediate update without blocking
+                # Schedule immediate update and also write state to ensure attributes are pushed
                 summary_sensors[self._assignee].async_schedule_update_ha_state(
                     force_refresh=True
                 )
@@ -482,6 +482,17 @@ class ChoreSummarySensor(SensorEntity):
             entry_type=dr.DeviceEntryType.SERVICE,
             suggested_area="Household",
         )
+
+    async def async_update(self) -> None:
+        """Update the sensor.
+
+        This method doesn't fetch data since we compute everything from properties,
+        but implementing it ensures Home Assistant re-evaluates our properties
+        when force_refresh=True is used.
+        """
+        # Properties are computed dynamically from manager.sensors
+        # This method just needs to exist to trigger property re-evaluation
+        pass
 
     @property
     def native_value(self) -> int:
