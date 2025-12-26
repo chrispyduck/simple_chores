@@ -290,14 +290,10 @@ class ChoreSensorManager:
             self.async_add_entities(summary_sensors_to_add)
             LOGGER.info("Added %d summary sensor(s)", len(summary_sensors_to_add))
 
-        # Update all existing summary sensors
+        # Update all existing summary sensors - schedule immediate updates
         if self.summary_sensors:
-            await asyncio.gather(
-                *[
-                    summary_sensor.async_update_ha_state(force_refresh=True)
-                    for summary_sensor in self.summary_sensors.values()
-                ]
-            )
+            for summary_sensor in self.summary_sensors.values():
+                summary_sensor.async_schedule_update_ha_state(force_refresh=True)
 
 
 class ChoreSensor(RestoreEntity, SensorEntity):
@@ -434,11 +430,12 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         # Use async_update_ha_state to ensure the state is written before returning
         await self.async_update_ha_state(force_refresh=True)
 
-        # Update summary sensor for this assignee
+        # Update summary sensor for this assignee - schedule write immediately
         if DOMAIN in self.hass.data and "summary_sensors" in self.hass.data[DOMAIN]:
             summary_sensors = self.hass.data[DOMAIN]["summary_sensors"]
             if self._assignee in summary_sensors:
-                await summary_sensors[self._assignee].async_update_ha_state(
+                # Use async_schedule to trigger immediate update without blocking
+                summary_sensors[self._assignee].async_schedule_update_ha_state(
                     force_refresh=True
                 )
 

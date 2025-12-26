@@ -1141,3 +1141,236 @@ class TestStartNewDayService:
         sensor2.set_state.assert_not_called()
         # Daily complete should be reset to PENDING
         sensor3.set_state.assert_called_once_with(ChoreState.PENDING)
+
+
+class TestSummarySensorUpdates:
+    """Tests to verify all state-changing operations update summary sensors."""
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_updates_summary_sensor(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test mark_complete updates the summary sensor."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+
+        mock_summary = Mock()
+        mock_summary.async_schedule_update_ha_state = Mock()
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor.async_update_ha_state = AsyncMock()
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": sensor},
+            "summary_sensors": {"alice": mock_summary},
+            "states": {},
+        }
+
+        await async_setup_services(mock_hass)
+
+        # Get mark_complete handler
+        handler = mock_hass.services.async_register.call_args_list[0][0][2]
+        call = MagicMock()
+        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+
+        await handler(call)
+
+        # Verify summary sensor was updated
+        mock_summary.async_schedule_update_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_mark_pending_updates_summary_sensor(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test mark_pending updates the summary sensor."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+
+        mock_summary = Mock()
+        mock_summary.async_schedule_update_ha_state = Mock()
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor.async_update_ha_state = AsyncMock()
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": sensor},
+            "summary_sensors": {"alice": mock_summary},
+            "states": {},
+        }
+
+        await async_setup_services(mock_hass)
+
+        # Get mark_pending handler
+        handler = mock_hass.services.async_register.call_args_list[1][0][2]
+        call = MagicMock()
+        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+
+        await handler(call)
+
+        # Verify summary sensor was updated
+        mock_summary.async_schedule_update_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_mark_not_requested_updates_summary_sensor(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test mark_not_requested updates the summary sensor."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+
+        mock_summary = Mock()
+        mock_summary.async_schedule_update_ha_state = Mock()
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor.async_update_ha_state = AsyncMock()
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": sensor},
+            "summary_sensors": {"alice": mock_summary},
+            "states": {},
+        }
+
+        await async_setup_services(mock_hass)
+
+        # Get mark_not_requested handler
+        handler = mock_hass.services.async_register.call_args_list[2][0][2]
+        call = MagicMock()
+        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+
+        await handler(call)
+
+        # Verify summary sensor was updated
+        mock_summary.async_schedule_update_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reset_completed_updates_summary_sensor(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test reset_completed updates the summary sensor."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+
+        mock_summary = Mock()
+        mock_summary.async_schedule_update_ha_state = Mock()
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor.async_update_ha_state = AsyncMock()
+            sensor._attr_native_value = ChoreState.COMPLETE.value
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": sensor},
+            "summary_sensors": {"alice": mock_summary},
+            "states": {},
+        }
+
+        await async_setup_services(mock_hass)
+
+        # Get reset_completed handler
+        handler = mock_hass.services.async_register.call_args_list[3][0][2]
+        call = MagicMock()
+        call.data = {}
+
+        await handler(call)
+
+        # Verify summary sensor was updated
+        mock_summary.async_schedule_update_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_start_new_day_updates_summary_sensor(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test start_new_day updates the summary sensor."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+
+        mock_summary = Mock()
+        mock_summary.async_schedule_update_ha_state = Mock()
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor.async_update_ha_state = AsyncMock()
+            sensor._attr_native_value = ChoreState.COMPLETE.value
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": sensor},
+            "summary_sensors": {"alice": mock_summary},
+            "states": {},
+        }
+
+        await async_setup_services(mock_hass)
+
+        # Get start_new_day handler
+        handler = mock_hass.services.async_register.call_args_list[4][0][2]
+        call = MagicMock()
+        call.data = {}
+
+        await handler(call)
+
+        # Verify summary sensor was updated
+        mock_summary.async_schedule_update_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_mark_all_assignees_updates_all_summary_sensors(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test marking all assignees updates all their summary sensors."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+        )
+
+        mock_summary_alice = Mock()
+        mock_summary_alice.async_schedule_update_ha_state = Mock()
+        mock_summary_bob = Mock()
+        mock_summary_bob.async_schedule_update_ha_state = Mock()
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_alice = ChoreSensor(mock_hass, chore, "alice")
+            sensor_alice.async_update_ha_state = AsyncMock()
+            sensor_bob = ChoreSensor(mock_hass, chore, "bob")
+            sensor_bob.async_update_ha_state = AsyncMock()
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": sensor_alice, "bob_dishes": sensor_bob},
+            "summary_sensors": {"alice": mock_summary_alice, "bob": mock_summary_bob},
+            "states": {},
+        }
+
+        await async_setup_services(mock_hass)
+
+        # Get mark_complete handler
+        handler = mock_hass.services.async_register.call_args_list[0][0][2]
+        call = MagicMock()
+        call.data = {ATTR_CHORE_SLUG: "dishes"}  # No user specified
+
+        await handler(call)
+
+        # Verify both summary sensors were updated
+        mock_summary_alice.async_schedule_update_ha_state.assert_called_once()
+        mock_summary_bob.async_schedule_update_ha_state.assert_called_once()

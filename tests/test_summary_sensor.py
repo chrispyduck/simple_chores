@@ -200,3 +200,82 @@ class TestChoreSummarySensor:
             alice_summary._attr_device_info["identifiers"]
             == alice_chore._attr_device_info["identifiers"]
         )
+
+    @pytest.mark.asyncio
+    async def test_summary_attributes_update_after_set_state(
+        self, mock_hass: MagicMock, sample_config: SimpleChoresConfig
+    ) -> None:
+        """Test summary sensor attributes update when chore state changes via set_state."""
+        from custom_components.simple_chores.const import DOMAIN
+
+        mock_hass.data = {DOMAIN: {"states": {}, "summary_sensors": {}}}
+        mock_config_loader = MagicMock()
+        mock_config_loader.config = sample_config
+        async_add_entities = Mock()
+
+        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        await manager.async_setup()
+
+        # Store summary sensors in hass.data so set_state can find them
+        mock_hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
+
+        alice_summary = manager.summary_sensors["alice"]
+        alice_dishes = manager.sensors["alice_dishes"]
+        alice_vacuum = manager.sensors["alice_vacuum"]
+
+        # Initial state - both chores should be NOT_REQUESTED
+        initial_attrs = alice_summary.extra_state_attributes
+        assert len(initial_attrs["not_requested_chores"]) == 2
+        assert len(initial_attrs["pending_chores"]) == 0
+        assert len(initial_attrs["complete_chores"]) == 0
+        assert initial_attrs["total_chores"] == 2
+
+        # Change dishes to PENDING using set_state
+        await alice_dishes.set_state(ChoreState.PENDING)
+
+        # Check summary sensor attributes reflect the change
+        attrs_after_pending = alice_summary.extra_state_attributes
+        assert (
+            "sensor.simple_chore_alice_dishes" in attrs_after_pending["pending_chores"]
+        )
+        assert (
+            "sensor.simple_chore_alice_vacuum"
+            in attrs_after_pending["not_requested_chores"]
+        )
+        assert len(attrs_after_pending["pending_chores"]) == 1
+        assert len(attrs_after_pending["not_requested_chores"]) == 1
+        assert len(attrs_after_pending["complete_chores"]) == 0
+        assert alice_summary.native_value == 1
+
+        # Change vacuum to COMPLETE using set_state
+        await alice_vacuum.set_state(ChoreState.COMPLETE)
+
+        # Check summary sensor attributes reflect both changes
+        attrs_after_complete = alice_summary.extra_state_attributes
+        assert (
+            "sensor.simple_chore_alice_dishes" in attrs_after_complete["pending_chores"]
+        )
+        assert (
+            "sensor.simple_chore_alice_vacuum"
+            in attrs_after_complete["complete_chores"]
+        )
+        assert len(attrs_after_complete["pending_chores"]) == 1
+        assert len(attrs_after_complete["not_requested_chores"]) == 0
+        assert len(attrs_after_complete["complete_chores"]) == 1
+        assert alice_summary.native_value == 1
+
+        # Change dishes to COMPLETE
+        await alice_dishes.set_state(ChoreState.COMPLETE)
+
+        # Check summary sensor shows all complete
+        attrs_all_complete = alice_summary.extra_state_attributes
+        assert len(attrs_all_complete["pending_chores"]) == 0
+        assert len(attrs_all_complete["not_requested_chores"]) == 0
+        assert len(attrs_all_complete["complete_chores"]) == 2
+        assert (
+            "sensor.simple_chore_alice_dishes" in attrs_all_complete["complete_chores"]
+        )
+        assert (
+            "sensor.simple_chore_alice_vacuum" in attrs_all_complete["complete_chores"]
+        )
+        assert alice_summary.native_value == 0

@@ -490,7 +490,7 @@ class TestChoreSensor:
         """Test that changing a chore state updates the summary sensor."""
         # Create mock summary sensor
         mock_summary = Mock()
-        mock_summary.async_update_ha_state = AsyncMock()
+        mock_summary.async_schedule_update_ha_state = Mock()
 
         # Setup hass.data with summary sensor
         mock_hass.data["simple_chores"] = {
@@ -503,8 +503,8 @@ class TestChoreSensor:
 
         await sensor.set_state(ChoreState.COMPLETE)
 
-        # Verify summary sensor was updated
-        mock_summary.async_update_ha_state.assert_called_once_with(force_refresh=True)
+        # Verify summary sensor state was written
+        mock_summary.async_schedule_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_icon_preserved_with_custom_icon(self, mock_hass: MagicMock) -> None:
@@ -552,19 +552,12 @@ class TestChoreSensor:
         assert sensor.has_entity_name is False
 
     @pytest.mark.asyncio
-    async def test_summary_sensor_update_is_awaited(
+    async def test_summary_sensor_state_is_written(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig
     ) -> None:
-        """Test that summary sensor update is awaited, not just scheduled."""
-        # Create a mock summary sensor that tracks if it was awaited
+        """Test that summary sensor state is written when chore state changes."""
         mock_summary = Mock()
-        update_called = False
-
-        async def mock_update(*args, **kwargs):
-            nonlocal update_called
-            update_called = True
-
-        mock_summary.async_update_ha_state = AsyncMock(side_effect=mock_update)
+        mock_summary.async_schedule_update_ha_state = Mock()
 
         # Setup hass.data with summary sensor
         mock_hass.data["simple_chores"] = {
@@ -575,67 +568,8 @@ class TestChoreSensor:
         sensor = ChoreSensor(mock_hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
-        # Set state and verify the summary update was awaited
+        # Set state and verify the summary state was written
         await sensor.set_state(ChoreState.PENDING)
 
-        # If the update was properly awaited, the flag should be set
-        assert update_called, "Summary sensor update was not awaited"
-        mock_summary.async_update_ha_state.assert_called_once_with(force_refresh=True)
-
-    @pytest.mark.asyncio
-    async def test_all_state_changes_update_summary_sensor(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
-    ) -> None:
-        """Test that all state changes properly update the summary sensor."""
-        mock_summary = Mock()
-        mock_summary.async_update_ha_state = AsyncMock()
-
-        mock_hass.data["simple_chores"] = {
-            "states": {},
-            "summary_sensors": {"alice": mock_summary},
-        }
-
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
-        sensor.async_update_ha_state = AsyncMock()
-
-        # Test PENDING state change
-        await sensor.set_state(ChoreState.PENDING)
-        assert mock_summary.async_update_ha_state.call_count == 1
-        mock_summary.async_update_ha_state.assert_called_with(force_refresh=True)
-
-        # Test COMPLETE state change
-        mock_summary.async_update_ha_state.reset_mock()
-        await sensor.set_state(ChoreState.COMPLETE)
-        assert mock_summary.async_update_ha_state.call_count == 1
-        mock_summary.async_update_ha_state.assert_called_with(force_refresh=True)
-
-        # Test NOT_REQUESTED state change
-        mock_summary.async_update_ha_state.reset_mock()
-        await sensor.set_state(ChoreState.NOT_REQUESTED)
-        assert mock_summary.async_update_ha_state.call_count == 1
-        mock_summary.async_update_ha_state.assert_called_with(force_refresh=True)
-
-    @pytest.mark.asyncio
-    async def test_summary_sensor_update_uses_await_not_schedule(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
-    ) -> None:
-        """Test that we use await async_update_ha_state, not async_schedule_update_ha_state."""
-        mock_summary = Mock()
-        mock_summary.async_update_ha_state = AsyncMock()
-        mock_summary.async_schedule_update_ha_state = Mock()  # Should NOT be called
-
-        mock_hass.data["simple_chores"] = {
-            "states": {},
-            "summary_sensors": {"alice": mock_summary},
-        }
-
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
-        sensor.async_update_ha_state = AsyncMock()
-
-        await sensor.set_state(ChoreState.COMPLETE)
-
-        # Verify async_update_ha_state was called (awaited)
-        mock_summary.async_update_ha_state.assert_called_once()
-
-        # Verify async_schedule_update_ha_state was NOT called
-        mock_summary.async_schedule_update_ha_state.assert_not_called()
+        # Verify the summary sensor state was written
+        mock_summary.async_schedule_update_ha_state.assert_called_once()
