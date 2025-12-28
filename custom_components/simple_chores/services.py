@@ -298,6 +298,17 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
     else:
         LOGGER.info("Reset %d completed chore(s) for all users", reset_count)
 
+    # Ensure summary sensors are updated immediately
+    summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
+    if summary_sensors and reset_count > 0:
+        if user and sanitized_user in summary_sensors:
+            # Update specific user's summary sensor
+            summary_sensors[sanitized_user].async_write_ha_state()
+        elif not user:
+            # Update all summary sensors
+            for summary_sensor in summary_sensors.values():
+                summary_sensor.async_write_ha_state()
+
 
 async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the start_new_day service call.
@@ -360,6 +371,17 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             manual_count,
             daily_count,
         )
+
+    # Ensure summary sensors are updated immediately
+    summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
+    if summary_sensors and reset_count > 0:
+        if user and sanitized_user in summary_sensors:
+            # Update specific user's summary sensor
+            summary_sensors[sanitized_user].async_write_ha_state()
+        elif not user:
+            # Update all summary sensors
+            for summary_sensor in summary_sensors.values():
+                summary_sensor.async_write_ha_state()
 
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
