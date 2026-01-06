@@ -88,7 +88,7 @@ def _find_matching_sensors(
         for sensor_id, sensor in sensors.items():
             if (
                 sensor_id.endswith(f"_{sanitized_chore}")
-                and sensor._chore.slug == chore_slug
+                and sensor.chore.slug == chore_slug
             ):
                 matching_sensors.append(sensor)
 
@@ -337,7 +337,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
         # Only reset sensors that are currently COMPLETE
         if sensor.native_value == ChoreState.COMPLETE.value:
-            chore_frequency = sensor._chore.frequency
+            chore_frequency = sensor.chore.frequency
 
             if chore_frequency == ChoreFrequency.MANUAL:
                 await sensor.set_state(ChoreState.NOT_REQUESTED)

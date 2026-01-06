@@ -363,6 +363,28 @@ class ChoreSensor(RestoreEntity, SensorEntity):
             )
 
     @property
+    def chore(self) -> ChoreConfig:
+        """
+        Return the chore configuration.
+
+        Returns:
+            ChoreConfig: The chore configuration
+
+        """
+        return self._chore
+
+    @property
+    def assignee(self) -> str:
+        """
+        Return the assignee username.
+
+        Returns:
+            str: The assignee username
+
+        """
+        return self._assignee
+
+    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """
         Return the state attributes.
