@@ -344,12 +344,6 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         # Initialize state - will be restored in async_added_to_hass if available
         self._attr_native_value = ChoreState.NOT_REQUESTED.value
 
-        # Store state in hass.data for service access
-        if DOMAIN not in self.hass.data:
-            self.hass.data[DOMAIN] = {}
-        if "states" not in self.hass.data[DOMAIN]:
-            self.hass.data[DOMAIN]["states"] = {}
-
     async def async_added_to_hass(self) -> None:
         """Restore previous state when entity is added to hass."""
         await super().async_added_to_hass()
@@ -367,13 +361,6 @@ class ChoreSensor(RestoreEntity, SensorEntity):
                 self.entity_id,
                 last_state.state,
             )
-
-        # Update in-memory state tracking for services
-        state_key = (
-            f"{sanitize_entity_id(self._assignee)}_"
-            f"{sanitize_entity_id(self._chore.slug)}"
-        )
-        self.hass.data[DOMAIN]["states"][state_key] = self._attr_native_value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -417,16 +404,6 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         """
         self._attr_native_value = state.value
 
-        # Persist state
-        state_key = (
-            f"{sanitize_entity_id(self._assignee)}_"
-            f"{sanitize_entity_id(self._chore.slug)}"
-        )
-        self.hass.data[DOMAIN]["states"][state_key] = state.value
-
-        # Icon stays as configured in chore (self._chore.icon)
-        # Do not change icon based on state
-
         # Use async_update_ha_state to ensure the state is written before returning
         await self.async_update_ha_state(force_refresh=True)
 
@@ -434,7 +411,6 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         if DOMAIN in self.hass.data and "summary_sensors" in self.hass.data[DOMAIN]:
             summary_sensors = self.hass.data[DOMAIN]["summary_sensors"]
             if self._assignee in summary_sensors:
-                # Schedule immediate update and also write state to ensure attributes are pushed
                 summary_sensors[self._assignee].async_schedule_update_ha_state(
                     force_refresh=True
                 )
@@ -524,14 +500,10 @@ class ChoreSummarySensor(SensorEntity):
         pending_entities = []
         complete_entities = []
         not_requested_entities = []
-        all_entities = []
 
         for entity_id, sensor in self._manager.sensors.items():
             if sensor._assignee == self._assignee:
                 full_entity_id = f"sensor.simple_chore_{entity_id}"
-                all_entities.append(full_entity_id)
-
-                # Access _attr_native_value directly to ensure we get the current value
                 current_state = sensor._attr_native_value
 
                 if current_state == ChoreState.PENDING.value:
@@ -540,6 +512,8 @@ class ChoreSummarySensor(SensorEntity):
                     complete_entities.append(full_entity_id)
                 elif current_state == ChoreState.NOT_REQUESTED.value:
                     not_requested_entities.append(full_entity_id)
+
+        all_entities = pending_entities + complete_entities + not_requested_entities
 
         return {
             "assignee": self._assignee,

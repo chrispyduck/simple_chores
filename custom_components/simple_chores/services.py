@@ -46,6 +46,62 @@ SERVICE_SCHEMA = vol.Schema(
     }
 )
 
+
+def _find_matching_sensors(
+    sensors: dict, chore_slug: str, user: str | None = None
+) -> list:
+    """Find sensors matching chore slug and optionally user.
+
+    Args:
+        sensors: Dictionary of sensors
+        chore_slug: Chore slug to match
+        user: Optional user to filter by
+
+    Returns:
+        List of matching sensors
+    """
+    sanitized_chore = sanitize_entity_id(chore_slug)
+    matching_sensors = []
+
+    if user:
+        # Specific user
+        sensor_id = f"{sanitize_entity_id(user)}_{sanitized_chore}"
+        if sensor_id in sensors:
+            matching_sensors.append(sensors[sensor_id])
+    else:
+        # All assignees for this chore
+        for sensor_id, sensor in sensors.items():
+            if (
+                sensor_id.endswith(f"_{sanitized_chore}")
+                and sensor._chore.slug == chore_slug
+            ):
+                matching_sensors.append(sensor)
+
+    return matching_sensors
+
+
+def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) -> None:
+    """Update summary sensors for a user or all users.
+
+    Args:
+        hass: Home Assistant instance
+        user: Optional user to update, or None for all users
+    """
+    summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
+    if not summary_sensors:
+        return
+
+    if user:
+        sanitized_user = sanitize_entity_id(user)
+        if sanitized_user in summary_sensors:
+            summary_sensors[sanitized_user].async_schedule_update_ha_state(
+                force_refresh=True
+            )
+    else:
+        for summary_sensor in summary_sensors.values():
+            summary_sensor.async_schedule_update_ha_state(force_refresh=True)
+
+
 CREATE_CHORE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_NAME): cv.string,
@@ -98,23 +154,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         raise HomeAssistantError(msg)
 
     sensors = hass.data[DOMAIN].get("sensors", {})
-    sanitized_chore = sanitize_entity_id(chore_slug)
-
-    # Find all sensors for this chore (optionally filtered by user)
-    matching_sensors = []
-    if user:
-        # Specific user
-        sensor_id = f"{sanitize_entity_id(user)}_{sanitized_chore}"
-        if sensor_id in sensors:
-            matching_sensors.append(sensors[sensor_id])
-    else:
-        # All assignees for this chore
-        for sensor_id, sensor in sensors.items():
-            if (
-                sensor_id.endswith(f"_{sanitized_chore}")
-                and sensor._chore.slug == chore_slug
-            ):
-                matching_sensors.append(sensor)
+    matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
 
     if not matching_sensors:
         if user:
@@ -158,23 +198,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
         raise HomeAssistantError(msg)
 
     sensors = hass.data[DOMAIN].get("sensors", {})
-    sanitized_chore = sanitize_entity_id(chore_slug)
-
-    # Find all sensors for this chore (optionally filtered by user)
-    matching_sensors = []
-    if user:
-        # Specific user
-        sensor_id = f"{sanitize_entity_id(user)}_{sanitized_chore}"
-        if sensor_id in sensors:
-            matching_sensors.append(sensors[sensor_id])
-    else:
-        # All assignees for this chore
-        for sensor_id, sensor in sensors.items():
-            if (
-                sensor_id.endswith(f"_{sanitized_chore}")
-                and sensor._chore.slug == chore_slug
-            ):
-                matching_sensors.append(sensor)
+    matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
 
     if not matching_sensors:
         if user:
@@ -218,23 +242,7 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
         raise HomeAssistantError(msg)
 
     sensors = hass.data[DOMAIN].get("sensors", {})
-    sanitized_chore = sanitize_entity_id(chore_slug)
-
-    # Find all sensors for this chore (optionally filtered by user)
-    matching_sensors = []
-    if user:
-        # Specific user
-        sensor_id = f"{sanitize_entity_id(user)}_{sanitized_chore}"
-        if sensor_id in sensors:
-            matching_sensors.append(sensors[sensor_id])
-    else:
-        # All assignees for this chore
-        for sensor_id, sensor in sensors.items():
-            if (
-                sensor_id.endswith(f"_{sanitized_chore}")
-                and sensor._chore.slug == chore_slug
-            ):
-                matching_sensors.append(sensor)
+    matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
 
     if not matching_sensors:
         if user:
@@ -298,16 +306,8 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
     else:
         LOGGER.info("Reset %d completed chore(s) for all users", reset_count)
 
-    # Ensure summary sensors are updated immediately
-    summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
-    if summary_sensors and reset_count > 0:
-        if user and sanitized_user in summary_sensors:
-            # Update specific user's summary sensor
-            summary_sensors[sanitized_user].async_write_ha_state()
-        elif not user:
-            # Update all summary sensors
-            for summary_sensor in summary_sensors.values():
-                summary_sensor.async_write_ha_state()
+    if reset_count > 0:
+        _update_summary_sensors(hass, user)
 
 
 async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -372,16 +372,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             daily_count,
         )
 
-    # Ensure summary sensors are updated immediately
-    summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
-    if summary_sensors and reset_count > 0:
-        if user and sanitized_user in summary_sensors:
-            # Update specific user's summary sensor
-            summary_sensors[sanitized_user].async_write_ha_state()
-        elif not user:
-            # Update all summary sensors
-            for summary_sensor in summary_sensors.values():
-                summary_sensor.async_write_ha_state()
+    if reset_count > 0:
+        _update_summary_sensors(hass, user)
 
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -510,29 +502,23 @@ async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None
         raise HomeAssistantError(msg)
 
     summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
-
     if not summary_sensors:
         LOGGER.warning("No summary sensors found")
         return
 
-    # Refresh specific user's summary sensor or all summary sensors
+    # Validate user exists if specified
     if user:
-        from .const import sanitize_entity_id
-
         sanitized_user = sanitize_entity_id(user)
-        if sanitized_user in summary_sensors:
-            summary_sensors[sanitized_user].async_schedule_update_ha_state(
-                force_refresh=True
-            )
-            LOGGER.info("Refreshed summary sensor for user '%s'", user)
-        else:
+        if sanitized_user not in summary_sensors:
             msg = f"No summary sensor found for user '{user}'"
             LOGGER.error(msg)
             raise ServiceValidationError(msg)
+
+    _update_summary_sensors(hass, user)
+
+    if user:
+        LOGGER.info("Refreshed summary sensor for user '%s'", user)
     else:
-        # Refresh all summary sensors
-        for summary_sensor in summary_sensors.values():
-            summary_sensor.async_schedule_update_ha_state(force_refresh=True)
         LOGGER.info("Refreshed %d summary sensor(s)", len(summary_sensors))
 
 

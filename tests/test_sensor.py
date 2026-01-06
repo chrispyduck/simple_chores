@@ -417,13 +417,6 @@ class TestChoreSensor:
         assert sensor.icon == "mdi:clipboard-list-outline"
         sensor.async_update_ha_state.assert_called_once()
 
-        # Check persistence
-        state_key = "alice_dishes"
-        assert (
-            mock_hass.data["simple_chores"]["states"][state_key]
-            == ChoreState.PENDING.value
-        )
-
     @pytest.mark.asyncio
     async def test_set_state_complete(
         self, mock_hass: MagicMock, sample_chore: ChoreConfig

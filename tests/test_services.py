@@ -1294,8 +1294,8 @@ class TestSummarySensorUpdates:
 
         await handler(call)
 
-        # Verify summary sensor was updated
-        mock_summary.async_schedule_update_ha_state.assert_called_once()
+        # Verify summary sensor was updated (called once by set_state in sensor, once by service handler)
+        assert mock_summary.async_schedule_update_ha_state.call_count == 2
 
     @pytest.mark.asyncio
     async def test_start_new_day_updates_summary_sensor(
@@ -1332,8 +1332,8 @@ class TestSummarySensorUpdates:
 
         await handler(call)
 
-        # Verify summary sensor was updated
-        mock_summary.async_schedule_update_ha_state.assert_called_once()
+        # Verify summary sensor was updated (called once by set_state in sensor, once by service handler)
+        assert mock_summary.async_schedule_update_ha_state.call_count == 2
 
     @pytest.mark.asyncio
     async def test_mark_all_assignees_updates_all_summary_sensors(
