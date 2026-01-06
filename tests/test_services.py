@@ -1144,6 +1144,80 @@ class TestStartNewDayService:
         # Daily complete should be reset to PENDING
         sensor3.set_state.assert_called_once_with(ChoreState.PENDING)
 
+    @pytest.mark.asyncio
+    async def test_start_new_day_updates_summary_attributes(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test that start_new_day properly updates summary sensor attributes."""
+        from custom_components.simple_chores.sensor import (
+            ChoreSensorManager,
+            ChoreSummarySensor,
+        )
+
+        # Create chores with different frequencies
+        chore_manual = ChoreConfig(
+            name="Manual Task",
+            slug="manual_task",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["alice"],
+        )
+        chore_daily = ChoreConfig(
+            name="Daily Task",
+            slug="daily_task",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+
+        # Create manager and sensors
+        manager = MagicMock(spec=ChoreSensorManager)
+        manager.sensors = {}
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_manual = ChoreSensor(mock_hass, chore_manual, "alice")
+            sensor_manual.async_update_ha_state = AsyncMock()
+            sensor_manual._attr_native_value = ChoreState.COMPLETE.value
+
+            sensor_daily = ChoreSensor(mock_hass, chore_daily, "alice")
+            sensor_daily.async_update_ha_state = AsyncMock()
+            sensor_daily._attr_native_value = ChoreState.COMPLETE.value
+
+        manager.sensors = {
+            "alice_manual_task": sensor_manual,
+            "alice_daily_task": sensor_daily,
+        }
+
+        # Create summary sensor
+        summary_sensor = ChoreSummarySensor(mock_hass, "alice", manager)
+
+        mock_hass.data[DOMAIN] = {
+            "sensors": manager.sensors,
+            "summary_sensors": {"alice": summary_sensor},
+        }
+
+        # Verify initial state - both complete
+        attrs_before = summary_sensor.extra_state_attributes
+        assert len(attrs_before["complete_chores"]) == 2
+        assert len(attrs_before["pending_chores"]) == 0
+        assert len(attrs_before["not_requested_chores"]) == 0
+
+        # Call start_new_day
+        await async_setup_services(mock_hass)
+        handler = mock_hass.services.async_register.call_args_list[4][0][2]
+        call = MagicMock()
+        call.data = {}
+        await handler(call)
+
+        # Verify attributes updated - manual to NOT_REQUESTED, daily to PENDING
+        attrs_after = summary_sensor.extra_state_attributes
+        assert len(attrs_after["complete_chores"]) == 0
+        assert len(attrs_after["pending_chores"]) == 1
+        assert len(attrs_after["not_requested_chores"]) == 1
+        assert "sensor.simple_chore_alice_daily_task" in attrs_after["pending_chores"]
+        assert (
+            "sensor.simple_chore_alice_manual_task"
+            in attrs_after["not_requested_chores"]
+        )
+
 
 class TestSummarySensorUpdates:
     """Tests to verify all state-changing operations update summary sensors."""
@@ -1294,8 +1368,8 @@ class TestSummarySensorUpdates:
 
         await handler(call)
 
-        # Verify summary sensor was updated (called once by set_state in sensor, once by service handler)
-        assert mock_summary.async_schedule_update_ha_state.call_count == 2
+        # Verify summary sensor was updated (once per set_state call)
+        mock_summary.async_schedule_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_start_new_day_updates_summary_sensor(
@@ -1332,8 +1406,8 @@ class TestSummarySensorUpdates:
 
         await handler(call)
 
-        # Verify summary sensor was updated (called once by set_state in sensor, once by service handler)
-        assert mock_summary.async_schedule_update_ha_state.call_count == 2
+        # Verify summary sensor was updated (once per set_state call)
+        mock_summary.async_schedule_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_mark_all_assignees_updates_all_summary_sensors(

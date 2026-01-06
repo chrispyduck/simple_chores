@@ -47,6 +47,21 @@ SERVICE_SCHEMA = vol.Schema(
 )
 
 
+def _validate_integration_loaded(hass: HomeAssistant) -> None:
+    """Validate that the Simple Chores integration is loaded.
+
+    Args:
+        hass: Home Assistant instance
+
+    Raises:
+        HomeAssistantError: If integration is not loaded
+    """
+    if DOMAIN not in hass.data:
+        msg = "Simple Chores integration not loaded"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
+
+
 def _find_matching_sensors(
     sensors: dict, chore_slug: str, user: str | None = None
 ) -> list:
@@ -148,11 +163,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         chore_slug,
     )
 
-    if DOMAIN not in hass.data:
-        msg = "Simple Chores integration not loaded"
-        LOGGER.error(msg)
-        raise HomeAssistantError(msg)
-
+    _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
     matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
 
@@ -192,11 +203,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
         chore_slug,
     )
 
-    if DOMAIN not in hass.data:
-        msg = "Simple Chores integration not loaded"
-        LOGGER.error(msg)
-        raise HomeAssistantError(msg)
-
+    _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
     matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
 
@@ -236,11 +243,7 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
         chore_slug,
     )
 
-    if DOMAIN not in hass.data:
-        msg = "Simple Chores integration not loaded"
-        LOGGER.error(msg)
-        raise HomeAssistantError(msg)
-
+    _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
     matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
 
@@ -280,11 +283,7 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
         user if user else "all users",
     )
 
-    if DOMAIN not in hass.data:
-        msg = "Simple Chores integration not loaded"
-        LOGGER.error(msg)
-        raise HomeAssistantError(msg)
-
+    _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
 
     # Sanitize user if provided for matching
@@ -306,9 +305,6 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
     else:
         LOGGER.info("Reset %d completed chore(s) for all users", reset_count)
 
-    if reset_count > 0:
-        _update_summary_sensors(hass, user)
-
 
 async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the start_new_day service call.
@@ -324,11 +320,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         user if user else "all users",
     )
 
-    if DOMAIN not in hass.data:
-        msg = "Simple Chores integration not loaded"
-        LOGGER.error(msg)
-        raise HomeAssistantError(msg)
-
+    _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
 
     # Sanitize user if provided for matching
@@ -372,9 +364,6 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             daily_count,
         )
 
-    if reset_count > 0:
-        _update_summary_sensors(hass, user)
-
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the create_chore service call."""
@@ -385,11 +374,7 @@ async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
         call.data.get(ATTR_ASSIGNEES),
     )
 
-    if DOMAIN not in hass.data:
-        msg = "Simple Chores integration not loaded"
-        LOGGER.error(msg)
-        raise HomeAssistantError(msg)
-
+    _validate_integration_loaded(hass)
     config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
 
     # Parse assignees from comma-separated string
@@ -426,11 +411,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
         {k: v for k, v in call.data.items() if k != ATTR_SLUG},
     )
 
-    if DOMAIN not in hass.data:
-        msg = "Simple Chores integration not loaded"
-        LOGGER.error(msg)
-        raise HomeAssistantError(msg)
-
+    _validate_integration_loaded(hass)
     config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
 
     slug = call.data[ATTR_SLUG]
@@ -471,11 +452,7 @@ async def handle_delete_chore(hass: HomeAssistant, call: ServiceCall) -> None:
 
     LOGGER.info("Service 'delete_chore' called with slug='%s'", slug)
 
-    if DOMAIN not in hass.data:
-        msg = "Simple Chores integration not loaded"
-        LOGGER.error(msg)
-        raise HomeAssistantError(msg)
-
+    _validate_integration_loaded(hass)
     config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
 
     try:
@@ -496,11 +473,7 @@ async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None
         user if user else "all users",
     )
 
-    if DOMAIN not in hass.data:
-        msg = "Simple Chores integration not loaded"
-        LOGGER.error(msg)
-        raise HomeAssistantError(msg)
-
+    _validate_integration_loaded(hass)
     summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
     if not summary_sensors:
         LOGGER.warning("No summary sensors found")
