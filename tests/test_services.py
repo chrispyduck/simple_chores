@@ -1235,7 +1235,7 @@ class TestSummarySensorUpdates:
         )
 
         mock_summary = Mock()
-        mock_summary.async_schedule_update_ha_state = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(mock_hass, chore, "alice")
@@ -1257,7 +1257,7 @@ class TestSummarySensorUpdates:
         await handler(call)
 
         # Verify summary sensor was updated
-        mock_summary.async_schedule_update_ha_state.assert_called_once()
+        mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_mark_pending_updates_summary_sensor(
@@ -1272,7 +1272,7 @@ class TestSummarySensorUpdates:
         )
 
         mock_summary = Mock()
-        mock_summary.async_schedule_update_ha_state = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(mock_hass, chore, "alice")
@@ -1294,7 +1294,7 @@ class TestSummarySensorUpdates:
         await handler(call)
 
         # Verify summary sensor was updated
-        mock_summary.async_schedule_update_ha_state.assert_called_once()
+        mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_mark_not_requested_updates_summary_sensor(
@@ -1309,7 +1309,7 @@ class TestSummarySensorUpdates:
         )
 
         mock_summary = Mock()
-        mock_summary.async_schedule_update_ha_state = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(mock_hass, chore, "alice")
@@ -1331,7 +1331,7 @@ class TestSummarySensorUpdates:
         await handler(call)
 
         # Verify summary sensor was updated
-        mock_summary.async_schedule_update_ha_state.assert_called_once()
+        mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reset_completed_updates_summary_sensor(
@@ -1346,7 +1346,7 @@ class TestSummarySensorUpdates:
         )
 
         mock_summary = Mock()
-        mock_summary.async_schedule_update_ha_state = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(mock_hass, chore, "alice")
@@ -1369,7 +1369,7 @@ class TestSummarySensorUpdates:
         await handler(call)
 
         # Verify summary sensor was updated (once per set_state call)
-        mock_summary.async_schedule_update_ha_state.assert_called_once()
+        mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_start_new_day_updates_summary_sensor(
@@ -1384,7 +1384,7 @@ class TestSummarySensorUpdates:
         )
 
         mock_summary = Mock()
-        mock_summary.async_schedule_update_ha_state = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(mock_hass, chore, "alice")
@@ -1407,7 +1407,7 @@ class TestSummarySensorUpdates:
         await handler(call)
 
         # Verify summary sensor was updated (once per set_state call)
-        mock_summary.async_schedule_update_ha_state.assert_called_once()
+        mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_mark_all_assignees_updates_all_summary_sensors(
@@ -1422,9 +1422,9 @@ class TestSummarySensorUpdates:
         )
 
         mock_summary_alice = Mock()
-        mock_summary_alice.async_schedule_update_ha_state = Mock()
+        mock_summary_alice.async_update_ha_state = AsyncMock()
         mock_summary_bob = Mock()
-        mock_summary_bob.async_schedule_update_ha_state = Mock()
+        mock_summary_bob.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor_alice = ChoreSensor(mock_hass, chore, "alice")
@@ -1448,8 +1448,8 @@ class TestSummarySensorUpdates:
         await handler(call)
 
         # Verify both summary sensors were updated
-        mock_summary_alice.async_schedule_update_ha_state.assert_called_once()
-        mock_summary_bob.async_schedule_update_ha_state.assert_called_once()
+        mock_summary_alice.async_update_ha_state.assert_called_once()
+        mock_summary_bob.async_update_ha_state.assert_called_once()
 
 
 class TestRefreshSummaryService:
@@ -1459,9 +1459,9 @@ class TestRefreshSummaryService:
     async def test_refresh_summary_all_users(self, mock_hass: MagicMock) -> None:
         """Test refresh_summary refreshes all summary sensors when no user specified."""
         mock_summary_alice = Mock()
-        mock_summary_alice.async_schedule_update_ha_state = Mock()
+        mock_summary_alice.async_update_ha_state = AsyncMock()
         mock_summary_bob = Mock()
-        mock_summary_bob.async_schedule_update_ha_state = Mock()
+        mock_summary_bob.async_update_ha_state = AsyncMock()
 
         mock_hass.data[DOMAIN] = {
             "summary_sensors": {"alice": mock_summary_alice, "bob": mock_summary_bob}
@@ -1477,10 +1477,10 @@ class TestRefreshSummaryService:
         await handler(call)
 
         # Verify both summary sensors were refreshed
-        mock_summary_alice.async_schedule_update_ha_state.assert_called_once_with(
+        mock_summary_alice.async_update_ha_state.assert_called_once_with(
             force_refresh=True
         )
-        mock_summary_bob.async_schedule_update_ha_state.assert_called_once_with(
+        mock_summary_bob.async_update_ha_state.assert_called_once_with(
             force_refresh=True
         )
 
@@ -1488,9 +1488,9 @@ class TestRefreshSummaryService:
     async def test_refresh_summary_specific_user(self, mock_hass: MagicMock) -> None:
         """Test refresh_summary refreshes only specified user's summary sensor."""
         mock_summary_alice = Mock()
-        mock_summary_alice.async_schedule_update_ha_state = Mock()
+        mock_summary_alice.async_update_ha_state = AsyncMock()
         mock_summary_bob = Mock()
-        mock_summary_bob.async_schedule_update_ha_state = Mock()
+        mock_summary_bob.async_update_ha_state = AsyncMock()
 
         mock_hass.data[DOMAIN] = {
             "summary_sensors": {"alice": mock_summary_alice, "bob": mock_summary_bob}
@@ -1506,10 +1506,10 @@ class TestRefreshSummaryService:
         await handler(call)
 
         # Verify only Alice's summary sensor was refreshed
-        mock_summary_alice.async_schedule_update_ha_state.assert_called_once_with(
+        mock_summary_alice.async_update_ha_state.assert_called_once_with(
             force_refresh=True
         )
-        mock_summary_bob.async_schedule_update_ha_state.assert_not_called()
+        mock_summary_bob.async_update_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_refresh_summary_nonexistent_user(self, mock_hass: MagicMock) -> None:

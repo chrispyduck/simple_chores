@@ -433,7 +433,8 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         if DOMAIN in self.hass.data and "summary_sensors" in self.hass.data[DOMAIN]:
             summary_sensors = self.hass.data[DOMAIN]["summary_sensors"]
             if self._assignee in summary_sensors:
-                summary_sensors[self._assignee].async_schedule_update_ha_state(
+                # Await the summary sensor update to ensure it completes
+                await summary_sensors[self._assignee].async_update_ha_state(
                     force_refresh=True
                 )
 
@@ -504,7 +505,7 @@ class ChoreSummarySensor(SensorEntity):
         pending_count = 0
         for sensor in self._manager.sensors.values():
             if (
-                sensor._assignee == self._assignee
+                sensor.assignee == self._assignee
                 and sensor.native_value == ChoreState.PENDING.value
             ):
                 pending_count += 1
@@ -524,9 +525,9 @@ class ChoreSummarySensor(SensorEntity):
         not_requested_entities = []
 
         for entity_id, sensor in self._manager.sensors.items():
-            if sensor._assignee == self._assignee:
+            if sensor.assignee == self._assignee:
                 full_entity_id = f"sensor.simple_chore_{entity_id}"
-                current_state = sensor._attr_native_value
+                current_state = sensor.native_value
 
                 if current_state == ChoreState.PENDING.value:
                     pending_entities.append(full_entity_id)

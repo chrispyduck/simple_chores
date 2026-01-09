@@ -95,7 +95,7 @@ def _find_matching_sensors(
     return matching_sensors
 
 
-def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) -> None:
+async def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) -> None:
     """Update summary sensors for a user or all users.
 
     Args:
@@ -109,12 +109,13 @@ def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) -> Non
     if user:
         sanitized_user = sanitize_entity_id(user)
         if sanitized_user in summary_sensors:
-            summary_sensors[sanitized_user].async_schedule_update_ha_state(
+            await summary_sensors[sanitized_user].async_update_ha_state(
                 force_refresh=True
             )
     else:
+        # Update all summary sensors and await completion
         for summary_sensor in summary_sensors.values():
-            summary_sensor.async_schedule_update_ha_state(force_refresh=True)
+            await summary_sensor.async_update_ha_state(force_refresh=True)
 
 
 CREATE_CHORE_SCHEMA = vol.Schema(
@@ -487,7 +488,7 @@ async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None
             LOGGER.error(msg)
             raise ServiceValidationError(msg)
 
-    _update_summary_sensors(hass, user)
+    await _update_summary_sensors(hass, user)
 
     if user:
         LOGGER.info("Refreshed summary sensor for user '%s'", user)

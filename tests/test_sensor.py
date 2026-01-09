@@ -483,7 +483,7 @@ class TestChoreSensor:
         """Test that changing a chore state updates the summary sensor."""
         # Create mock summary sensor
         mock_summary = Mock()
-        mock_summary.async_schedule_update_ha_state = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
 
         # Setup hass.data with summary sensor
         mock_hass.data["simple_chores"] = {
@@ -497,7 +497,7 @@ class TestChoreSensor:
         await sensor.set_state(ChoreState.COMPLETE)
 
         # Verify summary sensor state was written
-        mock_summary.async_schedule_update_ha_state.assert_called_once()
+        mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_icon_preserved_with_custom_icon(self, mock_hass: MagicMock) -> None:
@@ -550,7 +550,7 @@ class TestChoreSensor:
     ) -> None:
         """Test that summary sensor state is written when chore state changes."""
         mock_summary = Mock()
-        mock_summary.async_schedule_update_ha_state = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
 
         # Setup hass.data with summary sensor
         mock_hass.data["simple_chores"] = {
@@ -565,4 +565,4 @@ class TestChoreSensor:
         await sensor.set_state(ChoreState.PENDING)
 
         # Verify the summary sensor state was written
-        mock_summary.async_schedule_update_ha_state.assert_called_once()
+        mock_summary.async_update_ha_state.assert_called_once()
