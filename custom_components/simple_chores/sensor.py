@@ -527,7 +527,10 @@ class ChoreSummarySensor(SensorEntity):
         for entity_id, sensor in self._manager.sensors.items():
             if sensor.assignee == self._assignee:
                 full_entity_id = f"sensor.simple_chore_{entity_id}"
-                current_state = sensor.native_value
+                # Read from _attr_native_value directly to get the most current state.
+                # This ensures we see updates immediately, even before the state machine updates.
+                # Without the private member access the summary value won't be updated correctly.
+                current_state = sensor._attr_native_value  # noqa: SLF001
 
                 if current_state == ChoreState.PENDING.value:
                     pending_entities.append(full_entity_id)
