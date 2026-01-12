@@ -529,6 +529,9 @@ class ChoreSummarySensor(SensorEntity):
         pending_entities = []
         complete_entities = []
         not_requested_entities = []
+        
+        # Calculate points_possible dynamically from current chore states
+        current_points_possible = 0
 
         for entity_id, sensor in self._manager.sensors.items():
             if sensor.assignee == self._assignee:
@@ -537,11 +540,16 @@ class ChoreSummarySensor(SensorEntity):
                 # This ensures we see updates immediately, even before the state machine updates.
                 # Without the private member access the summary value won't be updated correctly.
                 current_state = sensor._attr_native_value  # noqa: SLF001
+                chore_points = sensor.chore.points
 
                 if current_state == ChoreState.PENDING.value:
                     pending_entities.append(full_entity_id)
+                    # Pending chores contribute to possible
+                    current_points_possible += chore_points
                 elif current_state == ChoreState.COMPLETE.value:
                     complete_entities.append(full_entity_id)
+                    # Complete chores contribute to possible
+                    current_points_possible += chore_points
                 elif current_state == ChoreState.NOT_REQUESTED.value:
                     not_requested_entities.append(full_entity_id)
 
@@ -549,10 +557,10 @@ class ChoreSummarySensor(SensorEntity):
 
         # Get total points for this assignee
         total_points = self._manager.points_storage.get_points(self._assignee)
+        # points_missed is cumulative (only updated by start_new_day)
         points_missed = self._manager.points_storage.get_points_missed(self._assignee)
-        points_possible = self._manager.points_storage.get_points_possible(
-            self._assignee
-        )
+        # points_possible is dynamic (calculated from current chore states)
+        points_possible = current_points_possible
 
         return {
             "assignee": self._assignee,

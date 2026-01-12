@@ -74,17 +74,28 @@ class PointsStorage:
         return dict(self._data)
 
     def get_points_missed(self, assignee: str) -> int:
-        """Get points missed for an assignee."""
+        """Get cumulative points missed for an assignee."""
         return self._points_missed.get(assignee, 0)
 
     def get_points_possible(self, assignee: str) -> int:
-        """Get points possible for an assignee."""
+        """Get points possible for an assignee (deprecated - calculated dynamically)."""
         return self._points_possible.get(assignee, 0)
+
+    async def add_points_missed(self, assignee: str, points: int) -> None:
+        """Add to cumulative points missed for an assignee."""
+        current = self._points_missed.get(assignee, 0)
+        self._points_missed[assignee] = current + points
+        await self.async_save()
+
+    async def set_points_missed(self, assignee: str, points: int) -> None:
+        """Set cumulative points missed for an assignee (used by reset_points)."""
+        self._points_missed[assignee] = points
+        await self.async_save()
 
     async def set_daily_stats(
         self, assignee: str, points_missed: int, points_possible: int
     ) -> None:
-        """Set daily stats for an assignee."""
+        """Set daily stats for an assignee (deprecated - use add_points_missed)."""
         self._points_missed[assignee] = points_missed
         self._points_possible[assignee] = points_possible
         await self.async_save()

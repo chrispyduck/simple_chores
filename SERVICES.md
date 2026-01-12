@@ -138,13 +138,14 @@ The integration includes a comprehensive points system to gamify chore completio
 - Points are accumulated and stored persistently in `.storage/simple_chores.points.json`
 - Each assignee's summary sensor displays three point-related attributes:
   - `total_points`: Lifetime earned points (cumulative across all time)
-  - `points_missed`: Sum of points from pending chores at the start of the current day (opportunities not completed)
-  - `points_possible`: Sum of points from both pending and complete chores at the start of the current day (total daily opportunity)
-  - **Relationship**: `points_possible = total_points + points_missed` for the current day
+  - `points_missed`: **Cumulative total** of all missed points - updated by `start_new_day` service by adding points from pending chores. This tracks all opportunities missed over time.
+  - `points_possible`: **Real-time calculation** - sum of points from currently pending + complete chores. Always reflects current state.
 - Points can be manually adjusted using the `adjust_points` service for bonuses, penalties, or corrections
+- The `start_new_day` service adds to the cumulative `points_missed` total before resetting chore states
 - Points tracking can be reset using the `reset_points` service:
-  - By default, resets daily stats (points_missed and points_possible) while preserving lifetime total
-  - With `reset_total: true`, resets everything including lifetime total points
+  - By default, resets cumulative points_missed to zero
+  - With `reset_total: true`, also resets lifetime total_points to zero
+  - Note: `points_possible` is always calculated dynamically from current chore states
 
 ### Example Points Configuration
 

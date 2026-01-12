@@ -1405,13 +1405,17 @@ class TestStartNewDayService:
             blocking=True,
         )
 
-        # Verify points_possible = 10 + 20 + 5 = 35 (pending + complete)
-        assert points_storage.get_points_possible("alice") == 35
+        # Verify cumulative points_missed = 10 + 5 = 15 (pending chores added)
+        assert points_storage.get_points_missed("alice") == 15
 
     @pytest.mark.asyncio
     async def test_start_new_day_points_relationship(self, hass) -> None:
-        """Test that points_possible = total_points + points_missed."""
+        """Test cumulative points_missed and dynamic points_possible."""
         from custom_components.simple_chores.data import PointsStorage
+        from custom_components.simple_chores.sensor import (
+            ChoreSensorManager,
+            ChoreSummarySensor,
+        )
 
         # Create chores
         chore1 = ChoreConfig(
@@ -1437,17 +1441,21 @@ class TestStartNewDayService:
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor1 = ChoreSensor(hass, chore1, "alice")
             sensor1.async_update_ha_state = AsyncMock()
-            sensor1._attr_native_value = ChoreState.PENDING.value  # Missed 15
+            sensor1._attr_native_value = ChoreState.PENDING.value  # Will add 15 to missed
 
             sensor2 = ChoreSensor(hass, chore2, "alice")
             sensor2.async_update_ha_state = AsyncMock()
             sensor2._attr_native_value = ChoreState.COMPLETE.value  # Earned 25
 
+        manager = MagicMock(spec=ChoreSensorManager)
+        manager.sensors = {
+            "alice_chore1": sensor1,
+            "alice_chore2": sensor2,
+        }
+        manager.points_storage = points_storage
+
         hass.data[DOMAIN] = {
-            "sensors": {
-                "alice_chore1": sensor1,
-                "alice_chore2": sensor2,
-            },
+            "sensors": manager.sensors,
             "summary_sensors": {},
             "points_storage": points_storage,
         }
@@ -1462,15 +1470,13 @@ class TestStartNewDayService:
             blocking=True,
         )
 
-        total_points = points_storage.get_points("alice")
-        points_missed = points_storage.get_points_missed("alice")
-        points_possible = points_storage.get_points_possible("alice")
+        # Verify cumulative points_missed
+        assert points_storage.get_points_missed("alice") == 15
 
-        # Verify the relationship: points_possible = total_points + points_missed
-        # In this case: 40 = 25 + 15
-        assert points_possible == total_points + points_missed
-        assert points_missed == 15
-        assert points_possible == 40
+        # Verify dynamic points_possible calculation
+        summary_sensor = ChoreSummarySensor(hass, "alice", manager)
+        attrs = summary_sensor.extra_state_attributes
+        assert attrs["points_possible"] == 40  # 15 (pending) + 25 (complete)
 
     @pytest.mark.asyncio
     async def test_start_new_day_ignores_not_requested_chores(self, hass) -> None:
@@ -1526,9 +1532,8 @@ class TestStartNewDayService:
             blocking=True,
         )
 
-        # Verify only pending chore counted
+        # Verify only pending chore counted (cumulative missed)
         assert points_storage.get_points_missed("alice") == 10
-        assert points_storage.get_points_possible("alice") == 10
 
     @pytest.mark.asyncio
     async def test_start_new_day_per_user_stats(self, hass) -> None:
@@ -1575,11 +1580,9 @@ class TestStartNewDayService:
             blocking=True,
         )
 
-        # Verify separate stats
+        # Verify separate cumulative missed stats
         assert points_storage.get_points_missed("alice") == 10
-        assert points_storage.get_points_possible("alice") == 10
         assert points_storage.get_points_missed("bob") == 0
-        assert points_storage.get_points_possible("bob") == 10
 
 
 class TestSummarySensorUpdates:
@@ -2049,35 +2052,50 @@ class TestSummarySensorAttributes:
 
     @pytest.mark.asyncio
     async def test_summary_sensor_includes_points_stats(self, hass) -> None:
-        """Test that summary sensor includes points_missed and points_possible attributes."""
+        """Test that summary sensor calculates points_missed and points_possible from current chore states."""
         from custom_components.simple_chores.data import PointsStorage
         from custom_components.simple_chores.sensor import (
             ChoreSensorManager,
             ChoreSummarySensor,
         )
 
-        chore = ChoreConfig(
-            name="Test Chore",
-            slug="test_chore",
+        # Create chores with different states to test calculation
+        pending_chore = ChoreConfig(
+            name="Pending Chore",
+            slug="pending_chore",
             frequency=ChoreFrequency.DAILY,
             assignees=["alice"],
             points=10,
+        )
+        
+        complete_chore = ChoreConfig(
+            name="Complete Chore",
+            slug="complete_chore",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            points=5,
         )
 
         points_storage = PointsStorage(hass)
         await points_storage.async_load()
         await points_storage.set_points("alice", 100)
-        await points_storage.set_daily_stats("alice", 15, 125)
 
         manager = MagicMock(spec=ChoreSensorManager)
-        manager.sensors = {}
         manager.points_storage = points_storage
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(hass, chore, "alice")
-            sensor.async_update_ha_state = AsyncMock()
+            pending_sensor = ChoreSensor(hass, pending_chore, "alice")
+            pending_sensor.async_update_ha_state = AsyncMock()
+            await pending_sensor.set_state(ChoreState.PENDING)
+            
+            complete_sensor = ChoreSensor(hass, complete_chore, "alice")
+            complete_sensor.async_update_ha_state = AsyncMock()
+            await complete_sensor.set_state(ChoreState.COMPLETE)
 
-        manager.sensors = {"alice_test_chore": sensor}
+        manager.sensors = {
+            "alice_pending_chore": pending_sensor,
+            "alice_complete_chore": complete_sensor,
+        }
 
         summary_sensor = ChoreSummarySensor(hass, "alice", manager)
 
@@ -2088,10 +2106,12 @@ class TestSummarySensorAttributes:
         assert "points_missed" in attrs
         assert "points_possible" in attrs
 
-        # Verify values
+        # Verify values are calculated from current states
         assert attrs["total_points"] == 100
-        assert attrs["points_missed"] == 15
-        assert attrs["points_possible"] == 125
+        # points_missed is cumulative from storage (not set yet, so 0)
+        assert attrs["points_missed"] == 0
+        # Both pending (10) and complete (5) contribute to points_possible
+        assert attrs["points_possible"] == 15
 
     @pytest.mark.asyncio
     async def test_summary_sensor_default_points_stats(self, hass) -> None:
@@ -2124,7 +2144,7 @@ class TestResetPointsService:
 
     @pytest.mark.asyncio
     async def test_reset_points_daily_stats_only(self, hass) -> None:
-        """Test reset_points resets daily stats but not total points by default."""
+        """Test reset_points resets cumulative points_missed but not total points by default."""
         from custom_components.simple_chores.data import PointsStorage
 
         points_storage = PointsStorage(hass)
@@ -2132,7 +2152,7 @@ class TestResetPointsService:
 
         # Set up initial state
         await points_storage.set_points("alice", 100)
-        await points_storage.set_daily_stats("alice", 15, 125)
+        await points_storage.set_points_missed("alice", 15)
 
         hass.data[DOMAIN] = {"points_storage": points_storage}
 
@@ -2146,14 +2166,13 @@ class TestResetPointsService:
             blocking=True,
         )
 
-        # Verify daily stats reset but total points unchanged
+        # Verify cumulative points_missed reset but total points unchanged
         assert points_storage.get_points("alice") == 100
         assert points_storage.get_points_missed("alice") == 0
-        assert points_storage.get_points_possible("alice") == 0
 
     @pytest.mark.asyncio
     async def test_reset_points_with_total(self, hass) -> None:
-        """Test reset_points resets both daily stats and total points when requested."""
+        """Test reset_points resets both cumulative missed and total points when requested."""
         from custom_components.simple_chores.data import PointsStorage
 
         points_storage = PointsStorage(hass)
@@ -2161,7 +2180,7 @@ class TestResetPointsService:
 
         # Set up initial state
         await points_storage.set_points("alice", 100)
-        await points_storage.set_daily_stats("alice", 15, 125)
+        await points_storage.set_points_missed("alice", 15)
 
         hass.data[DOMAIN] = {"points_storage": points_storage}
 
@@ -2178,7 +2197,6 @@ class TestResetPointsService:
         # Verify everything reset to 0
         assert points_storage.get_points("alice") == 0
         assert points_storage.get_points_missed("alice") == 0
-        assert points_storage.get_points_possible("alice") == 0
 
     @pytest.mark.asyncio
     async def test_reset_points_all_users(self, hass) -> None:
@@ -2190,9 +2208,9 @@ class TestResetPointsService:
 
         # Set up initial state for multiple users
         await points_storage.set_points("alice", 100)
-        await points_storage.set_daily_stats("alice", 15, 125)
+        await points_storage.set_points_missed("alice", 15)
         await points_storage.set_points("bob", 50)
-        await points_storage.set_daily_stats("bob", 10, 60)
+        await points_storage.set_points_missed("bob", 10)
 
         # Create sensors to ensure all users are found
         chore = ChoreConfig(
@@ -2225,13 +2243,11 @@ class TestResetPointsService:
             blocking=True,
         )
 
-        # Verify daily stats reset for both users, totals unchanged
+        # Verify cumulative missed reset for both users, totals unchanged
         assert points_storage.get_points("alice") == 100
         assert points_storage.get_points_missed("alice") == 0
-        assert points_storage.get_points_possible("alice") == 0
         assert points_storage.get_points("bob") == 50
         assert points_storage.get_points_missed("bob") == 0
-        assert points_storage.get_points_possible("bob") == 0
 
     @pytest.mark.asyncio
     async def test_reset_points_all_users_with_total(self, hass) -> None:
@@ -2243,9 +2259,9 @@ class TestResetPointsService:
 
         # Set up initial state for multiple users
         await points_storage.set_points("alice", 100)
-        await points_storage.set_daily_stats("alice", 15, 125)
+        await points_storage.set_points_missed("alice", 15)
         await points_storage.set_points("bob", 50)
-        await points_storage.set_daily_stats("bob", 10, 60)
+        await points_storage.set_points_missed("bob", 10)
 
         # Create sensors
         chore = ChoreConfig(
@@ -2281,10 +2297,8 @@ class TestResetPointsService:
         # Verify everything reset for both users
         assert points_storage.get_points("alice") == 0
         assert points_storage.get_points_missed("alice") == 0
-        assert points_storage.get_points_possible("alice") == 0
         assert points_storage.get_points("bob") == 0
         assert points_storage.get_points_missed("bob") == 0
-        assert points_storage.get_points_possible("bob") == 0
 
     @pytest.mark.asyncio
     async def test_reset_points_integration_not_loaded(self, hass) -> None:
@@ -2331,7 +2345,7 @@ class TestResetPointsService:
         await points_storage.async_load()
 
         await points_storage.set_points("alice", 100)
-        await points_storage.set_daily_stats("alice", 15, 125)
+        await points_storage.set_points_missed("alice", 15)
 
         hass.data[DOMAIN] = {"points_storage": points_storage}
 
@@ -2345,7 +2359,6 @@ class TestResetPointsService:
             blocking=True,
         )
 
-        # Verify total points not reset
+        # Verify total points not reset, cumulative missed reset
         assert points_storage.get_points("alice") == 100
         assert points_storage.get_points_missed("alice") == 0
-        assert points_storage.get_points_possible("alice") == 0

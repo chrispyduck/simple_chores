@@ -18,9 +18,9 @@ Why? Because the Grocy integration isn't working and KidsChores is buggy. I'll a
   * Lists of chores in each state
   * **Points tracking**:
     * `total_points`: Lifetime earned points (cumulative)
-    * `points_missed`: Points from uncompleted chores at day start
-    * `points_possible`: Total points available today (missed + earned)
-* **Points System**: Each chore can have a point value (default: 1). When a chore is marked complete, the assignee earns those points. Points can be set when creating/updating chores. The `start_new_day` service calculates daily statistics (points_missed and points_possible) before resetting chore states.
+    * `points_missed`: Cumulative total of all missed opportunities (updated by start_new_day)
+    * `points_possible`: Current sum of points from pending + complete chores (calculated in real-time)
+* **Points System**: Each chore can have a point value (default: 1). When a chore is marked complete, the assignee earns those points. Points can be set when creating/updating chores. The `start_new_day` service adds pending chore points to the cumulative `points_missed` total before resetting states. The summary sensor calculates `points_possible` in real-time based on current chore states.
 * The following actions are defined for interacting with chores:
   * `simple_chores.mark_complete` - Marks a chore as complete and awards points to the assignee. Takes a chore slug and optional user as parameters. If user is not specified, marks complete for all assignees.
   * `simple_chores.mark_pending` - Marks a chore as pending. Takes a chore slug and optional user as parameters. If user is not specified, marks pending for all assignees.

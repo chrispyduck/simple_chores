@@ -378,7 +378,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     # Sanitize user if provided for matching
     sanitized_user = sanitize_entity_id(user) if user else None
 
-    # Calculate points_missed and points_possible per assignee BEFORE resetting
+    # Calculate points to add to cumulative missed total per assignee BEFORE resetting
     assignee_stats: dict[str, dict[str, int]] = {}
     for sensor_id, sensor in sensors.items():
         # If user specified, only calculate for their chores
@@ -387,30 +387,28 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
         assignee = sensor.assignee
         if assignee not in assignee_stats:
-            assignee_stats[assignee] = {"missed": 0, "possible": 0}
+            assignee_stats[assignee] = {"missed": 0}
 
         current_state = sensor.native_value
         chore_points = sensor.chore.points
 
-        # Count pending chores as missed
+        # Count pending chores as missed (will be added to cumulative total)
         if current_state == ChoreState.PENDING.value:
             assignee_stats[assignee]["missed"] += chore_points
-            assignee_stats[assignee]["possible"] += chore_points
-        # Count complete chores as possible (but not missed)
-        elif current_state == ChoreState.COMPLETE.value:
-            assignee_stats[assignee]["possible"] += chore_points
 
-    # Store the daily stats
+    # Update cumulative points_missed (add to existing total)
     if points_storage:
         for assignee, stats in assignee_stats.items():
-            await points_storage.set_daily_stats(
-                assignee, stats["missed"], stats["possible"]
-            )
+            # Get current cumulative total and add today's missed points
+            current_missed = points_storage.get_points_missed(assignee)
+            new_missed = current_missed + stats["missed"]
+            await points_storage.add_points_missed(assignee, stats["missed"])
             LOGGER.debug(
-                "Set daily stats for %s: missed=%d, possible=%d",
+                "Updated cumulative points_missed for %s: added %d (was %d, now %d)",
                 assignee,
                 stats["missed"],
-                stats["possible"],
+                current_missed,
+                new_missed,
             )
 
     reset_count = 0
@@ -661,15 +659,15 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
 
     # Reset points for each user
     for assignee in users_to_reset:
-        # Always reset daily stats
-        await points_storage.set_daily_stats(assignee, 0, 0)
+        # Always reset cumulative points_missed (points_possible is calculated dynamically)
+        await points_storage.set_points_missed(assignee, 0)
 
         # Optionally reset total points
         if reset_total:
             await points_storage.set_points(assignee, 0)
 
         LOGGER.debug(
-            "Reset points for '%s': daily_stats=0, total_points=%s",
+            "Reset points for '%s': points_missed=0, total_points=%s",
             assignee,
             0 if reset_total else points_storage.get_points(assignee),
         )
