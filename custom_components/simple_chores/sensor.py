@@ -506,7 +506,7 @@ class ChoreSummarySensor(SensorEntity):
         for sensor in self._manager.sensors.values():
             if (
                 sensor.assignee == self._assignee
-                and sensor.native_value == ChoreState.PENDING.value
+                and sensor._attr_native_value == ChoreState.PENDING.value  # noqa: SLF001
             ):
                 pending_count += 1
         return pending_count
