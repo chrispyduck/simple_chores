@@ -529,7 +529,7 @@ class ChoreSummarySensor(SensorEntity):
         pending_entities = []
         complete_entities = []
         not_requested_entities = []
-        
+
         # Calculate points_possible dynamically from current chore states
         current_points_possible = 0
 

@@ -1441,7 +1441,9 @@ class TestStartNewDayService:
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor1 = ChoreSensor(hass, chore1, "alice")
             sensor1.async_update_ha_state = AsyncMock()
-            sensor1._attr_native_value = ChoreState.PENDING.value  # Will add 15 to missed
+            sensor1._attr_native_value = (
+                ChoreState.PENDING.value
+            )  # Will add 15 to missed
 
             sensor2 = ChoreSensor(hass, chore2, "alice")
             sensor2.async_update_ha_state = AsyncMock()
@@ -2067,7 +2069,7 @@ class TestSummarySensorAttributes:
             assignees=["alice"],
             points=10,
         )
-        
+
         complete_chore = ChoreConfig(
             name="Complete Chore",
             slug="complete_chore",
@@ -2087,7 +2089,7 @@ class TestSummarySensorAttributes:
             pending_sensor = ChoreSensor(hass, pending_chore, "alice")
             pending_sensor.async_update_ha_state = AsyncMock()
             await pending_sensor.set_state(ChoreState.PENDING)
-            
+
             complete_sensor = ChoreSensor(hass, complete_chore, "alice")
             complete_sensor.async_update_ha_state = AsyncMock()
             await complete_sensor.set_state(ChoreState.COMPLETE)
