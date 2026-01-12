@@ -166,6 +166,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
 
     _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
+    points_storage = hass.data[DOMAIN].get("points_storage")
     matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
 
     if not matching_sensors:
@@ -179,9 +180,21 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.error(msg)
         raise ServiceValidationError(msg)
 
-    # Mark all matching sensors as complete
+    # Mark all matching sensors as complete and award points
     for sensor in matching_sensors:
         await sensor.set_state(ChoreState.COMPLETE)
+
+        # Award points to the assignee
+        if points_storage:
+            points = sensor.chore.points
+            new_total = await points_storage.add_points(sensor.assignee, points)
+            LOGGER.debug(
+                "Awarded %d points to '%s' for completing '%s'. New total: %d",
+                points,
+                sensor.assignee,
+                chore_slug,
+                new_total,
+            )
 
     if user:
         LOGGER.info("Marked chore '%s' as complete for user '%s'", chore_slug, user)
@@ -191,6 +204,9 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
             chore_slug,
             len(matching_sensors),
         )
+
+    # Update summary sensors to reflect new point totals
+    await _update_summary_sensors(hass)
 
 
 async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:

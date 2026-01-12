@@ -20,7 +20,7 @@ from custom_components.simple_chores.models import (
 
 
 @pytest.fixture
-def mock_hass() -> MagicMock:
+def hass() -> MagicMock:
     """Create a mock Home Assistant instance."""
     hass = MagicMock()
     hass.async_add_executor_job = AsyncMock(side_effect=lambda func, *args: func(*args))
@@ -58,11 +58,11 @@ def valid_config_data() -> dict[str, Any]:
 class TestConfigLoaderInit:
     """Tests for ConfigLoader initialization."""
 
-    def test_init(self, mock_hass: MagicMock, temp_config_file: Path) -> None:
+    def test_init(self, hass, temp_config_file: Path) -> None:
         """Test ConfigLoader initialization."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
 
-        assert loader.hass == mock_hass
+        assert loader.hass == hass
         assert loader.config_path == temp_config_file
         assert loader._config is None
         assert loader._callbacks == []
@@ -76,7 +76,7 @@ class TestConfigLoaderLoad:
     @pytest.mark.asyncio
     async def test_load_valid_config(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
@@ -84,7 +84,7 @@ class TestConfigLoaderLoad:
         # Write config file
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         config = await loader.async_load()
 
         assert config is not None
@@ -96,10 +96,10 @@ class TestConfigLoaderLoad:
 
     @pytest.mark.asyncio
     async def test_load_missing_file(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test loading when config file doesn't exist."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         config = await loader.async_load()
 
         assert config is not None
@@ -108,12 +108,12 @@ class TestConfigLoaderLoad:
 
     @pytest.mark.asyncio
     async def test_load_invalid_yaml(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test loading invalid YAML."""
         temp_config_file.write_text("invalid: yaml: content: [")
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
 
         with pytest.raises(ConfigLoadError) as exc_info:
             await loader.async_load()
@@ -122,7 +122,7 @@ class TestConfigLoaderLoad:
 
     @pytest.mark.asyncio
     async def test_load_config_with_sanitized_slug(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test loading config where slug gets sanitized."""
         data = {
@@ -137,7 +137,7 @@ class TestConfigLoaderLoad:
         }
         temp_config_file.write_text(yaml.dump(data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Verify slug was sanitized
@@ -145,12 +145,12 @@ class TestConfigLoaderLoad:
 
     @pytest.mark.asyncio
     async def test_load_empty_yaml(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test loading empty YAML file."""
         temp_config_file.write_text("")
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         config = await loader.async_load()
 
         assert config is not None
@@ -158,10 +158,10 @@ class TestConfigLoaderLoad:
 
     @pytest.mark.asyncio
     async def test_config_property_before_load(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test accessing config property before loading."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
 
         with pytest.raises(ConfigLoadError) as exc_info:
             _ = loader.config
@@ -171,14 +171,14 @@ class TestConfigLoaderLoad:
     @pytest.mark.asyncio
     async def test_config_property_after_load(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test accessing config property after loading."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         config = loader.config
@@ -191,10 +191,10 @@ class TestConfigLoaderCallbacks:
 
     @pytest.mark.asyncio
     async def test_register_callback(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test registering a callback."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         callback = Mock()
 
         loader.register_callback(callback)
@@ -204,14 +204,14 @@ class TestConfigLoaderCallbacks:
     @pytest.mark.asyncio
     async def test_notify_callbacks_sync(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test notifying synchronous callbacks."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         callback = Mock()
@@ -225,14 +225,14 @@ class TestConfigLoaderCallbacks:
     @pytest.mark.asyncio
     async def test_notify_callbacks_async(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test notifying asynchronous callbacks."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         callback = AsyncMock()
@@ -246,14 +246,14 @@ class TestConfigLoaderCallbacks:
     @pytest.mark.asyncio
     async def test_notify_callbacks_with_exception(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test that callback exceptions are caught and logged."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         failing_callback = Mock(side_effect=Exception("Test error"))
@@ -271,10 +271,10 @@ class TestConfigLoaderCallbacks:
 
     @pytest.mark.asyncio
     async def test_notify_callbacks_before_load(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test notifying callbacks before config is loaded."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         callback = Mock()
         loader.register_callback(callback)
 
@@ -290,14 +290,14 @@ class TestConfigLoaderFileWatching:
     @pytest.mark.asyncio
     async def test_check_for_changes_file_modified(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test detecting file changes."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Modify file
@@ -314,14 +314,14 @@ class TestConfigLoaderFileWatching:
     @pytest.mark.asyncio
     async def test_check_for_changes_no_modification(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test when file hasn't changed."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         has_changes = await loader._check_for_changes()
@@ -330,10 +330,10 @@ class TestConfigLoaderFileWatching:
 
     @pytest.mark.asyncio
     async def test_check_for_changes_file_missing(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test checking for changes when file doesn't exist."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
 
         has_changes = await loader._check_for_changes()
 
@@ -341,10 +341,10 @@ class TestConfigLoaderFileWatching:
 
     @pytest.mark.asyncio
     async def test_start_watching(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test starting file watcher."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
 
         await loader.async_start_watching()
 
@@ -356,10 +356,10 @@ class TestConfigLoaderFileWatching:
 
     @pytest.mark.asyncio
     async def test_start_watching_already_running(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test starting watcher when already running."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
 
         await loader.async_start_watching()
         original_task = loader._watch_task
@@ -374,10 +374,10 @@ class TestConfigLoaderFileWatching:
 
     @pytest.mark.asyncio
     async def test_stop_watching(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test stopping file watcher."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
 
         await loader.async_start_watching()
         assert loader._watch_task is not None
@@ -388,10 +388,10 @@ class TestConfigLoaderFileWatching:
 
     @pytest.mark.asyncio
     async def test_stop_watching_not_running(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test stopping watcher when not running."""
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
 
         # Should not raise exception
         await loader.async_stop_watching()
@@ -401,14 +401,14 @@ class TestConfigLoaderFileWatching:
     @pytest.mark.asyncio
     async def test_watch_file_detects_changes(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test that file watcher detects and processes changes."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         callback = Mock()
@@ -448,14 +448,14 @@ class TestConfigLoaderFileWatching:
     @pytest.mark.asyncio
     async def test_watch_file_no_notify_if_config_unchanged(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test that callbacks aren't notified if config content is same."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         callback = Mock()
@@ -483,14 +483,14 @@ class TestConfigLoaderCreateChore:
     @pytest.mark.asyncio
     async def test_create_chore_success(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test creating a new chore successfully."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Create new chore with enum frequency
@@ -519,14 +519,14 @@ class TestConfigLoaderCreateChore:
     @pytest.mark.asyncio
     async def test_create_chore_with_manual_frequency(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test creating a chore with manual frequency (the problematic enum value)."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Create chore with MANUAL frequency (this was failing before)
@@ -548,14 +548,14 @@ class TestConfigLoaderCreateChore:
     @pytest.mark.asyncio
     async def test_create_chore_duplicate_slug(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test creating a chore with duplicate slug fails."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Try to create chore with existing slug
@@ -572,14 +572,14 @@ class TestConfigLoaderCreateChore:
     @pytest.mark.asyncio
     async def test_create_chore_with_custom_icon(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test creating a chore with custom icon."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Create chore with custom icon
@@ -613,14 +613,14 @@ class TestConfigLoaderUpdateChore:
     @pytest.mark.asyncio
     async def test_update_chore_name(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test updating a chore's name."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Update chore name
@@ -639,14 +639,14 @@ class TestConfigLoaderUpdateChore:
     @pytest.mark.asyncio
     async def test_update_chore_icon(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test updating a chore's icon."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Update chore icon
@@ -665,14 +665,14 @@ class TestConfigLoaderUpdateChore:
     @pytest.mark.asyncio
     async def test_update_chore_multiple_fields(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test updating multiple chore fields at once."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Update multiple fields
@@ -693,14 +693,14 @@ class TestConfigLoaderUpdateChore:
     @pytest.mark.asyncio
     async def test_update_chore_not_found(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test updating a non-existent chore fails."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         with pytest.raises(ConfigLoadError, match="not found"):

@@ -7,6 +7,7 @@ chores:
     description: "Take the trash and recycling bins to the curb"
     frequency: "manual"
     icon: "mdi:trash-can"  # Optional: Custom Material Design Icon
+    points: 5  # Optional: Points awarded for completion (default: 1)
     assignees:
       - "john"
       - "jane"
@@ -16,6 +17,7 @@ chores:
     description: "Wash and put away dishes from dinner"
     frequency: "daily"
     icon: "mdi:dishwasher"
+    points: 3
     assignees:
       - "john"
       - "jane"
@@ -26,6 +28,7 @@ chores:
     description: "Vacuum the living room and dining area"
     frequency: "manual"
     icon: "mdi:vacuum"
+    points: 10
     assignees:
       - "jane"
 
@@ -34,6 +37,7 @@ chores:
     description: "Deep clean the bathroom including toilet, shower, and sink"
     frequency: "manual"
     icon: "mdi:broom"
+    points: 15
     assignees:
       - "john"
       - "jane"

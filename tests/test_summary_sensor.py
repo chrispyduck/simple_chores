@@ -17,13 +17,6 @@ class TestChoreSummarySensor:
     """Tests for ChoreSummarySensor."""
 
     @pytest.fixture
-    def mock_hass(self) -> MagicMock:
-        """Create a mock Home Assistant instance."""
-        hass = MagicMock()
-        hass.data = {}
-        return hass
-
-    @pytest.fixture
     def sample_config(self) -> SimpleChoresConfig:
         """Create a sample config with multiple chores."""
         return SimpleChoresConfig(
@@ -51,14 +44,14 @@ class TestChoreSummarySensor:
 
     @pytest.mark.asyncio
     async def test_summary_sensor_creation(
-        self, mock_hass: MagicMock, sample_config: SimpleChoresConfig
+        self, hass, sample_config: SimpleChoresConfig
     ) -> None:
         """Test summary sensor is created for each assignee."""
         mock_config_loader = MagicMock()
         mock_config_loader.config = sample_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         # Should have summary sensors for alice and bob
@@ -72,15 +65,15 @@ class TestChoreSummarySensor:
 
     @pytest.mark.asyncio
     async def test_summary_sensor_pending_count(
-        self, mock_hass: MagicMock, sample_config: SimpleChoresConfig
+        self, hass, sample_config: SimpleChoresConfig
     ) -> None:
         """Test summary sensor counts pending chores correctly."""
-        mock_hass.data = {}
+        hass.data = {}
         mock_config_loader = MagicMock()
         mock_config_loader.config = sample_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         alice_summary = manager.summary_sensors["alice"]
@@ -104,15 +97,15 @@ class TestChoreSummarySensor:
 
     @pytest.mark.asyncio
     async def test_summary_sensor_attributes(
-        self, mock_hass: MagicMock, sample_config: SimpleChoresConfig
+        self, hass, sample_config: SimpleChoresConfig
     ) -> None:
         """Test summary sensor attributes list chores by state."""
-        mock_hass.data = {}
+        hass.data = {}
         mock_config_loader = MagicMock()
         mock_config_loader.config = sample_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         alice_summary = manager.summary_sensors["alice"]
@@ -154,15 +147,15 @@ class TestChoreSummarySensor:
 
     @pytest.mark.asyncio
     async def test_summary_sensor_only_counts_own_chores(
-        self, mock_hass: MagicMock, sample_config: SimpleChoresConfig
+        self, hass, sample_config: SimpleChoresConfig
     ) -> None:
         """Test summary sensor only counts chores for its assignee."""
-        mock_hass.data = {}
+        hass.data = {}
         mock_config_loader = MagicMock()
         mock_config_loader.config = sample_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         alice_summary = manager.summary_sensors["alice"]
@@ -182,14 +175,14 @@ class TestChoreSummarySensor:
 
     @pytest.mark.asyncio
     async def test_summary_sensor_device_info(
-        self, mock_hass: MagicMock, sample_config: SimpleChoresConfig
+        self, hass, sample_config: SimpleChoresConfig
     ) -> None:
         """Test summary sensor shares device info with chore sensors."""
         mock_config_loader = MagicMock()
         mock_config_loader.config = sample_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         alice_summary = manager.summary_sensors["alice"]
@@ -203,21 +196,21 @@ class TestChoreSummarySensor:
 
     @pytest.mark.asyncio
     async def test_summary_attributes_update_after_set_state(
-        self, mock_hass: MagicMock, sample_config: SimpleChoresConfig
+        self, hass, sample_config: SimpleChoresConfig
     ) -> None:
         """Test summary sensor attributes update when chore state changes via set_state."""
         from custom_components.simple_chores.const import DOMAIN
 
-        mock_hass.data = {DOMAIN: {"states": {}, "summary_sensors": {}}}
+        hass.data = {DOMAIN: {"states": {}, "summary_sensors": {}}}
         mock_config_loader = MagicMock()
         mock_config_loader.config = sample_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         # Store summary sensors in hass.data so set_state can find them
-        mock_hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
+        hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
 
         alice_summary = manager.summary_sensors["alice"]
         alice_dishes = manager.sensors["alice_dishes"]

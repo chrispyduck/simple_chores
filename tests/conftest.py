@@ -1,21 +1,5 @@
 """Shared fixtures for simple_chores tests."""
 
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
-
-
-@pytest.fixture
-def mock_hass():
-    """
-    Create a mock Home Assistant instance.
-
-    This is a shared fixture that can be imported by test modules.
-    Individual test modules may also define their own mock_hass with
-    specific requirements.
-    """
-    hass = MagicMock()
-    hass.data = {}
-    hass.config.path = lambda: "/config"
-    hass.async_add_executor_job = AsyncMock(side_effect=lambda func, *args: func(*args))
-    return hass
+# The mock_hass fixture is removed - tests should use the 'hass' fixture
+# provided by pytest-homeassistant-custom-component instead, which properly
+# supports storage and other Home Assistant features.

@@ -13,6 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, LOGGER, sanitize_entity_id
+from .data import PointsStorage
 from .models import ChoreConfig, ChoreState, SimpleChoresConfig
 
 if TYPE_CHECKING:
@@ -45,8 +46,9 @@ async def async_setup_entry(
     manager = ChoreSensorManager(hass, async_add_entities, config_loader)
     await manager.async_setup()
 
-    # Store sensors in hass.data for service access
+    # Store sensors and points storage in hass.data for service access
     hass.data[DOMAIN]["sensors"] = manager.sensors
+    hass.data[DOMAIN]["points_storage"] = manager.points_storage
 
     # Register callback for config changes
     config_loader.register_callback(manager.async_config_changed)
@@ -78,9 +80,10 @@ async def async_setup_platform(
     manager = ChoreSensorManager(hass, async_add_entities, config_loader)
     await manager.async_setup()
 
-    # Store sensors in hass.data for service access
+    # Store sensors and points storage in hass.data for service access
     hass.data[DOMAIN]["sensors"] = manager.sensors
     hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
+    hass.data[DOMAIN]["points_storage"] = manager.points_storage
 
     # Register callback for config changes
     config_loader.register_callback(manager.async_config_changed)
@@ -109,9 +112,11 @@ class ChoreSensorManager:
         self.config_loader = config_loader
         self.sensors: dict[str, ChoreSensor] = {}
         self.summary_sensors: dict[str, ChoreSummarySensor] = {}  # type: ignore[name-defined]
+        self.points_storage = PointsStorage(hass)
 
     async def async_setup(self) -> None:
         """Set up initial sensors from configuration."""
+        await self.points_storage.async_load()
         config = self.config_loader.config
         await self._create_sensors_from_config(config)
         await self._create_summary_sensors(config)
@@ -401,6 +406,7 @@ class ChoreSensor(RestoreEntity, SensorEntity):
             "assignee": self._assignee,
             "all_assignees": self._chore.assignees,
             "icon": self._chore.icon,
+            "points": self._chore.points,
         }
 
     def update_chore_config(self, chore: ChoreConfig) -> None:
@@ -541,6 +547,9 @@ class ChoreSummarySensor(SensorEntity):
 
         all_entities = pending_entities + complete_entities + not_requested_entities
 
+        # Get total points for this assignee
+        total_points = self._manager.points_storage.get_points(self._assignee)
+
         return {
             "assignee": self._assignee,
             "pending_chores": pending_entities,
@@ -548,4 +557,5 @@ class ChoreSummarySensor(SensorEntity):
             "not_requested_chores": not_requested_entities,
             "all_chores": all_entities,
             "total_chores": len(all_entities),
+            "total_points": total_points,
         }

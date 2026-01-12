@@ -20,18 +20,7 @@ from custom_components.simple_chores.sensor import (
 
 
 @pytest.fixture
-def mock_hass() -> MagicMock:
-    """Create a mock Home Assistant instance."""
-    hass = MagicMock()
-    hass.data = {}
-    hass.async_add_executor_job = AsyncMock(side_effect=lambda func, *args: func(*args))
-    # Mock the loop to avoid thread safety checks
-    hass.loop = MagicMock()
-    return hass
-
-
-@pytest.fixture
-def mock_config_loader(mock_hass: MagicMock) -> MagicMock:
+def mock_config_loader() -> MagicMock:
     """Create a mock config loader."""
     loader = MagicMock(spec=ConfigLoader)
     loader.config = SimpleChoresConfig(chores=[])
@@ -77,14 +66,14 @@ class TestAsyncSetupPlatform:
 
     @pytest.mark.asyncio
     async def test_setup_platform_success(
-        self, mock_hass: MagicMock, mock_config_loader: MagicMock
+        self, hass, mock_config_loader: MagicMock
     ) -> None:
         """Test successful platform setup."""
-        mock_hass.data["simple_chores"] = {"config_loader": mock_config_loader}
+        hass.data["simple_chores"] = {"config_loader": mock_config_loader}
         async_add_entities = Mock()
 
         await async_setup_platform(
-            mock_hass,
+            hass,
             {},
             async_add_entities,
             None,
@@ -94,15 +83,13 @@ class TestAsyncSetupPlatform:
         mock_config_loader.register_callback.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_setup_platform_integration_not_loaded(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_setup_platform_integration_not_loaded(self, hass) -> None:
         """Test setup when integration not loaded."""
         async_add_entities = Mock()
 
         # Should not raise exception, just log error
         await async_setup_platform(
-            mock_hass,
+            hass,
             {},
             async_add_entities,
             None,
@@ -113,15 +100,13 @@ class TestChoreSensorManager:
     """Tests for ChoreSensorManager."""
 
     @pytest.mark.asyncio
-    async def test_manager_init(
-        self, mock_hass: MagicMock, mock_config_loader: MagicMock
-    ) -> None:
+    async def test_manager_init(self, hass, mock_config_loader: MagicMock) -> None:
         """Test manager initialization."""
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
 
-        assert manager.hass == mock_hass
+        assert manager.hass == hass
         assert manager.async_add_entities == async_add_entities
         assert manager.config_loader == mock_config_loader
         assert manager.sensors == {}
@@ -129,7 +114,7 @@ class TestChoreSensorManager:
     @pytest.mark.asyncio
     async def test_async_setup(
         self,
-        mock_hass: MagicMock,
+        hass,
         mock_config_loader: MagicMock,
         sample_config: SimpleChoresConfig,
     ) -> None:
@@ -137,7 +122,7 @@ class TestChoreSensorManager:
         mock_config_loader.config = sample_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         # Should create 2 sensors (one for each chore)
@@ -155,7 +140,7 @@ class TestChoreSensorManager:
 
     @pytest.mark.asyncio
     async def test_async_setup_multiple_assignees(
-        self, mock_hass: MagicMock, mock_config_loader: MagicMock
+        self, hass, mock_config_loader: MagicMock
     ) -> None:
         """Test setup with chore having multiple assignees."""
         config = SimpleChoresConfig(
@@ -171,7 +156,7 @@ class TestChoreSensorManager:
         mock_config_loader.config = config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         # Should create 3 sensors (one per assignee)
@@ -189,7 +174,7 @@ class TestChoreSensorManager:
     @pytest.mark.asyncio
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
     async def test_config_changed_add_sensors(
-        self, mock_hass: MagicMock, mock_config_loader: MagicMock
+        self, hass, mock_config_loader: MagicMock
     ) -> None:
         """Test adding sensors when config changes."""
         initial_config = SimpleChoresConfig(
@@ -205,7 +190,7 @@ class TestChoreSensorManager:
         mock_config_loader.config = initial_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         assert len(manager.sensors) == 1
@@ -251,7 +236,7 @@ class TestChoreSensorManager:
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
     async def test_config_changed_remove_sensors(
         self,
-        mock_hass: MagicMock,
+        hass,
         mock_config_loader: MagicMock,
         sample_config: SimpleChoresConfig,
     ) -> None:
@@ -259,7 +244,7 @@ class TestChoreSensorManager:
         mock_config_loader.config = sample_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         assert len(manager.sensors) == 2
@@ -291,7 +276,7 @@ class TestChoreSensorManager:
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
     async def test_config_changed_update_existing_sensor(
         self,
-        mock_hass: MagicMock,
+        hass,
         mock_config_loader: MagicMock,
         sample_config: SimpleChoresConfig,
     ) -> None:
@@ -299,7 +284,7 @@ class TestChoreSensorManager:
         mock_config_loader.config = sample_config
         async_add_entities = Mock()
 
-        manager = ChoreSensorManager(mock_hass, async_add_entities, mock_config_loader)
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
         await manager.async_setup()
 
         original_sensor = manager.sensors["alice_dishes"]
@@ -334,12 +319,12 @@ class TestChoreSensorManager:
 class TestChoreSensor:
     """Tests for ChoreSensor."""
 
-    def test_sensor_init(self, mock_hass: MagicMock, sample_chore: ChoreConfig) -> None:
+    def test_sensor_init(self, hass, sample_chore: ChoreConfig) -> None:
         """Test sensor initialization."""
         with patch.object(ChoreSensor, "async_write_ha_state"):
-            sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+            sensor = ChoreSensor(hass, sample_chore, "alice")
 
-        assert sensor.hass == mock_hass
+        assert sensor.hass == hass
         assert sensor._chore == sample_chore
         assert sensor._assignee == "alice"
         assert sensor.unique_id == "simple_chores_alice_dishes"
@@ -349,10 +334,10 @@ class TestChoreSensor:
         assert sensor.icon == "mdi:clipboard-list-outline"
 
     def test_sensor_extra_state_attributes(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
+        self, hass, sample_chore: ChoreConfig
     ) -> None:
         """Test sensor extra state attributes."""
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
 
         attrs = sensor.extra_state_attributes
 
@@ -364,7 +349,7 @@ class TestChoreSensor:
         assert attrs["all_assignees"] == ["alice", "bob"]
         assert attrs["icon"] == "mdi:clipboard-list-outline"
 
-    def test_sensor_custom_icon(self, mock_hass: MagicMock) -> None:
+    def test_sensor_custom_icon(self, hass) -> None:
         """Test sensor with custom icon."""
         chore = ChoreConfig(
             name="Clean Kitchen",
@@ -374,16 +359,14 @@ class TestChoreSensor:
             assignees=["alice"],
             icon="mdi:broom",
         )
-        sensor = ChoreSensor(mock_hass, chore, "alice")
+        sensor = ChoreSensor(hass, chore, "alice")
 
         assert sensor.icon == "mdi:broom"
         assert sensor.extra_state_attributes["icon"] == "mdi:broom"
 
-    def test_update_chore_config(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
-    ) -> None:
+    def test_update_chore_config(self, hass, sample_chore: ChoreConfig) -> None:
         """Test updating chore configuration."""
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_write_ha_state = Mock()
 
         new_chore = ChoreConfig(
@@ -403,11 +386,9 @@ class TestChoreSensor:
         sensor.async_write_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_set_state_pending(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
-    ) -> None:
+    async def test_set_state_pending(self, hass, sample_chore: ChoreConfig) -> None:
         """Test setting sensor state to pending."""
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
         await sensor.set_state(ChoreState.PENDING)
@@ -418,11 +399,9 @@ class TestChoreSensor:
         sensor.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_set_state_complete(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
-    ) -> None:
+    async def test_set_state_complete(self, hass, sample_chore: ChoreConfig) -> None:
         """Test setting sensor state to complete."""
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
         await sensor.set_state(ChoreState.COMPLETE)
@@ -434,10 +413,10 @@ class TestChoreSensor:
 
     @pytest.mark.asyncio
     async def test_set_state_not_requested(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
+        self, hass, sample_chore: ChoreConfig
     ) -> None:
         """Test setting sensor state to not requested."""
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
         await sensor.set_state(ChoreState.NOT_REQUESTED)
@@ -448,14 +427,14 @@ class TestChoreSensor:
 
     @pytest.mark.asyncio
     async def test_state_persistence_on_init(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
+        self, hass, sample_chore: ChoreConfig
     ) -> None:
         """Test that sensor restores previous state on init."""
         # Create a mock last state
         mock_last_state = MagicMock()
         mock_last_state.state = ChoreState.COMPLETE.value
 
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
 
         # Mock async_get_last_state to return our mock state
         sensor.async_get_last_state = AsyncMock(return_value=mock_last_state)
@@ -465,12 +444,10 @@ class TestChoreSensor:
 
         assert sensor.native_value == ChoreState.COMPLETE.value
 
-    def test_multiple_sensors_same_chore(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
-    ) -> None:
+    def test_multiple_sensors_same_chore(self, hass, sample_chore: ChoreConfig) -> None:
         """Test creating multiple sensors for same chore with different assignees."""
-        sensor1 = ChoreSensor(mock_hass, sample_chore, "alice")
-        sensor2 = ChoreSensor(mock_hass, sample_chore, "bob")
+        sensor1 = ChoreSensor(hass, sample_chore, "alice")
+        sensor2 = ChoreSensor(hass, sample_chore, "bob")
 
         assert sensor1.unique_id != sensor2.unique_id
         assert sensor1.entity_id != sensor2.entity_id
@@ -478,7 +455,7 @@ class TestChoreSensor:
 
     @pytest.mark.asyncio
     async def test_set_state_updates_summary_sensor(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
+        self, hass, sample_chore: ChoreConfig
     ) -> None:
         """Test that changing a chore state updates the summary sensor."""
         # Create mock summary sensor
@@ -486,12 +463,12 @@ class TestChoreSensor:
         mock_summary.async_update_ha_state = AsyncMock()
 
         # Setup hass.data with summary sensor
-        mock_hass.data["simple_chores"] = {
+        hass.data["simple_chores"] = {
             "states": {},
             "summary_sensors": {"alice": mock_summary},
         }
 
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
         await sensor.set_state(ChoreState.COMPLETE)
@@ -500,7 +477,7 @@ class TestChoreSensor:
         mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_icon_preserved_with_custom_icon(self, mock_hass: MagicMock) -> None:
+    async def test_icon_preserved_with_custom_icon(self, hass) -> None:
         """Test that custom icon is preserved when state changes."""
         chore = ChoreConfig(
             name="Clean Kitchen",
@@ -510,7 +487,7 @@ class TestChoreSensor:
             assignees=["alice"],
             icon="mdi:broom",
         )
-        sensor = ChoreSensor(mock_hass, chore, "alice")
+        sensor = ChoreSensor(hass, chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
         # Icon should start as configured
@@ -528,37 +505,33 @@ class TestChoreSensor:
         await sensor.set_state(ChoreState.NOT_REQUESTED)
         assert sensor.icon == "mdi:broom"  # Icon should remain custom icon
 
-    def test_sensor_should_not_poll(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
-    ) -> None:
+    def test_sensor_should_not_poll(self, hass, sample_chore: ChoreConfig) -> None:
         """Test that sensor has polling disabled."""
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
 
         assert sensor.should_poll is False
 
-    def test_sensor_has_no_entity_name(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
-    ) -> None:
+    def test_sensor_has_no_entity_name(self, hass, sample_chore: ChoreConfig) -> None:
         """Test that sensor has entity name disabled."""
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
 
         assert sensor.has_entity_name is False
 
     @pytest.mark.asyncio
     async def test_summary_sensor_state_is_written(
-        self, mock_hass: MagicMock, sample_chore: ChoreConfig
+        self, hass, sample_chore: ChoreConfig
     ) -> None:
         """Test that summary sensor state is written when chore state changes."""
         mock_summary = Mock()
         mock_summary.async_update_ha_state = AsyncMock()
 
         # Setup hass.data with summary sensor
-        mock_hass.data["simple_chores"] = {
+        hass.data["simple_chores"] = {
             "states": {},
             "summary_sensors": {"alice": mock_summary},
         }
 
-        sensor = ChoreSensor(mock_hass, sample_chore, "alice")
+        sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
         # Set state and verify the summary state was written

@@ -24,7 +24,7 @@ from custom_components.simple_chores.sensor import ChoreSensor, ChoreSensorManag
 
 
 @pytest.fixture
-def mock_hass() -> MagicMock:
+def hass() -> MagicMock:
     """Create a mock Home Assistant instance."""
     hass = MagicMock()
     hass.data = {}
@@ -76,7 +76,7 @@ class TestFullIntegrationSetup:
     async def test_full_setup_flow(
         self,
         mock_loader_class: MagicMock,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
@@ -85,18 +85,18 @@ class TestFullIntegrationSetup:
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
         # Create real config loader
-        real_loader = ConfigLoader(mock_hass, temp_config_file)
+        real_loader = ConfigLoader(hass, temp_config_file)
         await real_loader.async_load()
         mock_loader_class.return_value = real_loader
 
         # Run async_setup
-        result = await async_setup(mock_hass, {})
+        result = await async_setup(hass, {})
 
         assert result is True
 
         # Verify data structure
-        assert "simple_chores" in mock_hass.data
-        assert "config_loader" in mock_hass.data["simple_chores"]
+        assert "simple_chores" in hass.data
+        assert "config_loader" in hass.data["simple_chores"]
 
         # Verify config was loaded
         config = real_loader.config
@@ -115,25 +115,25 @@ class TestFullIntegrationSetup:
     async def test_full_setup_and_unload_flow(
         self,
         mock_loader_class: MagicMock,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test complete setup and unload flow."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        real_loader = ConfigLoader(mock_hass, temp_config_file)
+        real_loader = ConfigLoader(hass, temp_config_file)
         await real_loader.async_load()
         mock_loader_class.return_value = real_loader
 
         # Setup
-        await async_setup(mock_hass, {})
+        await async_setup(hass, {})
 
         assert real_loader._watch_task is not None
 
         # Unload
         mock_entry = MagicMock()
-        result = await async_unload_entry(mock_hass, mock_entry)
+        result = await async_unload_entry(hass, mock_entry)
 
         assert result is True
         # Watch task should be stopped
@@ -148,14 +148,14 @@ class TestFullIntegrationSetup:
     @pytest.mark.asyncio
     async def test_config_loader_with_file_watcher_integration(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
         """Test config loader with file watcher detecting changes."""
         temp_config_file.write_text(yaml.dump(valid_config_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         callback_called = asyncio.Event()
@@ -201,7 +201,7 @@ class TestConfigLoaderIntegration:
     @pytest.mark.asyncio
     async def test_loader_handles_malformed_yaml_then_fixed(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
@@ -209,7 +209,7 @@ class TestConfigLoaderIntegration:
         # Start with malformed YAML
         temp_config_file.write_text("invalid: yaml: [")
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
 
         # First load should fail
         with pytest.raises(ConfigLoadError):
@@ -225,7 +225,7 @@ class TestConfigLoaderIntegration:
     @pytest.mark.asyncio
     async def test_loader_handles_slug_sanitization(
         self,
-        mock_hass: MagicMock,
+        hass,
         temp_config_file: Path,
         valid_config_data: dict[str, Any],
     ) -> None:
@@ -243,7 +243,7 @@ class TestConfigLoaderIntegration:
         }
         temp_config_file.write_text(yaml.dump(data_with_bad_slug))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         # Verify slug was sanitized
@@ -351,7 +351,7 @@ class TestSensorManagerIntegration:
     @pytest.mark.asyncio
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
     async def test_sensor_manager_lifecycle(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test complete sensor manager lifecycle."""
         # Initial config
@@ -367,11 +367,11 @@ class TestSensorManagerIntegration:
         }
         temp_config_file.write_text(yaml.dump(initial_data))
 
-        loader = ConfigLoader(mock_hass, temp_config_file)
+        loader = ConfigLoader(hass, temp_config_file)
         await loader.async_load()
 
         async_add_entities = Mock()
-        manager = ChoreSensorManager(mock_hass, async_add_entities, loader)
+        manager = ChoreSensorManager(hass, async_add_entities, loader)
 
         # Setup
         await manager.async_setup()
@@ -416,7 +416,7 @@ class TestSensorManagerIntegration:
     @pytest.mark.asyncio
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
     async def test_sensor_state_persistence_across_config_changes(
-        self, mock_hass: MagicMock, temp_config_file: Path
+        self, hass, temp_config_file: Path
     ) -> None:
         """Test that sensor states persist across config changes."""
         chore1 = ChoreConfig(
@@ -427,7 +427,7 @@ class TestSensorManagerIntegration:
         )
 
         # Create sensor and set state
-        sensor1 = ChoreSensor(mock_hass, chore1, "alice")
+        sensor1 = ChoreSensor(hass, chore1, "alice")
         await sensor1.set_state(ChoreState.COMPLETE)
 
         # Simulate config change - chore name updated
@@ -449,7 +449,7 @@ class TestSensorManagerIntegration:
         mock_last_state.state = ChoreState.COMPLETE.value
 
         # Create new sensor with same slug/assignee (simulating recreation)
-        sensor2 = ChoreSensor(mock_hass, chore2, "alice")
+        sensor2 = ChoreSensor(hass, chore2, "alice")
         sensor2.async_get_last_state = AsyncMock(return_value=mock_last_state)
         await sensor2.async_added_to_hass()
 

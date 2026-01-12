@@ -28,19 +28,18 @@ from custom_components.simple_chores.sensor import ChoreSensor
 from custom_components.simple_chores.services import async_setup_services
 
 
-@pytest.fixture
-def mock_hass() -> MagicMock:
-    """Create a mock Home Assistant instance."""
-    hass = MagicMock()
-    hass.data = {}
-    hass.services = MagicMock()
-    hass.services.async_register = Mock()
-    hass.loop = MagicMock()
-    return hass
+@pytest.fixture(autouse=True)
+async def setup_hass_data(hass):
+    """Setup hass.data for all tests in this file."""
+    # Ensure DOMAIN data exists
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {}
+
+    yield hass
 
 
 @pytest.fixture
-def mock_sensor(mock_hass: MagicMock) -> ChoreSensor:
+def mock_sensor(hass) -> ChoreSensor:
     """Create a mock chore sensor."""
     chore = ChoreConfig(
         name="Dishes",
@@ -49,7 +48,7 @@ def mock_sensor(mock_hass: MagicMock) -> ChoreSensor:
         assignees=["alice"],
     )
     with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-        sensor = ChoreSensor(mock_hass, chore, "alice")
+        sensor = ChoreSensor(hass, chore, "alice")
         sensor.set_state = AsyncMock()
     return sensor
 
@@ -58,38 +57,29 @@ class TestServiceSetup:
     """Tests for service setup."""
 
     @pytest.mark.asyncio
-    async def test_setup_services_registers_all_services(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_setup_services_registers_all_services(self, hass) -> None:
         """Test that all services are registered."""
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
-        assert mock_hass.services.async_register.call_count == 9
-
-        # Check that each service was registered
-        calls = mock_hass.services.async_register.call_args_list
-        registered_services = [call[0][1] for call in calls]
-
-        assert SERVICE_MARK_COMPLETE in registered_services
-        assert SERVICE_MARK_PENDING in registered_services
-        assert SERVICE_MARK_NOT_REQUESTED in registered_services
-        assert SERVICE_RESET_COMPLETED in registered_services
-        assert SERVICE_START_NEW_DAY in registered_services
-        assert SERVICE_CREATE_CHORE in registered_services
-        assert SERVICE_UPDATE_CHORE in registered_services
-        assert SERVICE_DELETE_CHORE in registered_services
-        assert SERVICE_REFRESH_SUMMARY in registered_services
+        # Check that each service was registered using has_service
+        assert hass.services.has_service(DOMAIN, SERVICE_MARK_COMPLETE)
+        assert hass.services.has_service(DOMAIN, SERVICE_MARK_PENDING)
+        assert hass.services.has_service(DOMAIN, SERVICE_MARK_NOT_REQUESTED)
+        assert hass.services.has_service(DOMAIN, SERVICE_RESET_COMPLETED)
+        assert hass.services.has_service(DOMAIN, SERVICE_START_NEW_DAY)
+        assert hass.services.has_service(DOMAIN, SERVICE_CREATE_CHORE)
+        assert hass.services.has_service(DOMAIN, SERVICE_UPDATE_CHORE)
+        assert hass.services.has_service(DOMAIN, SERVICE_DELETE_CHORE)
+        assert hass.services.has_service(DOMAIN, SERVICE_REFRESH_SUMMARY)
 
     @pytest.mark.asyncio
-    async def test_setup_services_uses_correct_domain(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_setup_services_uses_correct_domain(self, hass) -> None:
         """Test that services are registered with correct domain."""
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
-        calls = mock_hass.services.async_register.call_args_list
-        for call in calls:
-            assert call[0][0] == DOMAIN
+        # Verify all services are in the correct domain
+        services = hass.services.async_services_for_domain(DOMAIN)
+        assert len(services) == 9  # Should have exactly 9 services
 
 
 class TestMarkCompleteService:
@@ -97,25 +87,23 @@ class TestMarkCompleteService:
 
     @pytest.mark.asyncio
     async def test_mark_complete_updates_sensor_state(
-        self, mock_hass: MagicMock, mock_sensor: ChoreSensor
+        self, hass, mock_sensor: ChoreSensor
     ) -> None:
         """Test that mark_complete service updates sensor state."""
         # Setup
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
-        await async_setup_services(mock_hass)
-
-        # Get the registered handler
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-
-        # Create service call
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
+        await async_setup_services(hass)
 
         # Reset mock to ignore initialization calls
         mock_sensor.set_state.reset_mock()
 
-        # Execute
-        await handler(call)
+        # Execute service
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
 
         # Verify - should be called with COMPLETE (may be called multiple times due to internals)
         mock_sensor.set_state.assert_called_with(ChoreState.COMPLETE)
@@ -123,20 +111,23 @@ class TestMarkCompleteService:
     @pytest.mark.asyncio
     async def test_mark_complete_logs_info(
         self,
-        mock_hass: MagicMock,
+        hass,
         mock_sensor: ChoreSensor,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Test that mark_complete logs at INFO level."""
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         with caplog.at_level("INFO"):
-            await handler(call)
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_COMPLETE,
+                service_data,
+                blocking=True,
+            )
 
         # Check that INFO logs contain service call details
         assert "Service 'mark_complete' called" in caplog.text
@@ -146,46 +137,54 @@ class TestMarkCompleteService:
 
     @pytest.mark.asyncio
     async def test_mark_complete_sensor_not_found(
-        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+        self, hass, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test mark_complete when sensor doesn't exist."""
         from homeassistant.exceptions import ServiceValidationError
 
-        mock_hass.data[DOMAIN] = {"sensors": {}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {}}
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "bob", ATTR_CHORE_SLUG: "vacuum"}
+        service_data = {ATTR_USER: "bob", ATTR_CHORE_SLUG: "vacuum"}
 
         with pytest.raises(ServiceValidationError, match="No sensor found"):
-            await handler(call)
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_COMPLETE,
+                service_data,
+                blocking=True,
+            )
 
         # Should also log error
         assert "No sensor found" in caplog.text
 
     @pytest.mark.asyncio
     async def test_mark_complete_integration_not_loaded(
-        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+        self, hass, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test mark_complete when integration not loaded."""
         from homeassistant.exceptions import HomeAssistantError
 
-        await async_setup_services(mock_hass)
+        # Remove DOMAIN from hass.data to simulate integration not loaded
+        if DOMAIN in hass.data:
+            del hass.data[DOMAIN]
 
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        await async_setup_services(hass)
+
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         with pytest.raises(HomeAssistantError, match="integration not loaded"):
-            await handler(call)
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_COMPLETE,
+                service_data,
+                blocking=True,
+            )
 
         assert "integration not loaded" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_mark_complete_actually_changes_state(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_mark_complete_actually_changes_state(self, hass) -> None:
         """Test that mark_complete actually changes the sensor state value."""
         chore = ChoreConfig(
             name="Dishes",
@@ -195,21 +194,24 @@ class TestMarkCompleteService:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.async_write_ha_state = Mock()
 
         # Initially NOT_REQUESTED
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value
 
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}, "states": {}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}, "states": {}}
+        await async_setup_services(hass)
 
         # Call mark_complete
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            service_data,
+            blocking=True,
+        )
 
         # Verify state changed to COMPLETE
         assert sensor.native_value == ChoreState.COMPLETE.value, (
@@ -222,42 +224,48 @@ class TestMarkPendingService:
 
     @pytest.mark.asyncio
     async def test_mark_pending_updates_sensor_state(
-        self, mock_hass: MagicMock, mock_sensor: ChoreSensor
+        self, hass, mock_sensor: ChoreSensor
     ) -> None:
         """Test that mark_pending service updates sensor state."""
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
+        await async_setup_services(hass)
 
         # Get the handler for mark_pending (second service)
-        handler = mock_hass.services.async_register.call_args_list[1][0][2]
 
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         # Reset mock to ignore initialization calls
         mock_sensor.set_state.reset_mock()
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_PENDING,
+            service_data,
+            blocking=True,
+        )
 
         mock_sensor.set_state.assert_called_with(ChoreState.PENDING)
 
     @pytest.mark.asyncio
     async def test_mark_pending_logs_info(
         self,
-        mock_hass: MagicMock,
+        hass,
         mock_sensor: ChoreSensor,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Test that mark_pending logs at INFO level."""
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[1][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         with caplog.at_level("INFO"):
-            await handler(call)
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_PENDING,
+                service_data,
+                blocking=True,
+            )
 
         # Check that INFO logs contain service call details
         assert "Service 'mark_pending' called" in caplog.text
@@ -267,27 +275,28 @@ class TestMarkPendingService:
 
     @pytest.mark.asyncio
     async def test_mark_pending_sensor_not_found(
-        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+        self, hass, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test mark_pending when sensor doesn't exist."""
         from homeassistant.exceptions import ServiceValidationError
 
-        mock_hass.data[DOMAIN] = {"sensors": {}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {}}
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[1][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "bob", ATTR_CHORE_SLUG: "vacuum"}
+        service_data = {ATTR_USER: "bob", ATTR_CHORE_SLUG: "vacuum"}
 
         with pytest.raises(ServiceValidationError, match="No sensor found"):
-            await handler(call)
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_PENDING,
+                service_data,
+                blocking=True,
+            )
 
         assert "No sensor found" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_mark_pending_actually_changes_state(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_mark_pending_actually_changes_state(self, hass) -> None:
         """Test that mark_pending actually changes the sensor state value."""
         # Create a real sensor (not mocked)
         chore = ChoreConfig(
@@ -299,7 +308,7 @@ class TestMarkPendingService:
 
         # Mock async_write_ha_state to avoid threading issues in tests
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             # Also mock it on the instance for calls during set_state
             sensor.async_write_ha_state = Mock()
 
@@ -307,15 +316,18 @@ class TestMarkPendingService:
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value
 
         # Setup the service
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}, "states": {}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}, "states": {}}
+        await async_setup_services(hass)
 
         # Call mark_pending service
-        handler = mock_hass.services.async_register.call_args_list[1][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_PENDING,
+            service_data,
+            blocking=True,
+        )
 
         # Verify the state actually changed to PENDING
         assert sensor.native_value == ChoreState.PENDING.value, (
@@ -328,42 +340,48 @@ class TestMarkNotRequestedService:
 
     @pytest.mark.asyncio
     async def test_mark_not_requested_updates_sensor_state(
-        self, mock_hass: MagicMock, mock_sensor: ChoreSensor
+        self, hass, mock_sensor: ChoreSensor
     ) -> None:
         """Test that mark_not_requested service updates sensor state."""
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
+        await async_setup_services(hass)
 
         # Get the handler for mark_not_requested (third service)
-        handler = mock_hass.services.async_register.call_args_list[2][0][2]
 
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         # Reset mock to ignore initialization calls
         mock_sensor.set_state.reset_mock()
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_NOT_REQUESTED,
+            service_data,
+            blocking=True,
+        )
 
         mock_sensor.set_state.assert_called_with(ChoreState.NOT_REQUESTED)
 
     @pytest.mark.asyncio
     async def test_mark_not_requested_logs_info(
         self,
-        mock_hass: MagicMock,
+        hass,
         mock_sensor: ChoreSensor,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Test that mark_not_requested logs at INFO level."""
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[2][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         with caplog.at_level("INFO"):
-            await handler(call)
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_NOT_REQUESTED,
+                service_data,
+                blocking=True,
+            )
 
         # Check that INFO logs contain service call details
         assert "Service 'mark_not_requested' called" in caplog.text
@@ -373,27 +391,28 @@ class TestMarkNotRequestedService:
 
     @pytest.mark.asyncio
     async def test_mark_not_requested_sensor_not_found(
-        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+        self, hass, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test mark_not_requested when sensor doesn't exist."""
         from homeassistant.exceptions import ServiceValidationError
 
-        mock_hass.data[DOMAIN] = {"sensors": {}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {}}
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[2][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "bob", ATTR_CHORE_SLUG: "vacuum"}
+        service_data = {ATTR_USER: "bob", ATTR_CHORE_SLUG: "vacuum"}
 
         with pytest.raises(ServiceValidationError, match="No sensor found"):
-            await handler(call)
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_NOT_REQUESTED,
+                service_data,
+                blocking=True,
+            )
 
         assert "No sensor found" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_mark_not_requested_actually_changes_state(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_mark_not_requested_actually_changes_state(self, hass) -> None:
         """Test that mark_not_requested actually changes the sensor state value."""
         chore = ChoreConfig(
             name="Dishes",
@@ -403,22 +422,25 @@ class TestMarkNotRequestedService:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.async_write_ha_state = Mock()
             # Set initial state to COMPLETE
             sensor._attr_native_value = ChoreState.COMPLETE.value
 
         assert sensor.native_value == ChoreState.COMPLETE.value
 
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}, "states": {}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}, "states": {}}
+        await async_setup_services(hass)
 
         # Call mark_not_requested
-        handler = mock_hass.services.async_register.call_args_list[2][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_NOT_REQUESTED,
+            service_data,
+            blocking=True,
+        )
 
         # Verify state changed to NOT_REQUESTED
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value, (
@@ -430,9 +452,7 @@ class TestServiceStateTransitions:
     """Test state transitions through service calls."""
 
     @pytest.mark.asyncio
-    async def test_complete_state_transition_sequence(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_complete_state_transition_sequence(self, hass) -> None:
         """Test a complete sequence of state transitions."""
         chore = ChoreConfig(
             name="Dishes",
@@ -442,53 +462,53 @@ class TestServiceStateTransitions:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.async_write_ha_state = Mock()
 
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}, "states": {}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}, "states": {}}
+        await async_setup_services(hass)
 
-        # Get handlers
-        mark_complete_handler = mock_hass.services.async_register.call_args_list[0][0][
-            2
-        ]
-        mark_pending_handler = mock_hass.services.async_register.call_args_list[1][0][2]
-        mark_not_requested_handler = mock_hass.services.async_register.call_args_list[
-            2
-        ][0][2]
-
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         # Initial state: NOT_REQUESTED
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value
 
         # NOT_REQUESTED -> PENDING
-        await mark_pending_handler(call)
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_PENDING, service_data, blocking=True
+        )
         assert sensor.native_value == ChoreState.PENDING.value, (
             "Failed to transition from NOT_REQUESTED to PENDING"
         )
 
         # PENDING -> COMPLETE
-        await mark_complete_handler(call)
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
+        )
         assert sensor.native_value == ChoreState.COMPLETE.value, (
             "Failed to transition from PENDING to COMPLETE"
         )
 
         # COMPLETE -> NOT_REQUESTED
-        await mark_not_requested_handler(call)
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_NOT_REQUESTED, service_data, blocking=True
+        )
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value, (
             "Failed to transition from COMPLETE to NOT_REQUESTED"
         )
 
         # NOT_REQUESTED -> COMPLETE (direct transition)
-        await mark_complete_handler(call)
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
+        )
         assert sensor.native_value == ChoreState.COMPLETE.value, (
             "Failed to transition directly from NOT_REQUESTED to COMPLETE"
         )
 
         # COMPLETE -> PENDING (backwards transition)
-        await mark_pending_handler(call)
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_PENDING, service_data, blocking=True
+        )
         assert sensor.native_value == ChoreState.PENDING.value, (
             "Failed to transition from COMPLETE back to PENDING"
         )
@@ -498,9 +518,7 @@ class TestServiceIntegration:
     """Integration tests for services."""
 
     @pytest.mark.asyncio
-    async def test_services_work_after_sensor_platform_setup(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_services_work_after_sensor_platform_setup(self, hass) -> None:
         """Test that services work after sensor platform is set up."""
         # Create sensors manually (simulating what sensor platform does)
         chore = ChoreConfig(
@@ -511,31 +529,31 @@ class TestServiceIntegration:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.set_state = AsyncMock()
 
         # Simulate sensor platform setup storing sensors
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}}
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}}
 
         # Setup services
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Verify we can call the service
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         # Reset mock to ignore initialization calls
         sensor.set_state.reset_mock()
 
-        # This should not raise an error
-        await handler(call)
+        # Call the mark_complete service
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
+        )
 
         # Verify sensor state was updated
         sensor.set_state.assert_called_with(ChoreState.COMPLETE)
 
     @pytest.mark.asyncio
-    async def test_multiple_sensors_different_users(self, mock_hass: MagicMock) -> None:
+    async def test_multiple_sensors_different_users(self, hass) -> None:
         """Test services with multiple sensors for different users."""
         # Create multiple sensors
         chore = ChoreConfig(
@@ -546,27 +564,28 @@ class TestServiceIntegration:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_alice = ChoreSensor(mock_hass, chore, "alice")
-            sensor_bob = ChoreSensor(mock_hass, chore, "bob")
+            sensor_alice = ChoreSensor(hass, chore, "alice")
+            sensor_bob = ChoreSensor(hass, chore, "bob")
             sensor_alice.set_state = AsyncMock()
             sensor_bob.set_state = AsyncMock()
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {"alice_dishes": sensor_alice, "bob_dishes": sensor_bob}
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Call service for alice
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         # Reset mocks to ignore initialization calls
         sensor_alice.set_state.reset_mock()
         sensor_bob.set_state.reset_mock()
 
-        await handler(call)
+        # Call service for alice
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
+        )
 
         # Only alice's sensor should be updated
         sensor_alice.set_state.assert_called_with(ChoreState.COMPLETE)
@@ -575,17 +594,17 @@ class TestServiceIntegration:
         # Reset and call for bob
         sensor_alice.set_state.reset_mock()
         sensor_bob.set_state.reset_mock()
-        call.data = {ATTR_USER: "bob", ATTR_CHORE_SLUG: "dishes"}
-        await handler(call)
+        service_data = {ATTR_USER: "bob", ATTR_CHORE_SLUG: "dishes"}
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
+        )
 
         # Only bob's sensor should be updated
         sensor_alice.set_state.assert_not_called()
         sensor_bob.set_state.assert_called_with(ChoreState.COMPLETE)
 
     @pytest.mark.asyncio
-    async def test_service_with_special_characters_in_slug(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_service_with_special_characters_in_slug(self, hass) -> None:
         """Test service with special characters in slug."""
         chore = ChoreConfig(
             name="Test Chore",
@@ -595,22 +614,23 @@ class TestServiceIntegration:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.set_state = AsyncMock()
 
         # Key should be sanitized: hyphens converted to underscores
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_test_chore_123": sensor}}
+        hass.data[DOMAIN] = {"sensors": {"alice_test_chore_123": sensor}}
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "test-chore_123"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "test-chore_123"}
 
         # Reset mock to ignore initialization calls
         sensor.set_state.reset_mock()
 
-        await handler(call)
+        # Call the service
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
+        )
 
         sensor.set_state.assert_called_with(ChoreState.COMPLETE)
 
@@ -619,7 +639,7 @@ class TestMarkAllAssignees:
     """Tests for mark_* services without user parameter (all assignees)."""
 
     @pytest.mark.asyncio
-    async def test_mark_complete_all_assignees(self, mock_hass: MagicMock) -> None:
+    async def test_mark_complete_all_assignees(self, hass) -> None:
         """Test mark_complete without user marks all assignees as complete."""
         # Create a chore with multiple assignees
         chore = ChoreConfig(
@@ -630,11 +650,11 @@ class TestMarkAllAssignees:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_alice = ChoreSensor(mock_hass, chore, "alice")
+            sensor_alice = ChoreSensor(hass, chore, "alice")
             sensor_alice.async_write_ha_state = Mock()
-            sensor_bob = ChoreSensor(mock_hass, chore, "bob")
+            sensor_bob = ChoreSensor(hass, chore, "bob")
             sensor_bob.async_write_ha_state = Mock()
-            sensor_charlie = ChoreSensor(mock_hass, chore, "charlie")
+            sensor_charlie = ChoreSensor(hass, chore, "charlie")
             sensor_charlie.async_write_ha_state = Mock()
 
         # All start as NOT_REQUESTED
@@ -642,7 +662,7 @@ class TestMarkAllAssignees:
         assert sensor_bob.native_value == ChoreState.NOT_REQUESTED.value
         assert sensor_charlie.native_value == ChoreState.NOT_REQUESTED.value
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {
                 "alice_dishes": sensor_alice,
                 "bob_dishes": sensor_bob,
@@ -650,14 +670,17 @@ class TestMarkAllAssignees:
             },
             "states": {},
         }
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Call mark_complete without user
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_CHORE_SLUG: "dishes"}  # No user specified
+        service_data = {ATTR_CHORE_SLUG: "dishes"}  # No user specified
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            service_data,
+            blocking=True,
+        )
 
         # All assignees should be marked complete
         assert sensor_alice.native_value == ChoreState.COMPLETE.value
@@ -665,7 +688,7 @@ class TestMarkAllAssignees:
         assert sensor_charlie.native_value == ChoreState.COMPLETE.value
 
     @pytest.mark.asyncio
-    async def test_mark_pending_all_assignees(self, mock_hass: MagicMock) -> None:
+    async def test_mark_pending_all_assignees(self, hass) -> None:
         """Test mark_pending without user marks all assignees as pending."""
         chore = ChoreConfig(
             name="Dishes",
@@ -675,33 +698,36 @@ class TestMarkAllAssignees:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_alice = ChoreSensor(mock_hass, chore, "alice")
+            sensor_alice = ChoreSensor(hass, chore, "alice")
             sensor_alice.async_write_ha_state = Mock()
-            sensor_bob = ChoreSensor(mock_hass, chore, "bob")
+            sensor_bob = ChoreSensor(hass, chore, "bob")
             sensor_bob.async_write_ha_state = Mock()
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {
                 "alice_dishes": sensor_alice,
                 "bob_dishes": sensor_bob,
             },
             "states": {},
         }
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Call mark_pending without user
-        handler = mock_hass.services.async_register.call_args_list[1][0][2]
-        call = MagicMock()
-        call.data = {ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_CHORE_SLUG: "dishes"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_PENDING,
+            service_data,
+            blocking=True,
+        )
 
         # All assignees should be marked pending
         assert sensor_alice.native_value == ChoreState.PENDING.value
         assert sensor_bob.native_value == ChoreState.PENDING.value
 
     @pytest.mark.asyncio
-    async def test_mark_not_requested_all_assignees(self, mock_hass: MagicMock) -> None:
+    async def test_mark_not_requested_all_assignees(self, hass) -> None:
         """Test mark_not_requested without user marks all assignees as not requested."""
         chore = ChoreConfig(
             name="Dishes",
@@ -711,37 +737,38 @@ class TestMarkAllAssignees:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_alice = ChoreSensor(mock_hass, chore, "alice")
+            sensor_alice = ChoreSensor(hass, chore, "alice")
             sensor_alice.async_write_ha_state = Mock()
             sensor_alice._attr_native_value = ChoreState.COMPLETE.value
-            sensor_bob = ChoreSensor(mock_hass, chore, "bob")
+            sensor_bob = ChoreSensor(hass, chore, "bob")
             sensor_bob.async_write_ha_state = Mock()
             sensor_bob._attr_native_value = ChoreState.PENDING.value
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {
                 "alice_dishes": sensor_alice,
                 "bob_dishes": sensor_bob,
             },
             "states": {},
         }
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Call mark_not_requested without user
-        handler = mock_hass.services.async_register.call_args_list[2][0][2]
-        call = MagicMock()
-        call.data = {ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_CHORE_SLUG: "dishes"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_NOT_REQUESTED,
+            service_data,
+            blocking=True,
+        )
 
         # All assignees should be marked not requested
         assert sensor_alice.native_value == ChoreState.NOT_REQUESTED.value
         assert sensor_bob.native_value == ChoreState.NOT_REQUESTED.value
 
     @pytest.mark.asyncio
-    async def test_mark_complete_all_assignees_with_multiple_chores(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_mark_complete_all_assignees_with_multiple_chores(self, hass) -> None:
         """Test mark_complete all assignees only affects the specified chore."""
         chore_dishes = ChoreConfig(
             name="Dishes",
@@ -757,16 +784,16 @@ class TestMarkAllAssignees:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_alice_dishes = ChoreSensor(mock_hass, chore_dishes, "alice")
+            sensor_alice_dishes = ChoreSensor(hass, chore_dishes, "alice")
             sensor_alice_dishes.async_write_ha_state = Mock()
-            sensor_bob_dishes = ChoreSensor(mock_hass, chore_dishes, "bob")
+            sensor_bob_dishes = ChoreSensor(hass, chore_dishes, "bob")
             sensor_bob_dishes.async_write_ha_state = Mock()
-            sensor_alice_vacuum = ChoreSensor(mock_hass, chore_vacuum, "alice")
+            sensor_alice_vacuum = ChoreSensor(hass, chore_vacuum, "alice")
             sensor_alice_vacuum.async_write_ha_state = Mock()
-            sensor_bob_vacuum = ChoreSensor(mock_hass, chore_vacuum, "bob")
+            sensor_bob_vacuum = ChoreSensor(hass, chore_vacuum, "bob")
             sensor_bob_vacuum.async_write_ha_state = Mock()
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {
                 "alice_dishes": sensor_alice_dishes,
                 "bob_dishes": sensor_bob_dishes,
@@ -775,14 +802,17 @@ class TestMarkAllAssignees:
             },
             "states": {},
         }
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Mark dishes complete for all assignees
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_CHORE_SLUG: "dishes"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            service_data,
+            blocking=True,
+        )
 
         # Only dishes sensors should be complete
         assert sensor_alice_dishes.native_value == ChoreState.COMPLETE.value
@@ -793,19 +823,22 @@ class TestMarkAllAssignees:
 
     @pytest.mark.asyncio
     async def test_mark_complete_no_assignees_raises_error(
-        self, mock_hass: MagicMock, caplog: pytest.LogCaptureFixture
+        self, hass, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test mark_complete without user raises error when chore has no assignees."""
-        mock_hass.data[DOMAIN] = {"sensors": {}, "states": {}}
-        await async_setup_services(mock_hass)
+        hass.data[DOMAIN] = {"sensors": {}, "states": {}}
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_CHORE_SLUG: "nonexistent"}
+        service_data = {ATTR_CHORE_SLUG: "nonexistent"}
 
         with caplog.at_level("ERROR"):
             with pytest.raises(ServiceValidationError, match="No sensors found"):
-                await handler(call)
+                await hass.services.async_call(
+                    DOMAIN,
+                    SERVICE_MARK_COMPLETE,
+                    service_data,
+                    blocking=True,
+                )
 
         assert "No sensors found for chore 'nonexistent'" in caplog.text
 
@@ -814,7 +847,7 @@ class TestResetCompletedService:
     """Tests for reset_completed service."""
 
     @pytest.mark.asyncio
-    async def test_reset_completed_all_users(self, mock_hass: MagicMock) -> None:
+    async def test_reset_completed_all_users(self, hass) -> None:
         """Test reset_completed resets all completed chores when no user specified."""
         # Create multiple sensors with different states
         chore1 = ChoreConfig(
@@ -837,19 +870,19 @@ class TestResetCompletedService:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor1 = ChoreSensor(mock_hass, chore1, "alice")
+            sensor1 = ChoreSensor(hass, chore1, "alice")
             sensor1.set_state = AsyncMock()
             sensor1._attr_native_value = ChoreState.COMPLETE.value
 
-            sensor2 = ChoreSensor(mock_hass, chore2, "bob")
+            sensor2 = ChoreSensor(hass, chore2, "bob")
             sensor2.set_state = AsyncMock()
             sensor2._attr_native_value = ChoreState.COMPLETE.value
 
-            sensor3 = ChoreSensor(mock_hass, chore3, "alice")
+            sensor3 = ChoreSensor(hass, chore3, "alice")
             sensor3.set_state = AsyncMock()
             sensor3._attr_native_value = ChoreState.PENDING.value
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {
                 "alice_dishes": sensor1,
                 "bob_vacuum": sensor2,
@@ -857,16 +890,19 @@ class TestResetCompletedService:
             }
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Get the reset_completed handler (should be 4th registered service)
-        handler = mock_hass.services.async_register.call_args_list[3][0][2]
 
         # Create service call without user (reset all)
-        call = MagicMock()
-        call.data = {}
+        service_data = {}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_COMPLETED,
+            service_data,
+            blocking=True,
+        )
 
         # Both COMPLETE sensors should be reset
         sensor1.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
@@ -875,7 +911,7 @@ class TestResetCompletedService:
         sensor3.set_state.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_reset_completed_specific_user(self, mock_hass: MagicMock) -> None:
+    async def test_reset_completed_specific_user(self, hass) -> None:
         """Test reset_completed only resets specified user's chores."""
         # Create sensors for different users
         chore1 = ChoreConfig(
@@ -892,39 +928,39 @@ class TestResetCompletedService:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_alice = ChoreSensor(mock_hass, chore1, "alice")
+            sensor_alice = ChoreSensor(hass, chore1, "alice")
             sensor_alice.set_state = AsyncMock()
             sensor_alice._attr_native_value = ChoreState.COMPLETE.value
 
-            sensor_bob = ChoreSensor(mock_hass, chore2, "bob")
+            sensor_bob = ChoreSensor(hass, chore2, "bob")
             sensor_bob.set_state = AsyncMock()
             sensor_bob._attr_native_value = ChoreState.COMPLETE.value
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {
                 "alice_dishes": sensor_alice,
                 "bob_vacuum": sensor_bob,
             }
         }
 
-        await async_setup_services(mock_hass)
-
-        handler = mock_hass.services.async_register.call_args_list[3][0][2]
+        await async_setup_services(hass)
 
         # Create service call for alice only
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice"}
+        service_data = {ATTR_USER: "alice"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_COMPLETED,
+            service_data,
+            blocking=True,
+        )
 
         # Only alice's sensor should be reset
         sensor_alice.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
         sensor_bob.set_state.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_reset_completed_no_completed_chores(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_reset_completed_no_completed_chores(self, hass) -> None:
         """Test reset_completed when no chores are completed."""
         chore = ChoreConfig(
             name="Dishes",
@@ -934,20 +970,22 @@ class TestResetCompletedService:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.set_state = AsyncMock()
             sensor._attr_native_value = ChoreState.PENDING.value
 
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}}
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}}
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[3][0][2]
+        service_data = {}
 
-        call = MagicMock()
-        call.data = {}
-
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_COMPLETED,
+            service_data,
+            blocking=True,
+        )
 
         # Sensor should not be reset since it's not COMPLETE
         sensor.set_state.assert_not_called()
@@ -960,7 +998,7 @@ class TestStartNewDayService:
     """Tests for start_new_day service."""
 
     @pytest.mark.asyncio
-    async def test_start_new_day_manual_and_daily(self, mock_hass: MagicMock) -> None:
+    async def test_start_new_day_manual_and_daily(self, hass) -> None:
         """Test that manual chores go to NOT_REQUESTED and daily to PENDING."""
         # Create sensors with different frequencies
         chore_manual = ChoreConfig(
@@ -977,31 +1015,34 @@ class TestStartNewDayService:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_manual = ChoreSensor(mock_hass, chore_manual, "alice")
+            sensor_manual = ChoreSensor(hass, chore_manual, "alice")
             sensor_manual.set_state = AsyncMock()
             sensor_manual._attr_native_value = ChoreState.COMPLETE.value
 
-            sensor_daily = ChoreSensor(mock_hass, chore_daily, "alice")
+            sensor_daily = ChoreSensor(hass, chore_daily, "alice")
             sensor_daily.set_state = AsyncMock()
             sensor_daily._attr_native_value = ChoreState.COMPLETE.value
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {
                 "alice_manual_task": sensor_manual,
                 "alice_daily_task": sensor_daily,
             }
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Get the start_new_day handler (should be 5th registered service)
-        handler = mock_hass.services.async_register.call_args_list[4][0][2]
 
         # Create service call without user (reset all)
-        call = MagicMock()
-        call.data = {}
+        service_data = {}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            service_data,
+            blocking=True,
+        )
 
         # Manual should be reset to NOT_REQUESTED
         sensor_manual.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
@@ -1009,7 +1050,7 @@ class TestStartNewDayService:
         sensor_daily.set_state.assert_called_once_with(ChoreState.PENDING)
 
     @pytest.mark.asyncio
-    async def test_start_new_day_specific_user(self, mock_hass: MagicMock) -> None:
+    async def test_start_new_day_specific_user(self, hass) -> None:
         """Test start_new_day only resets specified user's chores."""
         chore1 = ChoreConfig(
             name="Manual Task",
@@ -1025,39 +1066,39 @@ class TestStartNewDayService:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_alice = ChoreSensor(mock_hass, chore1, "alice")
+            sensor_alice = ChoreSensor(hass, chore1, "alice")
             sensor_alice.set_state = AsyncMock()
             sensor_alice._attr_native_value = ChoreState.COMPLETE.value
 
-            sensor_bob = ChoreSensor(mock_hass, chore2, "bob")
+            sensor_bob = ChoreSensor(hass, chore2, "bob")
             sensor_bob.set_state = AsyncMock()
             sensor_bob._attr_native_value = ChoreState.COMPLETE.value
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {
                 "alice_manual_task": sensor_alice,
                 "bob_daily_task": sensor_bob,
             }
         }
 
-        await async_setup_services(mock_hass)
-
-        handler = mock_hass.services.async_register.call_args_list[4][0][2]
+        await async_setup_services(hass)
 
         # Create service call for alice only
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice"}
+        service_data = {ATTR_USER: "alice"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            service_data,
+            blocking=True,
+        )
 
         # Only alice's sensor should be reset
         sensor_alice.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
         sensor_bob.set_state.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_start_new_day_ignores_non_complete(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_start_new_day_ignores_non_complete(self, hass) -> None:
         """Test start_new_day only affects completed chores."""
         chore = ChoreConfig(
             name="Manual Task",
@@ -1067,26 +1108,28 @@ class TestStartNewDayService:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.set_state = AsyncMock()
             sensor._attr_native_value = ChoreState.PENDING.value
 
-        mock_hass.data[DOMAIN] = {"sensors": {"alice_manual_task": sensor}}
+        hass.data[DOMAIN] = {"sensors": {"alice_manual_task": sensor}}
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[4][0][2]
+        service_data = {}
 
-        call = MagicMock()
-        call.data = {}
-
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            service_data,
+            blocking=True,
+        )
 
         # Sensor should not be reset since it's not COMPLETE
         sensor.set_state.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_start_new_day_mixed_states(self, mock_hass: MagicMock) -> None:
+    async def test_start_new_day_mixed_states(self, hass) -> None:
         """Test start_new_day with mixed states and frequencies."""
         chore1 = ChoreConfig(
             name="Manual Complete",
@@ -1108,19 +1151,19 @@ class TestStartNewDayService:
         )
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor1 = ChoreSensor(mock_hass, chore1, "alice")
+            sensor1 = ChoreSensor(hass, chore1, "alice")
             sensor1.set_state = AsyncMock()
             sensor1._attr_native_value = ChoreState.COMPLETE.value
 
-            sensor2 = ChoreSensor(mock_hass, chore2, "alice")
+            sensor2 = ChoreSensor(hass, chore2, "alice")
             sensor2.set_state = AsyncMock()
             sensor2._attr_native_value = ChoreState.PENDING.value
 
-            sensor3 = ChoreSensor(mock_hass, chore3, "alice")
+            sensor3 = ChoreSensor(hass, chore3, "alice")
             sensor3.set_state = AsyncMock()
             sensor3._attr_native_value = ChoreState.COMPLETE.value
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {
                 "alice_manual_complete": sensor1,
                 "alice_manual_pending": sensor2,
@@ -1128,14 +1171,16 @@ class TestStartNewDayService:
             }
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
-        handler = mock_hass.services.async_register.call_args_list[4][0][2]
+        service_data = {}
 
-        call = MagicMock()
-        call.data = {}
-
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            service_data,
+            blocking=True,
+        )
 
         # Manual complete should be reset to NOT_REQUESTED
         sensor1.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
@@ -1145,9 +1190,7 @@ class TestStartNewDayService:
         sensor3.set_state.assert_called_once_with(ChoreState.PENDING)
 
     @pytest.mark.asyncio
-    async def test_start_new_day_updates_summary_attributes(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_start_new_day_updates_summary_attributes(self, hass) -> None:
         """Test that start_new_day properly updates summary sensor attributes."""
         from custom_components.simple_chores.sensor import (
             ChoreSensorManager,
@@ -1171,13 +1214,17 @@ class TestStartNewDayService:
         # Create manager and sensors
         manager = MagicMock(spec=ChoreSensorManager)
         manager.sensors = {}
+        # Add points_storage mock
+        mock_points_storage = MagicMock()
+        mock_points_storage.get_points.return_value = 0
+        manager.points_storage = mock_points_storage
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_manual = ChoreSensor(mock_hass, chore_manual, "alice")
+            sensor_manual = ChoreSensor(hass, chore_manual, "alice")
             sensor_manual.async_update_ha_state = AsyncMock()
             sensor_manual._attr_native_value = ChoreState.COMPLETE.value
 
-            sensor_daily = ChoreSensor(mock_hass, chore_daily, "alice")
+            sensor_daily = ChoreSensor(hass, chore_daily, "alice")
             sensor_daily.async_update_ha_state = AsyncMock()
             sensor_daily._attr_native_value = ChoreState.COMPLETE.value
 
@@ -1187,9 +1234,9 @@ class TestStartNewDayService:
         }
 
         # Create summary sensor
-        summary_sensor = ChoreSummarySensor(mock_hass, "alice", manager)
+        summary_sensor = ChoreSummarySensor(hass, "alice", manager)
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": manager.sensors,
             "summary_sensors": {"alice": summary_sensor},
         }
@@ -1201,11 +1248,14 @@ class TestStartNewDayService:
         assert len(attrs_before["not_requested_chores"]) == 0
 
         # Call start_new_day
-        await async_setup_services(mock_hass)
-        handler = mock_hass.services.async_register.call_args_list[4][0][2]
-        call = MagicMock()
-        call.data = {}
-        await handler(call)
+        await async_setup_services(hass)
+        service_data = {}
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            service_data,
+            blocking=True,
+        )
 
         # Verify attributes updated - manual to NOT_REQUESTED, daily to PENDING
         attrs_after = summary_sensor.extra_state_attributes
@@ -1223,9 +1273,7 @@ class TestSummarySensorUpdates:
     """Tests to verify all state-changing operations update summary sensors."""
 
     @pytest.mark.asyncio
-    async def test_mark_complete_updates_summary_sensor(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_mark_complete_updates_summary_sensor(self, hass) -> None:
         """Test mark_complete updates the summary sensor."""
         chore = ChoreConfig(
             name="Dishes",
@@ -1238,31 +1286,33 @@ class TestSummarySensorUpdates:
         mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.async_update_ha_state = AsyncMock()
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {"alice_dishes": sensor},
             "summary_sensors": {"alice": mock_summary},
             "states": {},
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Get mark_complete handler
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            service_data,
+            blocking=True,
+        )
 
         # Verify summary sensor was updated
-        mock_summary.async_update_ha_state.assert_called_once()
+        # Should be called twice: once from set_state, once from _update_summary_sensors
+        assert mock_summary.async_update_ha_state.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_mark_pending_updates_summary_sensor(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_mark_pending_updates_summary_sensor(self, hass) -> None:
         """Test mark_pending updates the summary sensor."""
         chore = ChoreConfig(
             name="Dishes",
@@ -1275,31 +1325,32 @@ class TestSummarySensorUpdates:
         mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.async_update_ha_state = AsyncMock()
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {"alice_dishes": sensor},
             "summary_sensors": {"alice": mock_summary},
             "states": {},
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Get mark_pending handler
-        handler = mock_hass.services.async_register.call_args_list[1][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_PENDING,
+            service_data,
+            blocking=True,
+        )
 
         # Verify summary sensor was updated
         mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_mark_not_requested_updates_summary_sensor(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_mark_not_requested_updates_summary_sensor(self, hass) -> None:
         """Test mark_not_requested updates the summary sensor."""
         chore = ChoreConfig(
             name="Dishes",
@@ -1312,31 +1363,32 @@ class TestSummarySensorUpdates:
         mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.async_update_ha_state = AsyncMock()
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {"alice_dishes": sensor},
             "summary_sensors": {"alice": mock_summary},
             "states": {},
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Get mark_not_requested handler
-        handler = mock_hass.services.async_register.call_args_list[2][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
+        service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_NOT_REQUESTED,
+            service_data,
+            blocking=True,
+        )
 
         # Verify summary sensor was updated
         mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_reset_completed_updates_summary_sensor(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_reset_completed_updates_summary_sensor(self, hass) -> None:
         """Test reset_completed updates the summary sensor."""
         chore = ChoreConfig(
             name="Dishes",
@@ -1349,32 +1401,33 @@ class TestSummarySensorUpdates:
         mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.async_update_ha_state = AsyncMock()
             sensor._attr_native_value = ChoreState.COMPLETE.value
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {"alice_dishes": sensor},
             "summary_sensors": {"alice": mock_summary},
             "states": {},
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Get reset_completed handler
-        handler = mock_hass.services.async_register.call_args_list[3][0][2]
-        call = MagicMock()
-        call.data = {}
+        service_data = {}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_COMPLETED,
+            service_data,
+            blocking=True,
+        )
 
         # Verify summary sensor was updated (once per set_state call)
         mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_start_new_day_updates_summary_sensor(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_start_new_day_updates_summary_sensor(self, hass) -> None:
         """Test start_new_day updates the summary sensor."""
         chore = ChoreConfig(
             name="Dishes",
@@ -1387,32 +1440,33 @@ class TestSummarySensorUpdates:
         mock_summary.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor = ChoreSensor(mock_hass, chore, "alice")
+            sensor = ChoreSensor(hass, chore, "alice")
             sensor.async_update_ha_state = AsyncMock()
             sensor._attr_native_value = ChoreState.COMPLETE.value
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {"alice_dishes": sensor},
             "summary_sensors": {"alice": mock_summary},
             "states": {},
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Get start_new_day handler
-        handler = mock_hass.services.async_register.call_args_list[4][0][2]
-        call = MagicMock()
-        call.data = {}
+        service_data = {}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            service_data,
+            blocking=True,
+        )
 
         # Verify summary sensor was updated (once per set_state call)
         mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_mark_all_assignees_updates_all_summary_sensors(
-        self, mock_hass: MagicMock
-    ) -> None:
+    async def test_mark_all_assignees_updates_all_summary_sensors(self, hass) -> None:
         """Test marking all assignees updates all their summary sensors."""
         chore = ChoreConfig(
             name="Dishes",
@@ -1427,54 +1481,56 @@ class TestSummarySensorUpdates:
         mock_summary_bob.async_update_ha_state = AsyncMock()
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor_alice = ChoreSensor(mock_hass, chore, "alice")
+            sensor_alice = ChoreSensor(hass, chore, "alice")
             sensor_alice.async_update_ha_state = AsyncMock()
-            sensor_bob = ChoreSensor(mock_hass, chore, "bob")
+            sensor_bob = ChoreSensor(hass, chore, "bob")
             sensor_bob.async_update_ha_state = AsyncMock()
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "sensors": {"alice_dishes": sensor_alice, "bob_dishes": sensor_bob},
             "summary_sensors": {"alice": mock_summary_alice, "bob": mock_summary_bob},
             "states": {},
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
-        # Get mark_complete handler
-        handler = mock_hass.services.async_register.call_args_list[0][0][2]
-        call = MagicMock()
-        call.data = {ATTR_CHORE_SLUG: "dishes"}  # No user specified
+        # Call mark_complete service without user (affects all assignees)
+        service_data = {ATTR_CHORE_SLUG: "dishes"}  # No user specified
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
+        )
 
         # Verify both summary sensors were updated
-        mock_summary_alice.async_update_ha_state.assert_called_once()
-        mock_summary_bob.async_update_ha_state.assert_called_once()
+        # Each sensor updated twice: once from each sensor's set_state, once from _update_summary_sensors
+        assert mock_summary_alice.async_update_ha_state.call_count == 2
+        assert mock_summary_bob.async_update_ha_state.call_count == 2
 
 
 class TestRefreshSummaryService:
     """Tests for refresh_summary service."""
 
     @pytest.mark.asyncio
-    async def test_refresh_summary_all_users(self, mock_hass: MagicMock) -> None:
+    async def test_refresh_summary_all_users(self, hass) -> None:
         """Test refresh_summary refreshes all summary sensors when no user specified."""
         mock_summary_alice = Mock()
         mock_summary_alice.async_update_ha_state = AsyncMock()
         mock_summary_bob = Mock()
         mock_summary_bob.async_update_ha_state = AsyncMock()
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "summary_sensors": {"alice": mock_summary_alice, "bob": mock_summary_bob}
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
-        # Get refresh_summary handler (should be the 9th service registered)
-        handler = mock_hass.services.async_register.call_args_list[8][0][2]
-        call = MagicMock()
-        call.data = {}
-
-        await handler(call)
+        # Call refresh_summary service
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_REFRESH_SUMMARY,
+            {},
+            blocking=True,
+        )
 
         # Verify both summary sensors were refreshed
         mock_summary_alice.async_update_ha_state.assert_called_once_with(
@@ -1485,25 +1541,28 @@ class TestRefreshSummaryService:
         )
 
     @pytest.mark.asyncio
-    async def test_refresh_summary_specific_user(self, mock_hass: MagicMock) -> None:
+    async def test_refresh_summary_specific_user(self, hass) -> None:
         """Test refresh_summary refreshes only specified user's summary sensor."""
         mock_summary_alice = Mock()
         mock_summary_alice.async_update_ha_state = AsyncMock()
         mock_summary_bob = Mock()
         mock_summary_bob.async_update_ha_state = AsyncMock()
 
-        mock_hass.data[DOMAIN] = {
+        hass.data[DOMAIN] = {
             "summary_sensors": {"alice": mock_summary_alice, "bob": mock_summary_bob}
         }
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Get refresh_summary handler
-        handler = mock_hass.services.async_register.call_args_list[8][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "alice"}
+        service_data = {ATTR_USER: "alice"}
 
-        await handler(call)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_REFRESH_SUMMARY,
+            service_data,
+            blocking=True,
+        )
 
         # Verify only Alice's summary sensor was refreshed
         mock_summary_alice.async_update_ha_state.assert_called_once_with(
@@ -1512,18 +1571,21 @@ class TestRefreshSummaryService:
         mock_summary_bob.async_update_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_refresh_summary_nonexistent_user(self, mock_hass: MagicMock) -> None:
+    async def test_refresh_summary_nonexistent_user(self, hass) -> None:
         """Test refresh_summary raises error for nonexistent user."""
         mock_summary_alice = Mock()
 
-        mock_hass.data[DOMAIN] = {"summary_sensors": {"alice": mock_summary_alice}}
+        hass.data[DOMAIN] = {"summary_sensors": {"alice": mock_summary_alice}}
 
-        await async_setup_services(mock_hass)
+        await async_setup_services(hass)
 
         # Get refresh_summary handler
-        handler = mock_hass.services.async_register.call_args_list[8][0][2]
-        call = MagicMock()
-        call.data = {ATTR_USER: "charlie"}
+        service_data = {ATTR_USER: "charlie"}
 
         with pytest.raises(ServiceValidationError, match="No summary sensor found"):
-            await handler(call)
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_REFRESH_SUMMARY,
+                service_data,
+                blocking=True,
+            )

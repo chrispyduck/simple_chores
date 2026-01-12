@@ -40,6 +40,11 @@ class ChoreConfig(BaseModel):
         default="mdi:clipboard-list-outline",
         description="Material Design Icon for the chore",
     )
+    points: int = Field(
+        default=1,
+        description="Points awarded when chore is completed",
+        ge=0,
+    )
 
     @field_validator("slug")
     @classmethod
