@@ -17,6 +17,7 @@ from .const import (
     ATTR_FREQUENCY,
     ATTR_ICON,
     ATTR_NAME,
+    ATTR_POINTS,
     ATTR_SLUG,
     ATTR_USER,
     DOMAIN,
@@ -128,6 +129,9 @@ CREATE_CHORE_SCHEMA = vol.Schema(
         vol.Required(ATTR_FREQUENCY): vol.In(["daily", "manual"]),
         vol.Required(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON, default="mdi:clipboard-list-outline"): cv.string,
+        vol.Optional(ATTR_POINTS, default=1): vol.All(
+            vol.Coerce(int), vol.Range(min=0)
+        ),
     }
 )
 
@@ -139,6 +143,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_FREQUENCY): vol.In(["daily", "manual"]),
         vol.Optional(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON): cv.string,
+        vol.Optional(ATTR_POINTS): vol.All(vol.Coerce(int), vol.Range(min=0)),
     }
 )
 
@@ -259,6 +264,9 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
             len(matching_sensors),
         )
 
+    # Update summary sensors to reflect new state
+    await _update_summary_sensors(hass)
+
 
 async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the mark_not_requested service call."""
@@ -301,6 +309,9 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
             len(matching_sensors),
         )
 
+    # Update summary sensors to reflect new state
+    await _update_summary_sensors(hass)
+
 
 async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the reset_completed service call."""
@@ -332,6 +343,9 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
         LOGGER.info("Reset %d completed chore(s) for user '%s'", reset_count, user)
     else:
         LOGGER.info("Reset %d completed chore(s) for all users", reset_count)
+
+    # Update summary sensors to reflect new state
+    await _update_summary_sensors(hass)
 
 
 async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -392,6 +406,9 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             daily_count,
         )
 
+    # Update summary sensors to reflect new state
+    await _update_summary_sensors(hass)
+
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the create_chore service call."""
@@ -422,6 +439,7 @@ async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             frequency=ChoreFrequency(call.data[ATTR_FREQUENCY]),
             assignees=assignees,
             icon=call.data.get(ATTR_ICON, "mdi:clipboard-list-outline"),
+            points=call.data.get(ATTR_POINTS, 1),
         )
         await config_loader.async_create_chore(chore)
         LOGGER.info("Created chore '%s'", chore.slug)
@@ -448,6 +466,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     frequency = call.data.get(ATTR_FREQUENCY)
     assignees_str = call.data.get(ATTR_ASSIGNEES)
     icon = call.data.get(ATTR_ICON)
+    points = call.data.get(ATTR_POINTS)
 
     # Parse assignees if provided
     assignees = None
@@ -466,6 +485,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             frequency=frequency,
             assignees=assignees,
             icon=icon,
+            points=points,
         )
         LOGGER.info("Updated chore '%s'", slug)
     except Exception as err:
@@ -554,11 +574,6 @@ async def handle_adjust_points(hass: HomeAssistant, call: ServiceCall) -> None:
 
     # Update the summary sensor to reflect the new points
     await _update_summary_sensors(hass, user)
-
-    if user:
-        LOGGER.info("Refreshed summary sensor for user '%s'", user)
-    else:
-        LOGGER.info("Refreshed %d summary sensor(s)", len(summary_sensors))
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:

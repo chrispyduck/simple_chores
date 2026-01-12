@@ -1350,7 +1350,8 @@ class TestSummarySensorUpdates:
         )
 
         # Verify summary sensor was updated
-        mock_summary.async_update_ha_state.assert_called_once()
+        # Should be called twice: once from set_state, once from _update_summary_sensors
+        assert mock_summary.async_update_ha_state.call_count == 2
 
     @pytest.mark.asyncio
     async def test_mark_not_requested_updates_summary_sensor(self, hass) -> None:
@@ -1388,7 +1389,8 @@ class TestSummarySensorUpdates:
         )
 
         # Verify summary sensor was updated
-        mock_summary.async_update_ha_state.assert_called_once()
+        # Should be called twice: once from set_state, once from _update_summary_sensors
+        assert mock_summary.async_update_ha_state.call_count == 2
 
     @pytest.mark.asyncio
     async def test_reset_completed_updates_summary_sensor(self, hass) -> None:
@@ -1426,8 +1428,9 @@ class TestSummarySensorUpdates:
             blocking=True,
         )
 
-        # Verify summary sensor was updated (once per set_state call)
-        mock_summary.async_update_ha_state.assert_called_once()
+        # Verify summary sensor was updated
+        # Should be called twice: once from set_state, once from _update_summary_sensors
+        assert mock_summary.async_update_ha_state.call_count == 2
 
     @pytest.mark.asyncio
     async def test_start_new_day_updates_summary_sensor(self, hass) -> None:
@@ -1465,8 +1468,9 @@ class TestSummarySensorUpdates:
             blocking=True,
         )
 
-        # Verify summary sensor was updated (once per set_state call)
-        mock_summary.async_update_ha_state.assert_called_once()
+        # Verify summary sensor was updated
+        # Should be called twice: once from set_state, once from _update_summary_sensors
+        assert mock_summary.async_update_ha_state.call_count == 2
 
     @pytest.mark.asyncio
     async def test_mark_all_assignees_updates_all_summary_sensors(self, hass) -> None:

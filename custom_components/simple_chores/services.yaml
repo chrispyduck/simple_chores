@@ -116,6 +116,7 @@ create_chore:
           options:
             - "daily"
             - "manual"
+    assignees:
       name: Assignees
       description: Comma-separated list of assignee usernames
       required: true
@@ -130,6 +131,17 @@ create_chore:
       example: "mdi:broom"
       selector:
         text:
+    points:
+      name: Points
+      description: Points awarded when the chore is completed
+      required: false
+      default: 1
+      example: 5
+      selector:
+        number:
+          min: 0
+          max: 1000000000
+          mode: box
 
 update_chore:
   name: Update Chore
@@ -181,6 +193,16 @@ update_chore:
       example: "mdi:broom"
       selector:
         text:
+    points:
+      name: Points
+      description: New point value for completing the chore (leave empty to keep current)
+      required: false
+      example: 5
+      selector:
+        number:
+          min: 0
+          max: 1000000000
+          mode: box
 
 delete_chore:
   name: Delete Chore
