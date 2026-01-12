@@ -11,7 +11,12 @@ Service actions have been implemented to allow external automation and scripts t
 3. `simple_chores.mark_not_requested` - Mark a chore as not requested for a specific user or all assignees
 4. `simple_chores.reset_completed` - Reset all completed chores to not requested (optionally for a specific user)
 5. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, daily chores to pending
-6. `simple_chores.adjust_points` - Manually adjust an assignee's earned points by a specified amount (positive or negative)
+6. `simple_chores.create_chore` - Dynamically create a new chore at runtime
+7. `simple_chores.update_chore` - Update an existing chore's properties (including points)
+8. `simple_chores.delete_chore` - Delete a chore
+9. `simple_chores.refresh_summary` - Force refresh of summary sensor attributes
+10. `simple_chores.adjust_points` - Manually adjust an assignee's earned points by a specified amount (positive or negative)
+11. `simple_chores.reset_points` - Reset points tracking (daily stats and/or total points)
 
 ## Service Parameters
 
@@ -28,6 +33,11 @@ Service actions have been implemented to allow external automation and scripts t
 
 - `user` (required, string): The assignee/user whose points should be adjusted
 - `adjustment` (required, integer): The number of points to add (positive) or subtract (negative). Range: -1,000,000,000 to 1,000,000,000
+
+### reset_points
+
+- `user` (optional, string): The assignee/user whose points should be reset. If not provided, resets points for all users.
+- `reset_total` (optional, boolean): Whether to reset total_points (lifetime earned points) to zero. Default: false (only resets daily stats)
 
 ## Usage Examples
 
@@ -96,17 +106,45 @@ service: simple_chores.adjust_points
 data:
   user: bob
   adjustment: -5
+
+# Reset daily points stats (missed/possible) for a specific user
+service: simple_chores.reset_points
+data:
+  user: alice
+
+# Reset all points including lifetime total for a user
+service: simple_chores.reset_points
+data:
+  user: alice
+  reset_total: true
+
+# Reset daily stats for all users
+service: simple_chores.reset_points
+data:
+  reset_total: false
+
+# Reset everything for all users
+service: simple_chores.reset_points
+data:
+  reset_total: true
 ```
 
 ## Points System
 
-The integration includes a points system to gamify chore completion:
+The integration includes a comprehensive points system to gamify chore completion:
 
-- Each chore has a `points` value (default: 1) that can be configured in the YAML file
+- Each chore has a `points` value (default: 1) that can be configured in the YAML file or set when creating/updating chores
 - When a chore is marked complete, the assignee earns the configured points
 - Points are accumulated and stored persistently in `.storage/simple_chores.points.json`
-- Each assignee's total points are displayed in their summary sensor attributes as `total_points`
+- Each assignee's summary sensor displays three point-related attributes:
+  - `total_points`: Lifetime earned points (cumulative across all time)
+  - `points_missed`: Sum of points from pending chores at the start of the current day (opportunities not completed)
+  - `points_possible`: Sum of points from both pending and complete chores at the start of the current day (total daily opportunity)
+  - **Relationship**: `points_possible = total_points + points_missed` for the current day
 - Points can be manually adjusted using the `adjust_points` service for bonuses, penalties, or corrections
+- Points tracking can be reset using the `reset_points` service:
+  - By default, resets daily stats (points_missed and points_possible) while preserving lifetime total
+  - With `reset_total: true`, resets everything including lifetime total points
 
 ### Example Points Configuration
 
@@ -161,10 +199,41 @@ automation:
       - condition: template
         value_template: "{{ now().weekday() == 0 }}"  # Monday
     action:
-      - service: simple_chores.adjust_points
+      - service: simple_chores.reset_points
         data:
-          user: alice
-          adjustment: "{{ -state_attr('sensor.simple_chore_summary_alice', 'total_points') }}"
+          reset_total: true  # Reset everything
+```
+
+Reset daily stats (missed/possible) at start of day:
+
+```yaml
+automation:
+  - alias: "Reset daily point stats"
+    trigger:
+      - platform: time
+        at: "02:00:00"
+    action:
+      - service: simple_chores.reset_points
+        data:
+          reset_total: false  # Keep lifetime total, reset daily stats
+```
+
+Notify when points are missed:
+
+```yaml
+automation:
+  - alias: "Notify points missed"
+    trigger:
+      - platform: state
+        entity_id: sensor.simple_chore_summary_alice
+        attribute: points_missed
+    condition:
+      - condition: template
+        value_template: "{{ state_attr('sensor.simple_chore_summary_alice', 'points_missed') | int > 0 }}"
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "You missed {{ state_attr('sensor.simple_chore_summary_alice', 'points_missed') }} points worth of chores today!"
 ```
 
 ## Implementation Details

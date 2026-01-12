@@ -549,6 +549,10 @@ class ChoreSummarySensor(SensorEntity):
 
         # Get total points for this assignee
         total_points = self._manager.points_storage.get_points(self._assignee)
+        points_missed = self._manager.points_storage.get_points_missed(self._assignee)
+        points_possible = self._manager.points_storage.get_points_possible(
+            self._assignee
+        )
 
         return {
             "assignee": self._assignee,
@@ -558,4 +562,6 @@ class ChoreSummarySensor(SensorEntity):
             "all_chores": all_entities,
             "total_chores": len(all_entities),
             "total_points": total_points,
+            "points_missed": points_missed,
+            "points_possible": points_possible,
         }

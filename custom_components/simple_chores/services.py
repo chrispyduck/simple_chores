@@ -18,6 +18,7 @@ from .const import (
     ATTR_ICON,
     ATTR_NAME,
     ATTR_POINTS,
+    ATTR_RESET_TOTAL,
     ATTR_SLUG,
     ATTR_USER,
     DOMAIN,
@@ -30,6 +31,7 @@ from .const import (
     SERVICE_MARK_PENDING,
     SERVICE_REFRESH_SUMMARY,
     SERVICE_RESET_COMPLETED,
+    SERVICE_RESET_POINTS,
     SERVICE_START_NEW_DAY,
     SERVICE_UPDATE_CHORE,
     sanitize_entity_id,
@@ -165,6 +167,13 @@ ADJUST_POINTS_SCHEMA = vol.Schema(
 RESET_COMPLETED_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_USER): cv.string,
+    }
+)
+
+RESET_POINTS_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_USER): cv.string,
+        vol.Optional(ATTR_RESET_TOTAL, default=False): cv.boolean,
     }
 )
 
@@ -364,9 +373,45 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
     _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
+    points_storage = hass.data[DOMAIN].get("points_storage")
 
     # Sanitize user if provided for matching
     sanitized_user = sanitize_entity_id(user) if user else None
+
+    # Calculate points_missed and points_possible per assignee BEFORE resetting
+    assignee_stats: dict[str, dict[str, int]] = {}
+    for sensor_id, sensor in sensors.items():
+        # If user specified, only calculate for their chores
+        if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
+            continue
+
+        assignee = sensor.assignee
+        if assignee not in assignee_stats:
+            assignee_stats[assignee] = {"missed": 0, "possible": 0}
+
+        current_state = sensor.native_value
+        chore_points = sensor.chore.points
+
+        # Count pending chores as missed
+        if current_state == ChoreState.PENDING.value:
+            assignee_stats[assignee]["missed"] += chore_points
+            assignee_stats[assignee]["possible"] += chore_points
+        # Count complete chores as possible (but not missed)
+        elif current_state == ChoreState.COMPLETE.value:
+            assignee_stats[assignee]["possible"] += chore_points
+
+    # Store the daily stats
+    if points_storage:
+        for assignee, stats in assignee_stats.items():
+            await points_storage.set_daily_stats(
+                assignee, stats["missed"], stats["possible"]
+            )
+            LOGGER.debug(
+                "Set daily stats for %s: missed=%d, possible=%d",
+                assignee,
+                stats["missed"],
+                stats["possible"],
+            )
 
     reset_count = 0
     manual_count = 0
@@ -576,6 +621,76 @@ async def handle_adjust_points(hass: HomeAssistant, call: ServiceCall) -> None:
     await _update_summary_sensors(hass, user)
 
 
+async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the reset_points service call.
+
+    Args:
+        hass: Home Assistant instance
+        call: Service call with 'user' and 'reset_total' data
+
+    """
+    user = call.data.get(ATTR_USER)
+    reset_total = call.data.get(ATTR_RESET_TOTAL, False)
+
+    LOGGER.info(
+        "Service 'reset_points' called with user='%s', reset_total=%s",
+        user if user else "all users",
+        reset_total,
+    )
+
+    _validate_integration_loaded(hass)
+    points_storage = hass.data[DOMAIN].get("points_storage")
+
+    if not points_storage:
+        msg = "Points storage not initialized"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
+
+    # Get list of users to reset
+    if user:
+        users_to_reset = [user]
+    else:
+        # Reset for all users who have any points data
+        users_to_reset = set()
+        all_points = points_storage.get_all_points()
+        users_to_reset.update(all_points.keys())
+        # Also include users who have daily stats
+        sensors = hass.data[DOMAIN].get("sensors", {})
+        for sensor in sensors.values():
+            users_to_reset.add(sensor.assignee)
+
+    # Reset points for each user
+    for assignee in users_to_reset:
+        # Always reset daily stats
+        await points_storage.set_daily_stats(assignee, 0, 0)
+
+        # Optionally reset total points
+        if reset_total:
+            await points_storage.set_points(assignee, 0)
+
+        LOGGER.debug(
+            "Reset points for '%s': daily_stats=0, total_points=%s",
+            assignee,
+            0 if reset_total else points_storage.get_points(assignee),
+        )
+
+    # Update summary sensors to reflect changes
+    await _update_summary_sensors(hass, user)
+
+    if user:
+        LOGGER.info(
+            "Reset points for user '%s' (total_points=%s)",
+            user,
+            "reset" if reset_total else "unchanged",
+        )
+    else:
+        LOGGER.info(
+            "Reset points for %d user(s) (total_points=%s)",
+            len(users_to_reset),
+            "reset" if reset_total else "unchanged",
+        )
+
+
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up services for the Simple Chores integration."""
     hass.services.async_register(
@@ -638,5 +753,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         partial(handle_adjust_points, hass),
         schema=ADJUST_POINTS_SCHEMA,
     )
-
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESET_POINTS,
+        partial(handle_reset_points, hass),
+        schema=RESET_POINTS_SCHEMA,
+    )
     LOGGER.debug("Registered Simple Chores services")

@@ -31,16 +31,26 @@ class PointsStorage:
         """Initialize points storage."""
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data: dict[str, int] = {}
+        self._points_missed: dict[str, int] = {}
+        self._points_possible: dict[str, int] = {}
 
     async def async_load(self) -> None:
         """Load points from storage."""
         data = await self._store.async_load()
         if data:
             self._data = data.get("points", {})
+            self._points_missed = data.get("points_missed", {})
+            self._points_possible = data.get("points_possible", {})
 
     async def async_save(self) -> None:
         """Save points to storage."""
-        await self._store.async_save({"points": self._data})
+        await self._store.async_save(
+            {
+                "points": self._data,
+                "points_missed": self._points_missed,
+                "points_possible": self._points_possible,
+            }
+        )
 
     def get_points(self, assignee: str) -> int:
         """Get points for an assignee."""
@@ -62,3 +72,19 @@ class PointsStorage:
     def get_all_points(self) -> dict[str, int]:
         """Get all assignee points."""
         return dict(self._data)
+
+    def get_points_missed(self, assignee: str) -> int:
+        """Get points missed for an assignee."""
+        return self._points_missed.get(assignee, 0)
+
+    def get_points_possible(self, assignee: str) -> int:
+        """Get points possible for an assignee."""
+        return self._points_possible.get(assignee, 0)
+
+    async def set_daily_stats(
+        self, assignee: str, points_missed: int, points_possible: int
+    ) -> None:
+        """Set daily stats for an assignee."""
+        self._points_missed[assignee] = points_missed
+        self._points_possible[assignee] = points_possible
+        await self.async_save()

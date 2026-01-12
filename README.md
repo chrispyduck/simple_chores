@@ -16,15 +16,23 @@ Why? Because the Grocy integration isn't working and KidsChores is buggy. I'll a
 * Each assignee has a summary sensor at `sensor.simple_chore_summary_{assignee}` that tracks:
   * Count of pending/complete/not requested chores
   * Lists of chores in each state
-  * Total earned points for the assignee
-* **Points System**: Each chore can have a point value (default: 1). When a chore is marked complete, the assignee earns those points. Total points are displayed in the summary sensor attributes.
+  * **Points tracking**:
+    * `total_points`: Lifetime earned points (cumulative)
+    * `points_missed`: Points from uncompleted chores at day start
+    * `points_possible`: Total points available today (missed + earned)
+* **Points System**: Each chore can have a point value (default: 1). When a chore is marked complete, the assignee earns those points. Points can be set when creating/updating chores. The `start_new_day` service calculates daily statistics (points_missed and points_possible) before resetting chore states.
 * The following actions are defined for interacting with chores:
   * `simple_chores.mark_complete` - Marks a chore as complete and awards points to the assignee. Takes a chore slug and optional user as parameters. If user is not specified, marks complete for all assignees.
   * `simple_chores.mark_pending` - Marks a chore as pending. Takes a chore slug and optional user as parameters. If user is not specified, marks pending for all assignees.
   * `simple_chores.mark_not_requested` - Marks a chore as not requested. Takes a chore slug and optional user as parameters. If user is not specified, marks not requested for all assignees.
   * `simple_chores.reset_completed` - Resets all completed chores to not requested. Takes an optional user parameter to reset only that user's chores.
-  * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending. Takes an optional user parameter.
+  * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending. Calculates daily points statistics before resetting. Takes an optional user parameter.
+  * `simple_chores.create_chore` - Dynamically create a new chore at runtime with specified properties including points.
+  * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon.
+  * `simple_chores.delete_chore` - Remove a chore from the system.
+  * `simple_chores.refresh_summary` - Force refresh of summary sensor attributes for one or all assignees.
   * `simple_chores.adjust_points` - Manually adjusts an assignee's earned points by a specified amount (positive or negative). Useful for bonuses, penalties, or corrections.
+  * `simple_chores.reset_points` - Reset points tracking for one or all assignees. Always resets daily stats (points_missed, points_possible). Optionally resets total_points with `reset_total: true`.
 
 ## Installation
 
