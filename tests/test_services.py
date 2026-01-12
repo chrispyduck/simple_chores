@@ -6,9 +6,11 @@ import pytest
 from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.simple_chores.const import (
+    ATTR_ADJUSTMENT,
     ATTR_CHORE_SLUG,
     ATTR_USER,
     DOMAIN,
+    SERVICE_ADJUST_POINTS,
     SERVICE_CREATE_CHORE,
     SERVICE_DELETE_CHORE,
     SERVICE_MARK_COMPLETE,
@@ -71,6 +73,7 @@ class TestServiceSetup:
         assert hass.services.has_service(DOMAIN, SERVICE_UPDATE_CHORE)
         assert hass.services.has_service(DOMAIN, SERVICE_DELETE_CHORE)
         assert hass.services.has_service(DOMAIN, SERVICE_REFRESH_SUMMARY)
+        assert hass.services.has_service(DOMAIN, SERVICE_ADJUST_POINTS)
 
     @pytest.mark.asyncio
     async def test_setup_services_uses_correct_domain(self, hass) -> None:
@@ -79,7 +82,7 @@ class TestServiceSetup:
 
         # Verify all services are in the correct domain
         services = hass.services.async_services_for_domain(DOMAIN)
-        assert len(services) == 9  # Should have exactly 9 services
+        assert len(services) == 10  # Should have exactly 10 services
 
 
 class TestMarkCompleteService:
@@ -1587,5 +1590,141 @@ class TestRefreshSummaryService:
                 DOMAIN,
                 SERVICE_REFRESH_SUMMARY,
                 service_data,
+                blocking=True,
+            )
+
+
+class TestAdjustPointsService:
+    """Tests for adjust_points service."""
+
+    @pytest.mark.asyncio
+    async def test_adjust_points_adds_points(self, hass) -> None:
+        """Test that adjust_points correctly adds points."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        # Set initial points
+        await points_storage.set_points("alice", 10)
+
+        mock_summary = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
+
+        hass.data[DOMAIN] = {
+            "points_storage": points_storage,
+            "summary_sensors": {"alice": mock_summary},
+        }
+
+        await async_setup_services(hass)
+
+        # Adjust points by +5
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_ADJUST_POINTS,
+            {ATTR_USER: "alice", ATTR_ADJUSTMENT: 5},
+            blocking=True,
+        )
+
+        # Verify points were added
+        assert points_storage.get_points("alice") == 15
+
+        # Verify summary sensor was updated
+        mock_summary.async_update_ha_state.assert_called_once_with(force_refresh=True)
+
+    @pytest.mark.asyncio
+    async def test_adjust_points_subtracts_points(self, hass) -> None:
+        """Test that adjust_points correctly subtracts points."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        # Set initial points
+        await points_storage.set_points("bob", 20)
+
+        mock_summary = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
+
+        hass.data[DOMAIN] = {
+            "points_storage": points_storage,
+            "summary_sensors": {"bob": mock_summary},
+        }
+
+        await async_setup_services(hass)
+
+        # Adjust points by -7
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_ADJUST_POINTS,
+            {ATTR_USER: "bob", ATTR_ADJUSTMENT: -7},
+            blocking=True,
+        )
+
+        # Verify points were subtracted
+        assert points_storage.get_points("bob") == 13
+
+    @pytest.mark.asyncio
+    async def test_adjust_points_new_user(self, hass) -> None:
+        """Test adjust_points works for user with no previous points."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        mock_summary = Mock()
+        mock_summary.async_update_ha_state = AsyncMock()
+
+        hass.data[DOMAIN] = {
+            "points_storage": points_storage,
+            "summary_sensors": {"charlie": mock_summary},
+        }
+
+        await async_setup_services(hass)
+
+        # Adjust points for new user
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_ADJUST_POINTS,
+            {ATTR_USER: "charlie", ATTR_ADJUSTMENT: 15},
+            blocking=True,
+        )
+
+        # Verify points were set
+        assert points_storage.get_points("charlie") == 15
+
+    @pytest.mark.asyncio
+    async def test_adjust_points_integration_not_loaded(self, hass) -> None:
+        """Test adjust_points raises error when integration not loaded."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        # Remove DOMAIN from hass.data
+        if DOMAIN in hass.data:
+            del hass.data[DOMAIN]
+
+        await async_setup_services(hass)
+
+        with pytest.raises(HomeAssistantError, match="integration not loaded"):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_ADJUST_POINTS,
+                {ATTR_USER: "alice", ATTR_ADJUSTMENT: 10},
+                blocking=True,
+            )
+
+    @pytest.mark.asyncio
+    async def test_adjust_points_no_storage(self, hass) -> None:
+        """Test adjust_points raises error when points storage not initialized."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        hass.data[DOMAIN] = {}  # No points_storage
+
+        await async_setup_services(hass)
+
+        with pytest.raises(HomeAssistantError, match="Points storage not initialized"):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_ADJUST_POINTS,
+                {ATTR_USER: "alice", ATTR_ADJUSTMENT: 10},
                 blocking=True,
             )

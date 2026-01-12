@@ -9,16 +9,22 @@ Why? Because the Grocy integration isn't working and KidsChores is buggy. I'll a
 * All configuration is file-based, in a single yaml file. State is maintained within Home Assistant.
 * Chores consist of a name, description, frequency (daily, manual), list of assignees, and slug (used to identify the chore in code).
 * Assignees are Home Assistant users and are identified by name, not ID, in the config file.
-* Each chore is represented in Home Assistant as a sensor following the format s`sensor.simple_chore_{assignee}_{slug}`.
-  * Attributes: the sensor includes all configured chore information (full name, description, frequency) as sensor attributes.
+* Each chore is represented in Home Assistant as a sensor following the format `sensor.simple_chore_{assignee}_{slug}`.
+  * Attributes: the sensor includes all configured chore information (full name, description, frequency, points) as sensor attributes.
   * State: chore state is one of: `Pending`, `Complete`, `Not Requested`
   * **Note**: A daily chore must be requested at least once (marked as Pending or Complete) before it becomes a daily chore. Until then, it behaves like a manual chore.
+* Each assignee has a summary sensor at `sensor.simple_chore_summary_{assignee}` that tracks:
+  * Count of pending/complete/not requested chores
+  * Lists of chores in each state
+  * Total earned points for the assignee
+* **Points System**: Each chore can have a point value (default: 1). When a chore is marked complete, the assignee earns those points. Total points are displayed in the summary sensor attributes.
 * The following actions are defined for interacting with chores:
-  * `simple_chores.mark_complete` - Marks a chore as complete. Takes a chore slug and optional user as parameters. If user is not specified, marks complete for all assignees.
+  * `simple_chores.mark_complete` - Marks a chore as complete and awards points to the assignee. Takes a chore slug and optional user as parameters. If user is not specified, marks complete for all assignees.
   * `simple_chores.mark_pending` - Marks a chore as pending. Takes a chore slug and optional user as parameters. If user is not specified, marks pending for all assignees.
   * `simple_chores.mark_not_requested` - Marks a chore as not requested. Takes a chore slug and optional user as parameters. If user is not specified, marks not requested for all assignees.
   * `simple_chores.reset_completed` - Resets all completed chores to not requested. Takes an optional user parameter to reset only that user's chores.
   * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending. Takes an optional user parameter.
+  * `simple_chores.adjust_points` - Manually adjusts an assignee's earned points by a specified amount (positive or negative). Useful for bonuses, penalties, or corrections.
 
 ## Installation
 
@@ -81,6 +87,8 @@ chores:
   - `daily`: Chore will be reset to Pending each day after being completed (must be requested at least once first)
   - `manual`: Chore will be reset to Not Requested each day after being completed
 - `assignees`: List of Home Assistant usernames who can be assigned this chore (required, at least one)
+- `points`: Number of points awarded when the chore is completed (optional, default: 1, must be >= 0)
+- `icon`: Material Design Icon for the chore (optional, default: `mdi:clipboard-list-outline`)
 
 The configuration file is automatically reloaded when changes are detected (checked every 5 seconds).
 

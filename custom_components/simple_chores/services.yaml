@@ -205,3 +205,25 @@ refresh_summary:
       example: "alice"
       selector:
         text:
+
+adjust_points:
+  name: Adjust Points
+  description: Manually adjust the earned points for a specific assignee. The adjustment can be positive or negative.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee whose points should be adjusted
+      required: true
+      example: "alice"
+      selector:
+        text:
+    adjustment:
+      name: Point Adjustment
+      description: The number of points to add (positive) or subtract (negative)
+      required: true
+      example: 10
+      selector:
+        number:
+          min: -1000000000
+          max: 1000000000
+          mode: box

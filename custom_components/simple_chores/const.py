@@ -25,6 +25,7 @@ SERVICE_CREATE_CHORE = "create_chore"
 SERVICE_UPDATE_CHORE = "update_chore"
 SERVICE_DELETE_CHORE = "delete_chore"
 SERVICE_REFRESH_SUMMARY = "refresh_summary"
+SERVICE_ADJUST_POINTS = "adjust_points"
 
 # Service parameters
 ATTR_USER = "user"
@@ -35,6 +36,8 @@ ATTR_DESCRIPTION = "description"
 ATTR_FREQUENCY = "frequency"
 ATTR_ASSIGNEES = "assignees"
 ATTR_ICON = "icon"
+ATTR_POINTS = "points"
+ATTR_ADJUSTMENT = "adjustment"
 
 
 def sanitize_entity_id(value: str) -> str:

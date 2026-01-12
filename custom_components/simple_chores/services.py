@@ -10,6 +10,7 @@ import voluptuous as vol
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .const import (
+    ATTR_ADJUSTMENT,
     ATTR_ASSIGNEES,
     ATTR_CHORE_SLUG,
     ATTR_DESCRIPTION,
@@ -20,6 +21,7 @@ from .const import (
     ATTR_USER,
     DOMAIN,
     LOGGER,
+    SERVICE_ADJUST_POINTS,
     SERVICE_CREATE_CHORE,
     SERVICE_DELETE_CHORE,
     SERVICE_MARK_COMPLETE,
@@ -143,6 +145,15 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
 DELETE_CHORE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_SLUG): cv.string,
+    }
+)
+
+ADJUST_POINTS_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_USER): cv.string,
+        vol.Required(ATTR_ADJUSTMENT): vol.All(
+            vol.Coerce(int), vol.Range(min=-1000000000, max=1000000000)
+        ),
     }
 )
 
@@ -506,6 +517,44 @@ async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None
 
     await _update_summary_sensors(hass, user)
 
+
+async def handle_adjust_points(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the adjust_points service call.
+
+    Args:
+        hass: Home Assistant instance
+        call: Service call with 'user' and 'adjustment' data
+    """
+    user = call.data[ATTR_USER]
+    adjustment = call.data[ATTR_ADJUSTMENT]
+
+    LOGGER.info(
+        "Service 'adjust_points' called with user='%s', adjustment=%d",
+        user,
+        adjustment,
+    )
+
+    _validate_integration_loaded(hass)
+    points_storage = hass.data[DOMAIN].get("points_storage")
+
+    if not points_storage:
+        msg = "Points storage not initialized"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
+
+    # Add the adjustment (can be positive or negative)
+    new_total = await points_storage.add_points(user, adjustment)
+
+    LOGGER.info(
+        "Adjusted points for user '%s' by %d. New total: %d",
+        user,
+        adjustment,
+        new_total,
+    )
+
+    # Update the summary sensor to reflect the new points
+    await _update_summary_sensors(hass, user)
+
     if user:
         LOGGER.info("Refreshed summary sensor for user '%s'", user)
     else:
@@ -567,6 +616,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_REFRESH_SUMMARY,
         partial(handle_refresh_summary, hass),
         schema=RESET_COMPLETED_SCHEMA,  # Same schema as reset_completed (optional user)
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ADJUST_POINTS,
+        partial(handle_adjust_points, hass),
+        schema=ADJUST_POINTS_SCHEMA,
     )
 
     LOGGER.debug("Registered Simple Chores services")
