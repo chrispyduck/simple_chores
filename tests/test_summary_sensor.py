@@ -1,6 +1,6 @@
 """Tests for the ChoreSummarySensor class."""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -10,7 +10,7 @@ from custom_components.simple_chores.models import (
     ChoreState,
     SimpleChoresConfig,
 )
-from custom_components.simple_chores.sensor import ChoreSensor, ChoreSensorManager
+from custom_components.simple_chores.sensor import ChoreSensorManager
 
 
 class TestChoreSummarySensor:
@@ -279,7 +279,6 @@ class TestChoreSummarySensor:
     ) -> None:
         """Test summary sensor includes points_earned in attributes."""
         from custom_components.simple_chores.data import PointsStorage
-        from custom_components.simple_chores.const import DOMAIN
 
         hass.data = {}
         mock_config_loader = MagicMock()

@@ -83,7 +83,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     # This avoids the deprecated hass.helpers.discovery pattern
     def add_entities(new_entities, update_before_add: bool = False) -> None:  # noqa: FBT001, FBT002
         """Add entities callback (no-op for YAML setup)."""
-        ...
 
     await async_setup_platform(hass, {}, add_entities, None)
 

@@ -1,7 +1,6 @@
 """Tests for simple_chores data structures."""
 
 from dataclasses import is_dataclass
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest

@@ -1,6 +1,5 @@
 """Tests for simple_chores sensor platform."""
 
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest

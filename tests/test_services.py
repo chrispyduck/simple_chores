@@ -29,7 +29,7 @@ from custom_components.simple_chores.models import (
     ChoreState,
     SimpleChoresConfig,
 )
-from custom_components.simple_chores.sensor import ChoreSensor
+from custom_components.simple_chores.sensor import ChoreSensor, ChoreSummarySensor
 from custom_components.simple_chores.services import async_setup_services
 
 
@@ -40,7 +40,7 @@ async def setup_hass_data(hass):
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
 
-    yield hass
+    return hass
 
 
 @pytest.fixture
@@ -1596,6 +1596,94 @@ class TestStartNewDayService:
         assert points_storage.get_points_missed("alice") == 10
         assert points_storage.get_points_missed("bob") == 0
 
+    @pytest.mark.asyncio
+    async def test_start_new_day_updates_summary_sensor_point_attributes(
+        self, hass
+    ) -> None:
+        """Test that start_new_day updates summary sensor point attributes correctly."""
+        from custom_components.simple_chores.data import PointsStorage
+        from custom_components.simple_chores.sensor import ChoreSensorManager
+
+        # Create chores
+        chore1 = ChoreConfig(
+            name="Chore 1",
+            slug="chore1",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            points=10,
+        )
+        chore2 = ChoreConfig(
+            name="Chore 2",
+            slug="chore2",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            points=5,
+        )
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        # Create manager
+        manager = MagicMock(spec=ChoreSensorManager)
+        manager.points_storage = points_storage
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            # One complete, one pending
+            sensor1 = ChoreSensor(hass, chore1, "alice")
+            sensor1.async_update_ha_state = AsyncMock()
+            sensor1._attr_native_value = ChoreState.COMPLETE.value
+
+            sensor2 = ChoreSensor(hass, chore2, "alice")
+            sensor2.async_update_ha_state = AsyncMock()
+            sensor2._attr_native_value = ChoreState.PENDING.value
+
+        manager.sensors = {
+            "alice_chore1": sensor1,
+            "alice_chore2": sensor2,
+        }
+
+        # Create summary sensor
+        summary_sensor = ChoreSummarySensor(hass, "alice", manager)
+        summary_sensor.async_update_ha_state = AsyncMock()
+
+        hass.data[DOMAIN] = {
+            "sensors": manager.sensors,
+            "summary_sensors": {"alice": summary_sensor},
+            "points_storage": points_storage,
+        }
+
+        await async_setup_services(hass)
+
+        # Get initial attributes
+        initial_attrs = summary_sensor.extra_state_attributes
+        assert initial_attrs["total_points"] == 0
+        assert initial_attrs["points_earned"] == 0
+        assert initial_attrs["points_missed"] == 0
+        assert initial_attrs["points_possible"] == 15  # 10 + 5
+
+        # Call start_new_day
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            {ATTR_USER: "alice"},
+            blocking=True,
+        )
+
+        # Verify summary sensor was updated
+        assert summary_sensor.async_update_ha_state.called
+
+        # Get updated attributes
+        updated_attrs = summary_sensor.extra_state_attributes
+        assert updated_attrs["total_points"] == 10  # Earned from completed chore
+        assert updated_attrs["points_earned"] == 10
+        assert updated_attrs["points_missed"] == 5  # Missed from pending chore
+        assert updated_attrs["points_possible"] == 15  # Both chores reset to pending
+
+        # CRITICAL: Verify that complete_chores list is empty after reset
+        # This is the bug reported by the user
+        assert updated_attrs["complete_chores"] == []
+        assert len(updated_attrs["pending_chores"]) == 2  # Both chores now pending
+
 
 class TestSummarySensorUpdates:
     """Tests to verify all state-changing operations update summary sensors."""
@@ -2496,12 +2584,13 @@ class TestResetPointsService:
     @pytest.mark.asyncio
     async def test_reset_points_updates_summary_sensor_attributes(self, hass) -> None:
         """Test that reset_points updates summary sensor attributes correctly."""
+        from unittest.mock import MagicMock
+
         from custom_components.simple_chores.data import PointsStorage
         from custom_components.simple_chores.sensor import (
-            ChoreSummarySensor,
             ChoreSensorManager,
+            ChoreSummarySensor,
         )
-        from unittest.mock import MagicMock
 
         points_storage = PointsStorage(hass)
         await points_storage.async_load()

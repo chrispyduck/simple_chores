@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
@@ -489,7 +488,8 @@ class ChoreSummarySensor(SensorEntity):
         )
 
     async def async_update(self) -> None:
-        """Update the sensor.
+        """
+        Update the sensor.
 
         This method doesn't fetch data since we compute everything from properties,
         but implementing it ensures Home Assistant re-evaluates our properties
@@ -497,7 +497,6 @@ class ChoreSummarySensor(SensorEntity):
         """
         # Properties are computed dynamically from manager.sensors
         # This method just needs to exist to trigger property re-evaluation
-        pass
 
     @property
     def native_value(self) -> int:

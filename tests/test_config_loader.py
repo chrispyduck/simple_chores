@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
@@ -95,9 +95,7 @@ class TestConfigLoaderLoad:
         assert loader._last_mtime is not None
 
     @pytest.mark.asyncio
-    async def test_load_missing_file(
-        self, hass, temp_config_file: Path
-    ) -> None:
+    async def test_load_missing_file(self, hass, temp_config_file: Path) -> None:
         """Test loading when config file doesn't exist."""
         loader = ConfigLoader(hass, temp_config_file)
         config = await loader.async_load()
@@ -107,9 +105,7 @@ class TestConfigLoaderLoad:
         assert loader._last_mtime is None
 
     @pytest.mark.asyncio
-    async def test_load_invalid_yaml(
-        self, hass, temp_config_file: Path
-    ) -> None:
+    async def test_load_invalid_yaml(self, hass, temp_config_file: Path) -> None:
         """Test loading invalid YAML."""
         temp_config_file.write_text("invalid: yaml: content: [")
 
@@ -144,9 +140,7 @@ class TestConfigLoaderLoad:
         assert loader.config.chores[0].slug == "invalidslug"
 
     @pytest.mark.asyncio
-    async def test_load_empty_yaml(
-        self, hass, temp_config_file: Path
-    ) -> None:
+    async def test_load_empty_yaml(self, hass, temp_config_file: Path) -> None:
         """Test loading empty YAML file."""
         temp_config_file.write_text("")
 
@@ -190,9 +184,7 @@ class TestConfigLoaderCallbacks:
     """Tests for ConfigLoader callback functionality."""
 
     @pytest.mark.asyncio
-    async def test_register_callback(
-        self, hass, temp_config_file: Path
-    ) -> None:
+    async def test_register_callback(self, hass, temp_config_file: Path) -> None:
         """Test registering a callback."""
         loader = ConfigLoader(hass, temp_config_file)
         callback = Mock()
@@ -340,9 +332,7 @@ class TestConfigLoaderFileWatching:
         assert has_changes is False
 
     @pytest.mark.asyncio
-    async def test_start_watching(
-        self, hass, temp_config_file: Path
-    ) -> None:
+    async def test_start_watching(self, hass, temp_config_file: Path) -> None:
         """Test starting file watcher."""
         loader = ConfigLoader(hass, temp_config_file)
 
@@ -373,9 +363,7 @@ class TestConfigLoaderFileWatching:
         await loader.async_stop_watching()
 
     @pytest.mark.asyncio
-    async def test_stop_watching(
-        self, hass, temp_config_file: Path
-    ) -> None:
+    async def test_stop_watching(self, hass, temp_config_file: Path) -> None:
         """Test stopping file watcher."""
         loader = ConfigLoader(hass, temp_config_file)
 

@@ -208,9 +208,7 @@ class TestAsyncSetupEntry:
         hass.config.path = MagicMock(return_value=str(temp_config_file.parent))
 
         # Mock the forward entry setups
-        hass.config_entries.async_forward_entry_setups = AsyncMock(
-            return_value=True
-        )
+        hass.config_entries.async_forward_entry_setups = AsyncMock(return_value=True)
 
         result = await async_setup_entry(hass, mock_config_entry)
 
@@ -282,9 +280,7 @@ class TestAsyncReloadEntry:
     """Tests for async_reload_entry."""
 
     @pytest.mark.asyncio
-    async def test_reload_entry(
-        self, hass, mock_config_entry: MagicMock
-    ) -> None:
+    async def test_reload_entry(self, hass, mock_config_entry: MagicMock) -> None:
         """Test reload entry."""
         await async_reload_entry(hass, mock_config_entry)
 

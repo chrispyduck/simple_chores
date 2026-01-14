@@ -350,9 +350,7 @@ class TestSensorManagerIntegration:
 
     @pytest.mark.asyncio
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())
-    async def test_sensor_manager_lifecycle(
-        self, hass, temp_config_file: Path
-    ) -> None:
+    async def test_sensor_manager_lifecycle(self, hass, temp_config_file: Path) -> None:
         """Test complete sensor manager lifecycle."""
         # Initial config
         initial_data = {

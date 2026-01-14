@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -53,13 +54,15 @@ SERVICE_SCHEMA = vol.Schema(
 
 
 def _validate_integration_loaded(hass: HomeAssistant) -> None:
-    """Validate that the Simple Chores integration is loaded.
+    """
+    Validate that the Simple Chores integration is loaded.
 
     Args:
         hass: Home Assistant instance
 
     Raises:
         HomeAssistantError: If integration is not loaded
+
     """
     if DOMAIN not in hass.data:
         msg = "Simple Chores integration not loaded"
@@ -70,7 +73,8 @@ def _validate_integration_loaded(hass: HomeAssistant) -> None:
 def _find_matching_sensors(
     sensors: dict, chore_slug: str, user: str | None = None
 ) -> list:
-    """Find sensors matching chore slug and optionally user.
+    """
+    Find sensors matching chore slug and optionally user.
 
     Args:
         sensors: Dictionary of sensors
@@ -79,6 +83,7 @@ def _find_matching_sensors(
 
     Returns:
         List of matching sensors
+
     """
     sanitized_chore = sanitize_entity_id(chore_slug)
     matching_sensors = []
@@ -101,11 +106,13 @@ def _find_matching_sensors(
 
 
 async def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) -> None:
-    """Update summary sensors for a user or all users.
+    """
+    Update summary sensors for a user or all users.
 
     Args:
         hass: Home Assistant instance
         user: Optional user to update, or None for all users
+
     """
     summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
     if not summary_sensors:
@@ -346,7 +353,8 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
 
 
 async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
-    """Handle the start_new_day service call.
+    """
+    Handle the start_new_day service call.
 
     Resets completed chores based on their frequency:
     - manual: Reset to NOT_REQUESTED
@@ -438,9 +446,14 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
                 daily_count += 1
 
     # Apply all state changes without triggering individual summary updates
+    update_tasks = []
     for sensor, new_state in state_changes:
         sensor._attr_native_value = new_state.value
-        await sensor.async_update_ha_state(force_refresh=True)
+        update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+    # Await all sensor updates to complete before updating summary
+    if update_tasks:
+        await asyncio.gather(*update_tasks)
 
     if user:
         LOGGER.info(
@@ -591,11 +604,13 @@ async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None
 
 
 async def handle_adjust_points(hass: HomeAssistant, call: ServiceCall) -> None:
-    """Handle the adjust_points service call.
+    """
+    Handle the adjust_points service call.
 
     Args:
         hass: Home Assistant instance
         call: Service call with 'user' and 'adjustment' data
+
     """
     user = call.data[ATTR_USER]
     adjustment = call.data[ATTR_ADJUSTMENT]
@@ -629,7 +644,8 @@ async def handle_adjust_points(hass: HomeAssistant, call: ServiceCall) -> None:
 
 
 async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
-    """Handle the reset_points service call.
+    """
+    Handle the reset_points service call.
 
     Args:
         hass: Home Assistant instance
