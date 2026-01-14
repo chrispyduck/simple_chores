@@ -213,10 +213,12 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         raise ServiceValidationError(msg)
 
     # Mark all matching sensors as complete and award points immediately
+    affected_users = set()
     for sensor in matching_sensors:
         # Only award points if transitioning from non-complete state
         was_complete = sensor.native_value == ChoreState.COMPLETE.value
         await sensor.set_state(ChoreState.COMPLETE)
+        affected_users.add(sensor.assignee)
 
         # Award points for newly completed chore
         if not was_complete and points_storage:
@@ -239,8 +241,9 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
             len(matching_sensors),
         )
 
-    # Update summary sensors to reflect state changes
-    await _update_summary_sensors(hass)
+    # Update summary sensors for all affected users
+    for affected_user in affected_users:
+        await _update_summary_sensors(hass, affected_user)
 
 
 async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -271,10 +274,12 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
         raise ServiceValidationError(msg)
 
     # Mark all matching sensors as pending and deduct points if previously complete
+    affected_users = set()
     for sensor in matching_sensors:
         # Deduct points if transitioning from complete to pending
         was_complete = sensor.native_value == ChoreState.COMPLETE.value
         await sensor.set_state(ChoreState.PENDING)
+        affected_users.add(sensor.assignee)
 
         # Deduct points for un-completing a chore
         if was_complete and points_storage:
@@ -297,8 +302,9 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
             len(matching_sensors),
         )
 
-    # Update summary sensors to reflect new state
-    await _update_summary_sensors(hass)
+    # Update summary sensors for all affected users
+    for affected_user in affected_users:
+        await _update_summary_sensors(hass, affected_user)
 
 
 async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> None:
