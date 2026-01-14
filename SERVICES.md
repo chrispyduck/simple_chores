@@ -134,15 +134,20 @@ data:
 The integration includes a comprehensive points system to gamify chore completion:
 
 - Each chore has a `points` value (default: 1) that can be configured in the YAML file or set when creating/updating chores
-- When a chore is marked complete, the assignee earns the configured points
+- **Points are awarded when `start_new_day` is called**, not when chores are marked complete
+  - Completed chores earn their configured points
+  - Pending chores count as missed opportunities
 - Points are accumulated and stored persistently in `.storage/simple_chores.points.json`
 - Each assignee's summary sensor displays four point-related attributes:
   - `total_points`: Lifetime earned points (cumulative across all time, only reset with `reset_total: true`)
-  - `points_earned`: Resettable earned points (resets when `reset_points` is called, even if `reset_total: false`)
+  - `points_earned`: Resettable earned points (updated by `start_new_day`, resets when `reset_points` is called)
   - `points_missed`: **Cumulative total** of all missed points - updated by `start_new_day` service by adding points from pending chores. This tracks all opportunities missed over time.
   - `points_possible`: **Real-time calculation** - sum of points from currently pending + complete chores. Always reflects current state.
 - Points can be manually adjusted using the `adjust_points` service for bonuses, penalties, or corrections
-- The `start_new_day` service adds to the cumulative `points_missed` total before resetting chore states
+- The `start_new_day` service:
+  - Awards points for all completed chores (updates `total_points` and `points_earned`)
+  - Adds pending chore points to cumulative `points_missed` total
+  - Then resets chore states based on frequency
 - Points tracking can be reset using the `reset_points` service:
   - By default, resets points_earned and cumulative points_missed to zero
   - With `reset_total: true`, also resets lifetime total_points to zero

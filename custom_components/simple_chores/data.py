@@ -60,13 +60,10 @@ class PointsStorage:
         return self._data.get(assignee, 0)
 
     async def add_points(self, assignee: str, points: int) -> int:
-        """Add points to an assignee and return new total."""
+        """Add points to total_points for an assignee and return new total."""
         current = self._data.get(assignee, 0)
         new_total = current + points
         self._data[assignee] = new_total
-        # Also update points_earned
-        earned_current = self._points_earned.get(assignee, 0)
-        self._points_earned[assignee] = earned_current + points
         await self.async_save()
         return new_total
 

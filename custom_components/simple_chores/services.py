@@ -205,21 +205,9 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.error(msg)
         raise ServiceValidationError(msg)
 
-    # Mark all matching sensors as complete and award points
+    # Mark all matching sensors as complete (points awarded during start_new_day)
     for sensor in matching_sensors:
         await sensor.set_state(ChoreState.COMPLETE)
-
-        # Award points to the assignee
-        if points_storage:
-            points = sensor.chore.points
-            new_total = await points_storage.add_points(sensor.assignee, points)
-            LOGGER.debug(
-                "Awarded %d points to '%s' for completing '%s'. New total: %d",
-                points,
-                sensor.assignee,
-                chore_slug,
-                new_total,
-            )
 
     if user:
         LOGGER.info("Marked chore '%s' as complete for user '%s'", chore_slug, user)
@@ -230,7 +218,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
             len(matching_sensors),
         )
 
-    # Update summary sensors to reflect new point totals
+    # Update summary sensors to reflect state changes
     await _update_summary_sensors(hass)
 
 
@@ -378,7 +366,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     # Sanitize user if provided for matching
     sanitized_user = sanitize_entity_id(user) if user else None
 
-    # Calculate points to add to cumulative missed total per assignee BEFORE resetting
+    # Calculate points earned and missed per assignee BEFORE resetting
     assignee_stats: dict[str, dict[str, int]] = {}
     for sensor_id, sensor in sensors.items():
         # If user specified, only calculate for their chores
@@ -387,29 +375,43 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
         assignee = sensor.assignee
         if assignee not in assignee_stats:
-            assignee_stats[assignee] = {"missed": 0}
+            assignee_stats[assignee] = {"earned": 0, "missed": 0}
 
         current_state = sensor.native_value
         chore_points = sensor.chore.points
 
+        # Count completed chores as earned
+        if current_state == ChoreState.COMPLETE.value:
+            assignee_stats[assignee]["earned"] += chore_points
         # Count pending chores as missed (will be added to cumulative total)
-        if current_state == ChoreState.PENDING.value:
+        elif current_state == ChoreState.PENDING.value:
             assignee_stats[assignee]["missed"] += chore_points
 
-    # Update cumulative points_missed (add to existing total)
+    # Update points_earned, total_points, and cumulative points_missed
     if points_storage:
         for assignee, stats in assignee_stats.items():
-            # Get current cumulative total and add today's missed points
-            current_missed = points_storage.get_points_missed(assignee)
-            new_missed = current_missed + stats["missed"]
-            await points_storage.add_points_missed(assignee, stats["missed"])
-            LOGGER.debug(
-                "Updated cumulative points_missed for %s: added %d (was %d, now %d)",
-                assignee,
-                stats["missed"],
-                current_missed,
-                new_missed,
-            )
+            # Award points for completed chores
+            if stats["earned"] > 0:
+                await points_storage.add_points(assignee, stats["earned"])
+                await points_storage.add_points_earned(assignee, stats["earned"])
+                LOGGER.debug(
+                    "Awarded %d points to '%s' for completed chores",
+                    stats["earned"],
+                    assignee,
+                )
+
+            # Update cumulative points_missed
+            if stats["missed"] > 0:
+                current_missed = points_storage.get_points_missed(assignee)
+                new_missed = current_missed + stats["missed"]
+                await points_storage.add_points_missed(assignee, stats["missed"])
+                LOGGER.debug(
+                    "Updated cumulative points_missed for %s: added %d (was %d, now %d)",
+                    assignee,
+                    stats["missed"],
+                    current_missed,
+                    new_missed,
+                )
 
     reset_count = 0
     manual_count = 0

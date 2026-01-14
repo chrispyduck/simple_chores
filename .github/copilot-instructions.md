@@ -36,9 +36,11 @@ PointsStorage (data.py)
 - Always validate against actual assignees in config
 
 **Points System (Critical!):**
+- **Points ONLY update during `start_new_day`** - NOT when chores are marked complete
 - `total_points`: Lifetime earned points (stored, only reset with `reset_total: true`)
+  - Updated by `start_new_day` for completed chores
 - `points_earned`: Resettable earned points (stored, reset by `reset_points` even if `reset_total: false`)
-  - Incremented automatically when `add_points()` is called
+  - Updated by `start_new_day` for completed chores
   - Use for weekly/monthly leaderboards that reset
 - `points_missed`: **Cumulative** counter, updated ONLY by `start_new_day` service
   - Accumulates pending chore points before resetting states
