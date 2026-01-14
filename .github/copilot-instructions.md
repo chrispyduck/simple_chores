@@ -36,11 +36,13 @@ PointsStorage (data.py)
 - Always validate against actual assignees in config
 
 **Points System (Critical!):**
-- **Points ONLY update during `start_new_day`** - NOT when chores are marked complete
+- **Points update IMMEDIATELY** when chores are marked complete/pending:
+  - `mark_complete`: Awards points to `total_points` and `points_earned`
+  - `mark_pending` (from complete): Deducts points from `total_points` and `points_earned`
 - `total_points`: Lifetime earned points (stored, only reset with `reset_total: true`)
-  - Updated by `start_new_day` for completed chores
+  - Updated immediately by `mark_complete` and `mark_pending`
 - `points_earned`: Resettable earned points (stored, reset by `reset_points` even if `reset_total: false`)
-  - Updated by `start_new_day` for completed chores
+  - Updated immediately by `mark_complete` and `mark_pending`
   - Use for weekly/monthly leaderboards that reset
 - `points_missed`: **Cumulative** counter, updated ONLY by `start_new_day` service
   - Accumulates pending chore points before resetting states
@@ -48,6 +50,7 @@ PointsStorage (data.py)
 - `points_possible`: **Dynamic** calculation in summary sensor
   - Calculated on-demand: sum of current pending + complete chore points
   - Never stored, always computed from current chore states
+  - Updates when chore states change (mark_complete, mark_pending, mark_not_requested)
 
 **Summary Sensor Updates:**
 Services that modify chore/point state MUST call `_update_summary_sensors(hass, user)`:

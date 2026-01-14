@@ -6,11 +6,11 @@ This document describes the service actions implemented for the Simple Chores Ho
 
 Service actions have been implemented to allow external automation and scripts to update chore states and manage points:
 
-1. `simple_chores.mark_complete` - Mark a chore as complete for a specific user or all assignees (awards points)
-2. `simple_chores.mark_pending` - Mark a chore as pending for a specific user or all assignees
+1. `simple_chores.mark_complete` - Mark a chore as complete for a specific user or all assignees (awards points immediately)
+2. `simple_chores.mark_pending` - Mark a chore as pending for a specific user or all assignees (deducts points if chore was previously complete)
 3. `simple_chores.mark_not_requested` - Mark a chore as not requested for a specific user or all assignees
 4. `simple_chores.reset_completed` - Reset all completed chores to not requested (optionally for a specific user)
-5. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, daily chores to pending
+5. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, daily chores to pending (calculates missed points for pending chores)
 6. `simple_chores.create_chore` - Dynamically create a new chore at runtime
 7. `simple_chores.update_chore` - Update an existing chore's properties (including points)
 8. `simple_chores.delete_chore` - Delete a chore

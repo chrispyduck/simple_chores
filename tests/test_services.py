@@ -1340,6 +1340,10 @@ class TestStartNewDayService:
 
         await async_setup_services(hass)
 
+        # Simulate points awarded when chore2 was marked complete
+        await points_storage.add_points("alice", 20)
+        await points_storage.add_points_earned("alice", 20)
+
         # Call start_new_day
         await hass.services.async_call(
             DOMAIN,
@@ -1350,6 +1354,8 @@ class TestStartNewDayService:
 
         # Verify points_missed = 10 + 5 = 15 (pending chores)
         assert points_storage.get_points_missed("alice") == 15
+        # Verify total points unchanged (already awarded on complete)
+        assert points_storage.get_points("alice") == 20
 
     @pytest.mark.asyncio
     async def test_start_new_day_calculates_points_possible(self, hass) -> None:
@@ -1445,8 +1451,9 @@ class TestStartNewDayService:
 
         points_storage = PointsStorage(hass)
         await points_storage.async_load()
-        # Set alice to have 25 total points (from completing chore2)
-        await points_storage.set_points("alice", 25)
+        # Simulate alice completing chore2 earlier (points awarded on mark_complete)
+        await points_storage.add_points("alice", 25)
+        await points_storage.add_points_earned("alice", 25)
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor1 = ChoreSensor(hass, chore1, "alice")
@@ -1485,10 +1492,11 @@ class TestStartNewDayService:
         # Verify cumulative points_missed
         assert points_storage.get_points_missed("alice") == 15
 
-        # Verify dynamic points_possible calculation
+        # Verify dynamic points_possible calculation after reset
+        # After start_new_day, chore2 (complete) is reset to pending
         summary_sensor = ChoreSummarySensor(hass, "alice", manager)
         attrs = summary_sensor.extra_state_attributes
-        assert attrs["points_possible"] == 40  # 15 (pending) + 25 (complete)
+        assert attrs["points_possible"] == 40  # Both chores now pending: 15 + 25
 
     @pytest.mark.asyncio
     async def test_start_new_day_ignores_not_requested_chores(self, hass) -> None:
@@ -1661,7 +1669,17 @@ class TestStartNewDayService:
         assert initial_attrs["points_missed"] == 0
         assert initial_attrs["points_possible"] == 15  # 10 + 5
 
-        # Call start_new_day
+        # Simulate points awarded when chore1 was marked complete
+        # (In new behavior, points are awarded immediately on mark_complete)
+        await points_storage.add_points("alice", 10)
+        await points_storage.add_points_earned("alice", 10)
+
+        # Verify points were awarded
+        mid_attrs = summary_sensor.extra_state_attributes
+        assert mid_attrs["total_points"] == 10
+        assert mid_attrs["points_earned"] == 10
+
+        # Call start_new_day (should update missed points, reset chore states)
         await hass.services.async_call(
             DOMAIN,
             SERVICE_START_NEW_DAY,
@@ -1674,8 +1692,8 @@ class TestStartNewDayService:
 
         # Get updated attributes
         updated_attrs = summary_sensor.extra_state_attributes
-        assert updated_attrs["total_points"] == 10  # Earned from completed chore
-        assert updated_attrs["points_earned"] == 10
+        assert updated_attrs["total_points"] == 10  # Unchanged (already awarded)
+        assert updated_attrs["points_earned"] == 10  # Unchanged
         assert updated_attrs["points_missed"] == 5  # Missed from pending chore
         assert updated_attrs["points_possible"] == 15  # Both chores reset to pending
 
@@ -2466,8 +2484,8 @@ class TestResetPointsService:
         assert points_storage.get_points_missed("alice") == 0
 
     @pytest.mark.asyncio
-    async def test_points_earned_increments_with_start_new_day(self, hass) -> None:
-        """Test that points_earned and total_points increment when start_new_day is called."""
+    async def test_points_earned_increments_with_mark_complete(self, hass) -> None:
+        """Test that points_earned and total_points increment when chores are marked complete."""
         from custom_components.simple_chores.data import PointsStorage
 
         points_storage = PointsStorage(hass)
@@ -2492,11 +2510,11 @@ class TestResetPointsService:
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor1 = ChoreSensor(hass, chore1, "alice")
             sensor1.async_update_ha_state = AsyncMock()
-            sensor1._attr_native_value = ChoreState.COMPLETE.value
+            sensor1._attr_native_value = ChoreState.PENDING.value
 
             sensor2 = ChoreSensor(hass, chore2, "alice")
             sensor2.async_update_ha_state = AsyncMock()
-            sensor2._attr_native_value = ChoreState.COMPLETE.value
+            sensor2._attr_native_value = ChoreState.PENDING.value
 
         hass.data[DOMAIN] = {
             "points_storage": points_storage,
@@ -2513,11 +2531,22 @@ class TestResetPointsService:
         assert points_storage.get_points("alice") == 0
         assert points_storage.get_points_earned("alice") == 0
 
-        # Call start_new_day to award points for completed chores
+        # Mark chores as complete (points awarded immediately)
         await hass.services.async_call(
             DOMAIN,
-            SERVICE_START_NEW_DAY,
-            {ATTR_USER: "alice"},
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "complete_chore"},
+            blocking=True,
+        )
+
+        # Verify points for first chore
+        assert points_storage.get_points("alice") == 10
+        assert points_storage.get_points_earned("alice") == 10
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "another_complete"},
             blocking=True,
         )
 
@@ -2551,6 +2580,56 @@ class TestResetPointsService:
 
         # total_points should remain, points_earned should be reset
         assert points_storage.get_points("alice") == 100
+        assert points_storage.get_points_earned("alice") == 0
+
+    @pytest.mark.asyncio
+    async def test_mark_pending_deducts_points(self, hass) -> None:
+        """Test that marking a completed chore as pending deducts points."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        # Create a chore
+        chore = ChoreConfig(
+            name="Test Chore",
+            slug="test_chore",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            points=25,
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(hass, chore, "alice")
+            sensor.async_update_ha_state = AsyncMock()
+            sensor._attr_native_value = ChoreState.COMPLETE.value
+
+        hass.data[DOMAIN] = {
+            "points_storage": points_storage,
+            "sensors": {"alice_test_chore": sensor},
+            "summary_sensors": {},
+        }
+
+        await async_setup_services(hass)
+
+        # Set points (as if chore was completed earlier)
+        await points_storage.add_points("alice", 25)
+        await points_storage.add_points_earned("alice", 25)
+
+        # Verify initial points
+        assert points_storage.get_points("alice") == 25
+        assert points_storage.get_points_earned("alice") == 25
+
+        # Mark as pending (should deduct points)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_PENDING,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "test_chore"},
+            blocking=True,
+        )
+
+        # Verify points were deducted
+        assert points_storage.get_points("alice") == 0
         assert points_storage.get_points_earned("alice") == 0
 
     @pytest.mark.asyncio

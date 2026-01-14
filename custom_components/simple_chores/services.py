@@ -212,9 +212,23 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.error(msg)
         raise ServiceValidationError(msg)
 
-    # Mark all matching sensors as complete (points awarded during start_new_day)
+    # Mark all matching sensors as complete and award points immediately
     for sensor in matching_sensors:
+        # Only award points if transitioning from non-complete state
+        was_complete = sensor.native_value == ChoreState.COMPLETE.value
         await sensor.set_state(ChoreState.COMPLETE)
+
+        # Award points for newly completed chore
+        if not was_complete and points_storage:
+            chore_points = sensor.chore.points
+            await points_storage.add_points(sensor.assignee, chore_points)
+            await points_storage.add_points_earned(sensor.assignee, chore_points)
+            LOGGER.debug(
+                "Awarded %d points to '%s' for completing chore '%s'",
+                chore_points,
+                sensor.assignee,
+                chore_slug,
+            )
 
     if user:
         LOGGER.info("Marked chore '%s' as complete for user '%s'", chore_slug, user)
@@ -242,6 +256,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
 
     _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
+    points_storage = hass.data[DOMAIN].get("points_storage")
     matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
 
     if not matching_sensors:
@@ -255,9 +270,23 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.error(msg)
         raise ServiceValidationError(msg)
 
-    # Mark all matching sensors as pending
+    # Mark all matching sensors as pending and deduct points if previously complete
     for sensor in matching_sensors:
+        # Deduct points if transitioning from complete to pending
+        was_complete = sensor.native_value == ChoreState.COMPLETE.value
         await sensor.set_state(ChoreState.PENDING)
+
+        # Deduct points for un-completing a chore
+        if was_complete and points_storage:
+            chore_points = sensor.chore.points
+            await points_storage.add_points(sensor.assignee, -chore_points)
+            await points_storage.add_points_earned(sensor.assignee, -chore_points)
+            LOGGER.debug(
+                "Deducted %d points from '%s' for un-completing chore '%s'",
+                chore_points,
+                sensor.assignee,
+                chore_slug,
+            )
 
     if user:
         LOGGER.info("Marked chore '%s' as pending for user '%s'", chore_slug, user)
@@ -374,7 +403,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     # Sanitize user if provided for matching
     sanitized_user = sanitize_entity_id(user) if user else None
 
-    # Calculate points earned and missed per assignee BEFORE resetting
+    # Calculate points missed per assignee BEFORE resetting (points already awarded on complete)
     assignee_stats: dict[str, dict[str, int]] = {}
     for sensor_id, sensor in sensors.items():
         # If user specified, only calculate for their chores
@@ -383,31 +412,18 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
         assignee = sensor.assignee
         if assignee not in assignee_stats:
-            assignee_stats[assignee] = {"earned": 0, "missed": 0}
+            assignee_stats[assignee] = {"missed": 0}
 
         current_state = sensor.native_value
         chore_points = sensor.chore.points
 
-        # Count completed chores as earned
-        if current_state == ChoreState.COMPLETE.value:
-            assignee_stats[assignee]["earned"] += chore_points
         # Count pending chores as missed (will be added to cumulative total)
-        elif current_state == ChoreState.PENDING.value:
+        if current_state == ChoreState.PENDING.value:
             assignee_stats[assignee]["missed"] += chore_points
 
-    # Update points_earned, total_points, and cumulative points_missed
+    # Update cumulative points_missed
     if points_storage:
         for assignee, stats in assignee_stats.items():
-            # Award points for completed chores
-            if stats["earned"] > 0:
-                await points_storage.add_points(assignee, stats["earned"])
-                await points_storage.add_points_earned(assignee, stats["earned"])
-                LOGGER.debug(
-                    "Awarded %d points to '%s' for completed chores",
-                    stats["earned"],
-                    assignee,
-                )
-
             # Update cumulative points_missed
             if stats["missed"] > 0:
                 current_missed = points_storage.get_points_missed(assignee)
