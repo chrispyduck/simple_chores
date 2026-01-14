@@ -272,3 +272,46 @@ class TestChoreSummarySensor:
             "sensor.simple_chore_alice_vacuum" in attrs_all_complete["complete_chores"]
         )
         assert alice_summary.native_value == 0
+
+    @pytest.mark.asyncio
+    async def test_summary_sensor_points_attributes(
+        self, hass, sample_config: SimpleChoresConfig
+    ) -> None:
+        """Test summary sensor includes points_earned in attributes."""
+        from custom_components.simple_chores.data import PointsStorage
+        from custom_components.simple_chores.const import DOMAIN
+
+        hass.data = {}
+        mock_config_loader = MagicMock()
+        mock_config_loader.config = sample_config
+        async_add_entities = Mock()
+
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
+
+        # Set up points storage
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+        manager.points_storage = points_storage
+
+        await manager.async_setup()
+
+        alice_summary = manager.summary_sensors["alice"]
+
+        # Set some points values
+        await points_storage.set_points("alice", 100)
+        await points_storage.set_points_earned("alice", 50)
+        await points_storage.set_points_missed("alice", 10)
+
+        attrs = alice_summary.extra_state_attributes
+
+        # Verify all points attributes are present
+        assert "total_points" in attrs
+        assert "points_earned" in attrs
+        assert "points_missed" in attrs
+        assert "points_possible" in attrs
+
+        # Verify values
+        assert attrs["total_points"] == 100
+        assert attrs["points_earned"] == 50
+        assert attrs["points_missed"] == 10
+        assert attrs["points_possible"] == 0  # No chores are pending/complete

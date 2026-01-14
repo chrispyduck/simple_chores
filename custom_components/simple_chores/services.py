@@ -415,6 +415,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     manual_count = 0
     daily_count = 0
 
+    # Collect all state changes first, then apply them
+    state_changes = []
     for sensor_id, sensor in sensors.items():
         # If user specified, only reset their chores
         if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
@@ -425,13 +427,18 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             chore_frequency = sensor.chore.frequency
 
             if chore_frequency == ChoreFrequency.MANUAL:
-                await sensor.set_state(ChoreState.NOT_REQUESTED)
+                state_changes.append((sensor, ChoreState.NOT_REQUESTED))
                 reset_count += 1
                 manual_count += 1
             elif chore_frequency == ChoreFrequency.DAILY:
-                await sensor.set_state(ChoreState.PENDING)
+                state_changes.append((sensor, ChoreState.PENDING))
                 reset_count += 1
                 daily_count += 1
+
+    # Apply all state changes without triggering individual summary updates
+    for sensor, new_state in state_changes:
+        sensor._attr_native_value = new_state.value
+        await sensor.async_update_ha_state(force_refresh=True)
 
     if user:
         LOGGER.info(
@@ -449,8 +456,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             daily_count,
         )
 
-    # Update summary sensors to reflect new state
-    await _update_summary_sensors(hass)
+    # Update summary sensors to reflect new state (after all chore states are updated)
+    await _update_summary_sensors(hass, user)
 
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -659,7 +666,8 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
 
     # Reset points for each user
     for assignee in users_to_reset:
-        # Always reset cumulative points_missed (points_possible is calculated dynamically)
+        # Always reset points_earned and points_missed (points_possible is calculated dynamically)
+        await points_storage.set_points_earned(assignee, 0)
         await points_storage.set_points_missed(assignee, 0)
 
         # Optionally reset total points
@@ -667,7 +675,7 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
             await points_storage.set_points(assignee, 0)
 
         LOGGER.debug(
-            "Reset points for '%s': points_missed=0, total_points=%s",
+            "Reset points for '%s': points_earned=0, points_missed=0, total_points=%s",
             assignee,
             0 if reset_total else points_storage.get_points(assignee),
         )

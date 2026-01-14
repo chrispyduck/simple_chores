@@ -37,7 +37,7 @@ Service actions have been implemented to allow external automation and scripts t
 ### reset_points
 
 - `user` (optional, string): The assignee/user whose points should be reset. If not provided, resets points for all users.
-- `reset_total` (optional, boolean): Whether to reset total_points (lifetime earned points) to zero. Default: false (only resets daily stats)
+- `reset_total` (optional, boolean): Whether to reset total_points (lifetime earned points) to zero. Default: false (only resets points_earned and daily stats)
 
 ## Usage Examples
 
@@ -136,14 +136,15 @@ The integration includes a comprehensive points system to gamify chore completio
 - Each chore has a `points` value (default: 1) that can be configured in the YAML file or set when creating/updating chores
 - When a chore is marked complete, the assignee earns the configured points
 - Points are accumulated and stored persistently in `.storage/simple_chores.points.json`
-- Each assignee's summary sensor displays three point-related attributes:
-  - `total_points`: Lifetime earned points (cumulative across all time)
+- Each assignee's summary sensor displays four point-related attributes:
+  - `total_points`: Lifetime earned points (cumulative across all time, only reset with `reset_total: true`)
+  - `points_earned`: Resettable earned points (resets when `reset_points` is called, even if `reset_total: false`)
   - `points_missed`: **Cumulative total** of all missed points - updated by `start_new_day` service by adding points from pending chores. This tracks all opportunities missed over time.
   - `points_possible`: **Real-time calculation** - sum of points from currently pending + complete chores. Always reflects current state.
 - Points can be manually adjusted using the `adjust_points` service for bonuses, penalties, or corrections
 - The `start_new_day` service adds to the cumulative `points_missed` total before resetting chore states
 - Points tracking can be reset using the `reset_points` service:
-  - By default, resets cumulative points_missed to zero
+  - By default, resets points_earned and cumulative points_missed to zero
   - With `reset_total: true`, also resets lifetime total_points to zero
   - Note: `points_possible` is always calculated dynamically from current chore states
 

@@ -557,6 +557,8 @@ class ChoreSummarySensor(SensorEntity):
 
         # Get total points for this assignee
         total_points = self._manager.points_storage.get_points(self._assignee)
+        # points_earned is resettable (updated when points added, reset by reset_points)
+        points_earned = self._manager.points_storage.get_points_earned(self._assignee)
         # points_missed is cumulative (only updated by start_new_day)
         points_missed = self._manager.points_storage.get_points_missed(self._assignee)
         # points_possible is dynamic (calculated from current chore states)
@@ -570,6 +572,7 @@ class ChoreSummarySensor(SensorEntity):
             "all_chores": all_entities,
             "total_chores": len(all_entities),
             "total_points": total_points,
+            "points_earned": points_earned,
             "points_missed": points_missed,
             "points_possible": points_possible,
         }

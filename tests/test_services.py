@@ -1022,11 +1022,11 @@ class TestStartNewDayService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor_manual = ChoreSensor(hass, chore_manual, "alice")
-            sensor_manual.set_state = AsyncMock()
+            sensor_manual.async_update_ha_state = AsyncMock()
             sensor_manual._attr_native_value = ChoreState.COMPLETE.value
 
             sensor_daily = ChoreSensor(hass, chore_daily, "alice")
-            sensor_daily.set_state = AsyncMock()
+            sensor_daily.async_update_ha_state = AsyncMock()
             sensor_daily._attr_native_value = ChoreState.COMPLETE.value
 
         hass.data[DOMAIN] = {
@@ -1051,9 +1051,12 @@ class TestStartNewDayService:
         )
 
         # Manual should be reset to NOT_REQUESTED
-        sensor_manual.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
+        assert sensor_manual.native_value == ChoreState.NOT_REQUESTED.value
         # Daily should be reset to PENDING
-        sensor_daily.set_state.assert_called_once_with(ChoreState.PENDING)
+        assert sensor_daily.native_value == ChoreState.PENDING.value
+        # Both sensors should have been updated
+        sensor_manual.async_update_ha_state.assert_called()
+        sensor_daily.async_update_ha_state.assert_called()
 
     @pytest.mark.asyncio
     async def test_start_new_day_specific_user(self, hass) -> None:
@@ -1073,11 +1076,11 @@ class TestStartNewDayService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor_alice = ChoreSensor(hass, chore1, "alice")
-            sensor_alice.set_state = AsyncMock()
+            sensor_alice.async_update_ha_state = AsyncMock()
             sensor_alice._attr_native_value = ChoreState.COMPLETE.value
 
             sensor_bob = ChoreSensor(hass, chore2, "bob")
-            sensor_bob.set_state = AsyncMock()
+            sensor_bob.async_update_ha_state = AsyncMock()
             sensor_bob._attr_native_value = ChoreState.COMPLETE.value
 
         hass.data[DOMAIN] = {
@@ -1100,8 +1103,11 @@ class TestStartNewDayService:
         )
 
         # Only alice's sensor should be reset
-        sensor_alice.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
-        sensor_bob.set_state.assert_not_called()
+        assert sensor_alice.native_value == ChoreState.NOT_REQUESTED.value
+        sensor_alice.async_update_ha_state.assert_called()
+        # Bob's should not be touched
+        assert sensor_bob.native_value == ChoreState.COMPLETE.value
+        sensor_bob.async_update_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_start_new_day_ignores_non_complete(self, hass) -> None:
@@ -1158,15 +1164,15 @@ class TestStartNewDayService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor1 = ChoreSensor(hass, chore1, "alice")
-            sensor1.set_state = AsyncMock()
+            sensor1.async_update_ha_state = AsyncMock()
             sensor1._attr_native_value = ChoreState.COMPLETE.value
 
             sensor2 = ChoreSensor(hass, chore2, "alice")
-            sensor2.set_state = AsyncMock()
+            sensor2.async_update_ha_state = AsyncMock()
             sensor2._attr_native_value = ChoreState.PENDING.value
 
             sensor3 = ChoreSensor(hass, chore3, "alice")
-            sensor3.set_state = AsyncMock()
+            sensor3.async_update_ha_state = AsyncMock()
             sensor3._attr_native_value = ChoreState.COMPLETE.value
 
         hass.data[DOMAIN] = {
@@ -1189,11 +1195,14 @@ class TestStartNewDayService:
         )
 
         # Manual complete should be reset to NOT_REQUESTED
-        sensor1.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
-        # Manual pending should not be reset
-        sensor2.set_state.assert_not_called()
+        assert sensor1.native_value == ChoreState.NOT_REQUESTED.value
+        sensor1.async_update_ha_state.assert_called()
+        # Manual pending should not be touched
+        assert sensor2.native_value == ChoreState.PENDING.value
+        sensor2.async_update_ha_state.assert_not_called()
         # Daily complete should be reset to PENDING
-        sensor3.set_state.assert_called_once_with(ChoreState.PENDING)
+        assert sensor3.native_value == ChoreState.PENDING.value
+        sensor3.async_update_ha_state.assert_called()
 
     @pytest.mark.asyncio
     async def test_start_new_day_updates_summary_attributes(self, hass) -> None:
@@ -1784,8 +1793,8 @@ class TestSummarySensorUpdates:
         )
 
         # Verify summary sensor was updated
-        # Should be called twice: once from set_state, once from _update_summary_sensors
-        assert mock_summary.async_update_ha_state.call_count == 2
+        # Should be called once from _update_summary_sensors (not from individual sensors)
+        mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_mark_all_assignees_updates_all_summary_sensors(self, hass) -> None:
@@ -2347,6 +2356,7 @@ class TestResetPointsService:
         await points_storage.async_load()
 
         await points_storage.set_points("alice", 100)
+        await points_storage.set_points_earned("alice", 50)
         await points_storage.set_points_missed("alice", 15)
 
         hass.data[DOMAIN] = {"points_storage": points_storage}
@@ -2361,6 +2371,79 @@ class TestResetPointsService:
             blocking=True,
         )
 
-        # Verify total points not reset, cumulative missed reset
+        # Verify total points not reset, earned and cumulative missed reset
         assert points_storage.get_points("alice") == 100
+        assert points_storage.get_points_earned("alice") == 0
         assert points_storage.get_points_missed("alice") == 0
+
+    @pytest.mark.asyncio
+    async def test_points_earned_increments_with_completion(self, hass) -> None:
+        """Test that points_earned increments when chores are completed."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        # Add some points
+        await points_storage.add_points("alice", 10)
+        await points_storage.add_points("alice", 5)
+
+        # Verify both total_points and points_earned are updated
+        assert points_storage.get_points("alice") == 15
+        assert points_storage.get_points_earned("alice") == 15
+
+    @pytest.mark.asyncio
+    async def test_points_earned_resets_independently(self, hass) -> None:
+        """Test that points_earned resets without affecting total_points."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        # Set initial values
+        await points_storage.set_points("alice", 100)
+        await points_storage.set_points_earned("alice", 50)
+
+        hass.data[DOMAIN] = {"points_storage": points_storage}
+
+        await async_setup_services(hass)
+
+        # Reset with reset_total=false (default)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_POINTS,
+            {ATTR_USER: "alice"},
+            blocking=True,
+        )
+
+        # total_points should remain, points_earned should be reset
+        assert points_storage.get_points("alice") == 100
+        assert points_storage.get_points_earned("alice") == 0
+
+    @pytest.mark.asyncio
+    async def test_points_earned_resets_with_total(self, hass) -> None:
+        """Test that both points_earned and total_points reset when reset_total=true."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        # Set initial values
+        await points_storage.set_points("alice", 100)
+        await points_storage.set_points_earned("alice", 50)
+
+        hass.data[DOMAIN] = {"points_storage": points_storage}
+
+        await async_setup_services(hass)
+
+        # Reset with reset_total=true
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_POINTS,
+            {ATTR_USER: "alice", ATTR_RESET_TOTAL: True},
+            blocking=True,
+        )
+
+        # Both should be reset
+        assert points_storage.get_points("alice") == 0
+        assert points_storage.get_points_earned("alice") == 0

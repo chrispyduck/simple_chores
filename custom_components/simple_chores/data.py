@@ -31,6 +31,7 @@ class PointsStorage:
         """Initialize points storage."""
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data: dict[str, int] = {}
+        self._points_earned: dict[str, int] = {}
         self._points_missed: dict[str, int] = {}
         self._points_possible: dict[str, int] = {}
 
@@ -39,6 +40,7 @@ class PointsStorage:
         data = await self._store.async_load()
         if data:
             self._data = data.get("points", {})
+            self._points_earned = data.get("points_earned", {})
             self._points_missed = data.get("points_missed", {})
             self._points_possible = data.get("points_possible", {})
 
@@ -47,6 +49,7 @@ class PointsStorage:
         await self._store.async_save(
             {
                 "points": self._data,
+                "points_earned": self._points_earned,
                 "points_missed": self._points_missed,
                 "points_possible": self._points_possible,
             }
@@ -61,6 +64,9 @@ class PointsStorage:
         current = self._data.get(assignee, 0)
         new_total = current + points
         self._data[assignee] = new_total
+        # Also update points_earned
+        earned_current = self._points_earned.get(assignee, 0)
+        self._points_earned[assignee] = earned_current + points
         await self.async_save()
         return new_total
 
@@ -72,6 +78,23 @@ class PointsStorage:
     def get_all_points(self) -> dict[str, int]:
         """Get all assignee points."""
         return dict(self._data)
+
+    def get_points_earned(self, assignee: str) -> int:
+        """Get points earned for an assignee (resets with reset_points)."""
+        return self._points_earned.get(assignee, 0)
+
+    async def add_points_earned(self, assignee: str, points: int) -> int:
+        """Add points to earned total and return new total."""
+        current = self._points_earned.get(assignee, 0)
+        new_total = current + points
+        self._points_earned[assignee] = new_total
+        await self.async_save()
+        return new_total
+
+    async def set_points_earned(self, assignee: str, points: int) -> None:
+        """Set points earned for an assignee."""
+        self._points_earned[assignee] = points
+        await self.async_save()
 
     def get_points_missed(self, assignee: str) -> int:
         """Get cumulative points missed for an assignee."""

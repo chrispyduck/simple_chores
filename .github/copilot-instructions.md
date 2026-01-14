@@ -36,7 +36,10 @@ PointsStorage (data.py)
 - Always validate against actual assignees in config
 
 **Points System (Critical!):**
-- `total_points`: Lifetime earned points (stored)
+- `total_points`: Lifetime earned points (stored, only reset with `reset_total: true`)
+- `points_earned`: Resettable earned points (stored, reset by `reset_points` even if `reset_total: false`)
+  - Incremented automatically when `add_points()` is called
+  - Use for weekly/monthly leaderboards that reset
 - `points_missed`: **Cumulative** counter, updated ONLY by `start_new_day` service
   - Accumulates pending chore points before resetting states
   - Use `add_points_missed()` to add to cumulative total

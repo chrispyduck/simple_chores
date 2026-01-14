@@ -252,7 +252,7 @@ adjust_points:
 
 reset_points:
   name: Reset Points
-  description: Reset points tracking for assignees. Always resets points_missed and points_possible to zero. Optionally resets total_points to zero.
+  description: Reset points tracking for assignees. Always resets points_earned, points_missed and points_possible to zero. Optionally resets total_points to zero.
   fields:
     user:
       name: User
@@ -263,7 +263,7 @@ reset_points:
         text:
     reset_total:
       name: Reset Total Points
-      description: If true, also resets total earned points to zero. If false, only resets daily stats (points_missed and points_possible)
+      description: If true, also resets total earned points to zero. If false, only resets points_earned and daily stats (points_missed and points_possible)
       required: false
       default: false
       example: false
