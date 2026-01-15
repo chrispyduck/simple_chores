@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
@@ -434,6 +435,9 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         # Use async_update_ha_state to ensure the state is written before returning
         await self.async_update_ha_state(force_refresh=True)
 
+        # Yield to event loop to ensure state update is fully processed
+        await asyncio.sleep(0)
+
         # Update summary sensor for this assignee
         if DOMAIN in self.hass.data and "summary_sensors" in self.hass.data[DOMAIN]:
             summary_sensors = self.hass.data[DOMAIN]["summary_sensors"]
@@ -442,6 +446,8 @@ class ChoreSensor(RestoreEntity, SensorEntity):
                 await summary_sensors[self._assignee].async_update_ha_state(
                     force_refresh=True
                 )
+                # Yield again to ensure summary update is processed
+                await asyncio.sleep(0)
 
 
 class ChoreSummarySensor(SensorEntity):

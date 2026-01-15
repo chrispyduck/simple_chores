@@ -336,8 +336,10 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
         raise ServiceValidationError(msg)
 
     # Mark all matching sensors as not requested
+    affected_users = set()
     for sensor in matching_sensors:
         await sensor.set_state(ChoreState.NOT_REQUESTED)
+        affected_users.add(sensor.assignee)
 
     if user:
         LOGGER.info(
@@ -350,8 +352,9 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
             len(matching_sensors),
         )
 
-    # Update summary sensors to reflect new state
-    await _update_summary_sensors(hass)
+    # Update summary sensors for all affected users
+    for affected_user in affected_users:
+        await _update_summary_sensors(hass, affected_user)
 
 
 async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None:
