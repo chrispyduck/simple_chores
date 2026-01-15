@@ -4,6 +4,10 @@ A Home Assistant custom integration for managing household chores.
 
 Why? Because the Grocy integration isn't working and KidsChores is buggy. I'll add features as needed to motivate the kiddos, but this is for adults, too.
 
+## A Note About This Code
+
+This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an experiment in AI use and its limitations as it is a real HASS integration that provides real value.
+
 ## Basics
 
 * All configuration is file-based, in a single yaml file. State is maintained within Home Assistant.
