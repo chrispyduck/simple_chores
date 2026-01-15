@@ -216,7 +216,8 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
     affected_users = set()
     for sensor in matching_sensors:
         # Only award points if transitioning from non-complete state
-        was_complete = sensor.native_value == ChoreState.COMPLETE.value
+        # Read from _attr_native_value directly to get the most current state
+        was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
         await sensor.set_state(ChoreState.COMPLETE)
         affected_users.add(sensor.assignee)
 
@@ -277,7 +278,8 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
     affected_users = set()
     for sensor in matching_sensors:
         # Deduct points if transitioning from complete to pending
-        was_complete = sensor.native_value == ChoreState.COMPLETE.value
+        # Read from _attr_native_value directly to get the most current state
+        was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
         await sensor.set_state(ChoreState.PENDING)
         affected_users.add(sensor.assignee)
 
@@ -374,7 +376,8 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
             continue
 
         # Only reset sensors that are currently COMPLETE
-        if sensor.native_value == ChoreState.COMPLETE.value:
+        # Read from _attr_native_value directly to get the most current state
+        if sensor._attr_native_value == ChoreState.COMPLETE.value:  # noqa: SLF001
             await sensor.set_state(ChoreState.NOT_REQUESTED)
             reset_count += 1
 
@@ -420,7 +423,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         if assignee not in assignee_stats:
             assignee_stats[assignee] = {"missed": 0}
 
-        current_state = sensor.native_value
+        # Read from _attr_native_value directly to get the most current state
+        current_state = sensor._attr_native_value  # noqa: SLF001
         chore_points = sensor.chore.points
 
         # Count pending chores as missed (will be added to cumulative total)
@@ -455,7 +459,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             continue
 
         # Only reset sensors that are currently COMPLETE
-        if sensor.native_value == ChoreState.COMPLETE.value:
+        # Read from _attr_native_value directly to get the most current state
+        if sensor._attr_native_value == ChoreState.COMPLETE.value:  # noqa: SLF001
             chore_frequency = sensor.chore.frequency
 
             if chore_frequency == ChoreFrequency.MANUAL:
@@ -476,6 +481,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     # Await all sensor updates to complete before updating summary
     if update_tasks:
         await asyncio.gather(*update_tasks)
+        # Yield to event loop to ensure all state updates are fully processed
+        await asyncio.sleep(0)
 
     if user:
         LOGGER.info(
@@ -495,6 +502,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
     # Update summary sensors to reflect new state (after all chore states are updated)
     await _update_summary_sensors(hass, user)
+    # Yield again to ensure summary sensor updates are fully processed
+    await asyncio.sleep(0)
 
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:

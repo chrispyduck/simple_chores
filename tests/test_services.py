@@ -1703,6 +1703,117 @@ class TestStartNewDayService:
         assert updated_attrs["complete_chores"] == []
         assert len(updated_attrs["pending_chores"]) == 2  # Both chores now pending
 
+    @pytest.mark.asyncio
+    async def test_start_new_day_clears_complete_chores_list(self, hass) -> None:
+        """Test that start_new_day properly clears the complete_chores list in summary sensor."""
+        from custom_components.simple_chores.data import PointsStorage
+        from custom_components.simple_chores.sensor import ChoreSensorManager
+
+        # Create multiple chores with different states
+        chore1 = ChoreConfig(
+            name="Complete Chore 1",
+            slug="complete1",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            points=10,
+        )
+        chore2 = ChoreConfig(
+            name="Complete Chore 2",
+            slug="complete2",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["alice"],
+            points=5,
+        )
+        chore3 = ChoreConfig(
+            name="Pending Chore",
+            slug="pending1",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            points=3,
+        )
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        manager = MagicMock(spec=ChoreSensorManager)
+        manager.points_storage = points_storage
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            # Two complete chores
+            sensor1 = ChoreSensor(hass, chore1, "alice")
+            sensor1.async_update_ha_state = AsyncMock()
+            sensor1._attr_native_value = ChoreState.COMPLETE.value
+
+            sensor2 = ChoreSensor(hass, chore2, "alice")
+            sensor2.async_update_ha_state = AsyncMock()
+            sensor2._attr_native_value = ChoreState.COMPLETE.value
+
+            # One pending chore
+            sensor3 = ChoreSensor(hass, chore3, "alice")
+            sensor3.async_update_ha_state = AsyncMock()
+            sensor3._attr_native_value = ChoreState.PENDING.value
+
+        manager.sensors = {
+            "alice_complete1": sensor1,
+            "alice_complete2": sensor2,
+            "alice_pending1": sensor3,
+        }
+
+        summary_sensor = ChoreSummarySensor(hass, "alice", manager)
+        summary_sensor.async_update_ha_state = AsyncMock()
+
+        hass.data[DOMAIN] = {
+            "sensors": manager.sensors,
+            "summary_sensors": {"alice": summary_sensor},
+            "points_storage": points_storage,
+        }
+
+        await async_setup_services(hass)
+
+        # Verify initial state has complete chores
+        initial_attrs = summary_sensor.extra_state_attributes
+        assert len(initial_attrs["complete_chores"]) == 2
+        assert "sensor.simple_chore_alice_complete1" in initial_attrs["complete_chores"]
+        assert "sensor.simple_chore_alice_complete2" in initial_attrs["complete_chores"]
+        assert len(initial_attrs["pending_chores"]) == 1
+
+        # Call start_new_day
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            {ATTR_USER: "alice"},
+            blocking=True,
+        )
+
+        # Verify summary sensor was updated
+        assert summary_sensor.async_update_ha_state.called
+
+        # Get updated attributes - THIS IS THE CRITICAL CHECK
+        updated_attrs = summary_sensor.extra_state_attributes
+
+        # CRITICAL: complete_chores should be EMPTY
+        assert updated_attrs["complete_chores"] == [], (
+            f"Expected complete_chores to be empty after start_new_day, "
+            f"but got: {updated_attrs['complete_chores']}"
+        )
+
+        # Daily chore should now be pending (was complete, now reset to pending)
+        assert len(updated_attrs["pending_chores"]) == 2  # pending1 + complete1 (daily)
+
+        # Manual chore should be not_requested (was complete, now reset to not_requested)
+        assert len(updated_attrs["not_requested_chores"]) == 1  # complete2 (manual)
+
+        # Verify the actual sensor states were updated
+        assert (
+            sensor1._attr_native_value == ChoreState.PENDING.value
+        )  # daily -> pending
+        assert (
+            sensor2._attr_native_value == ChoreState.NOT_REQUESTED.value
+        )  # manual -> not_requested
+        assert (
+            sensor3._attr_native_value == ChoreState.PENDING.value
+        )  # was already pending
+
 
 class TestSummarySensorUpdates:
     """Tests to verify all state-changing operations update summary sensors."""

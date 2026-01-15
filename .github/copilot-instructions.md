@@ -59,6 +59,22 @@ Services that modify chore/point state MUST call `_update_summary_sensors(hass, 
 - create_chore, update_chore, delete_chore
 - adjust_points, reset_points
 
+**State Reading Pattern (CRITICAL!):**
+- **ALWAYS use `sensor._attr_native_value` when reading current sensor state in service handlers**
+- **NEVER use `sensor.native_value`** - it may return cached values from the state machine
+- The `_attr_native_value` is the actual internal state that reflects the most recent update
+- This is especially critical in services that:
+  - Check previous state before awarding/deducting points (mark_complete, mark_pending)
+  - Check current state before resetting (reset_completed, start_new_day)
+  - Read state for summary sensor attribute calculations
+- Example: `was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001`
+- The summary sensor's `extra_state_attributes` property also uses this pattern for the same reason
+
+**Event Loop Synchronization:**
+- After batch state updates (e.g., `asyncio.gather()`), add `await asyncio.sleep(0)` to yield to event loop
+- This ensures state updates are fully processed before reading them elsewhere
+- Example in `start_new_day`: yield after sensor updates, then yield after summary updates
+
 ## Development Workflow
 
 ### Setup & Running
@@ -124,7 +140,12 @@ async def async_handle_mark_complete(call: ServiceCall) -> None:
     """Handle mark_complete service."""
     hass = call.hass
     user = call.data[ATTR_USER]
+
+    # CRITICAL: Use _attr_native_value to read current state
+    was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
+
     # ... business logic
+
     await _update_summary_sensors(hass, user)  # CRITICAL!
 ```
 
@@ -171,12 +192,14 @@ await storage.set_points_missed(user, amount)  # Sets absolute value
 
 ## Common Pitfalls
 
-1. **Forgetting _update_summary_sensors()** after state changes
-2. **Storing points_possible** instead of calculating dynamically
-3. **Using set_points_missed()** when you should use add_points_missed()
-4. **start_new_day order:** Calculate missed points BEFORE resetting states
-5. **Testing without hass fixture:** Use pytest-homeassistant-custom-component's hass
-6. **Entity ID sanitization:** Always use sanitize_entity_id() for slugs
+1. **Using `sensor.native_value` instead of `sensor._attr_native_value`** when reading current state
+2. **Forgetting _update_summary_sensors()** after state changes
+3. **Storing points_possible** instead of calculating dynamically
+4. **Using set_points_missed()** when you should use add_points_missed()
+5. **start_new_day order:** Calculate missed points BEFORE resetting states
+6. **Testing without hass fixture:** Use pytest-homeassistant-custom-component's hass
+7. **Entity ID sanitization:** Always use sanitize_entity_id() for slugs
+8. **Missing event loop yields:** Add `await asyncio.sleep(0)` after batch state updates
 
 ## File Locations
 
