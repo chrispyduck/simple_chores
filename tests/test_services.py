@@ -1667,7 +1667,7 @@ class TestStartNewDayService:
         assert initial_attrs["total_points"] == 0
         assert initial_attrs["points_earned"] == 0
         assert initial_attrs["points_missed"] == 0
-        assert initial_attrs["points_possible"] == 15  # 10 + 5
+        assert initial_attrs["points_possible"] == 0  # earned + missed = 0 + 0
 
         # Simulate points awarded when chore1 was marked complete
         # (In new behavior, points are awarded immediately on mark_complete)
@@ -1678,6 +1678,7 @@ class TestStartNewDayService:
         mid_attrs = summary_sensor.extra_state_attributes
         assert mid_attrs["total_points"] == 10
         assert mid_attrs["points_earned"] == 10
+        assert mid_attrs["points_possible"] == 10  # earned + missed = 10 + 0
 
         # Call start_new_day (should update missed points, reset chore states)
         await hass.services.async_call(
@@ -1695,7 +1696,7 @@ class TestStartNewDayService:
         assert updated_attrs["total_points"] == 10  # Unchanged (already awarded)
         assert updated_attrs["points_earned"] == 10  # Unchanged
         assert updated_attrs["points_missed"] == 5  # Missed from pending chore
-        assert updated_attrs["points_possible"] == 15  # Both chores reset to pending
+        assert updated_attrs["points_possible"] == 15  # earned + missed = 10 + 5
 
         # CRITICAL: Verify that complete_chores list is empty after reset
         # This is the bug reported by the user
@@ -2228,8 +2229,8 @@ class TestSummarySensorAttributes:
         assert attrs["total_points"] == 100
         # points_missed is cumulative from storage (not set yet, so 0)
         assert attrs["points_missed"] == 0
-        # Both pending (10) and complete (5) contribute to points_possible
-        assert attrs["points_possible"] == 15
+        # points_possible = points_earned + points_missed (0 + 0 = 0)
+        assert attrs["points_possible"] == 0
 
     @pytest.mark.asyncio
     async def test_summary_sensor_default_points_stats(self, hass) -> None:

@@ -47,10 +47,10 @@ PointsStorage (data.py)
 - `points_missed`: **Cumulative** counter, updated ONLY by `start_new_day` service
   - Accumulates pending chore points before resetting states
   - Use `add_points_missed()` to add to cumulative total
-- `points_possible`: **Dynamic** calculation in summary sensor
-  - Calculated on-demand: sum of current pending + complete chore points
-  - Never stored, always computed from current chore states
-  - Updates when chore states change (mark_complete, mark_pending, mark_not_requested)
+- `points_possible`: **Calculated invariant** in summary sensor
+  - **INVARIANT: points_earned + points_missed = points_possible**
+  - Never stored, always computed as `points_earned + points_missed`
+  - Represents the total opportunity (what was earned + what was missed)
 
 **Summary Sensor Updates:**
 Services that modify chore/point state MUST call `_update_summary_sensors(hass, user)`:

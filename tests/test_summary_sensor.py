@@ -313,4 +313,5 @@ class TestChoreSummarySensor:
         assert attrs["total_points"] == 100
         assert attrs["points_earned"] == 50
         assert attrs["points_missed"] == 10
-        assert attrs["points_possible"] == 0  # No chores are pending/complete
+        # INVARIANT: points_possible = points_earned + points_missed
+        assert attrs["points_possible"] == 60  # 50 + 10

@@ -529,9 +529,6 @@ class ChoreSummarySensor(SensorEntity):
         complete_entities = []
         not_requested_entities = []
 
-        # Calculate points_possible dynamically from current chore states
-        current_points_possible = 0
-
         for entity_id, sensor in self._manager.sensors.items():
             if sensor.assignee == self._assignee:
                 full_entity_id = f"sensor.simple_chore_{entity_id}"
@@ -539,16 +536,11 @@ class ChoreSummarySensor(SensorEntity):
                 # This ensures we see updates immediately, even before the state machine updates.
                 # Without the private member access the summary value won't be updated correctly.
                 current_state = sensor._attr_native_value  # noqa: SLF001
-                chore_points = sensor.chore.points
 
                 if current_state == ChoreState.PENDING.value:
                     pending_entities.append(full_entity_id)
-                    # Pending chores contribute to possible
-                    current_points_possible += chore_points
                 elif current_state == ChoreState.COMPLETE.value:
                     complete_entities.append(full_entity_id)
-                    # Complete chores contribute to possible
-                    current_points_possible += chore_points
                 elif current_state == ChoreState.NOT_REQUESTED.value:
                     not_requested_entities.append(full_entity_id)
 
@@ -560,8 +552,9 @@ class ChoreSummarySensor(SensorEntity):
         points_earned = self._manager.points_storage.get_points_earned(self._assignee)
         # points_missed is cumulative (only updated by start_new_day)
         points_missed = self._manager.points_storage.get_points_missed(self._assignee)
-        # points_possible is dynamic (calculated from current chore states)
-        points_possible = current_points_possible
+        # points_possible is the total opportunity (earned + missed)
+        # INVARIANT: points_earned + points_missed = points_possible
+        points_possible = points_earned + points_missed
 
         return {
             "assignee": self._assignee,
