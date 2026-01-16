@@ -455,6 +455,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     daily_count = 0
 
     # Collect all state changes first, then apply them
+    # Track affected users to update only their summary sensors
+    affected_users = set()
     state_changes = []
     for sensor_id, sensor in sensors.items():
         # If user specified, only reset their chores
@@ -465,6 +467,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         # Read from _attr_native_value directly to get the most current state
         if sensor._attr_native_value == ChoreState.COMPLETE.value:  # noqa: SLF001
             chore_frequency = sensor.chore.frequency
+            affected_users.add(sensor.assignee)
 
             if chore_frequency == ChoreFrequency.MANUAL:
                 state_changes.append((sensor, ChoreState.NOT_REQUESTED))
@@ -504,9 +507,12 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         )
 
     # Update summary sensors to reflect new state (after all chore states are updated)
-    await _update_summary_sensors(hass, user)
-    # Yield again to ensure summary sensor updates are fully processed
-    await asyncio.sleep(0)
+    # Only update affected users' summary sensors
+    if affected_users:
+        for affected_user in affected_users:
+            await _update_summary_sensors(hass, affected_user)
+        # Yield after all summary sensors are updated to ensure updates are processed
+        await asyncio.sleep(0)
 
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
