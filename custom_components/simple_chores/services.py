@@ -118,16 +118,25 @@ async def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) 
     if not summary_sensors:
         return
 
+    update_tasks = []
     if user:
         sanitized_user = sanitize_entity_id(user)
         if sanitized_user in summary_sensors:
-            await summary_sensors[sanitized_user].async_update_ha_state(
-                force_refresh=True
+            update_tasks.append(
+                summary_sensors[sanitized_user].async_update_ha_state(
+                    force_refresh=True
+                )
             )
     else:
-        # Update all summary sensors and await completion
+        # Batch all summary sensor updates
         for summary_sensor in summary_sensors.values():
-            await summary_sensor.async_update_ha_state(force_refresh=True)
+            update_tasks.append(
+                summary_sensor.async_update_ha_state(force_refresh=True)
+            )
+
+    # Await all summary sensor updates to complete
+    if update_tasks:
+        await asyncio.gather(*update_tasks)
 
 
 CREATE_CHORE_SCHEMA = vol.Schema(
@@ -565,8 +574,6 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     # Await all sensor updates to complete before updating summary
     if update_tasks:
         await asyncio.gather(*update_tasks)
-        # Yield to event loop to ensure all state updates are fully processed
-        await asyncio.sleep(0)
 
     if user:
         LOGGER.info(
@@ -589,8 +596,6 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     if affected_users:
         for affected_user in affected_users:
             await _update_summary_sensors(hass, affected_user)
-        # Yield after all summary sensors are updated to ensure updates are processed
-        await asyncio.sleep(0)
 
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:

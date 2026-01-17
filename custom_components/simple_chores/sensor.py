@@ -295,10 +295,15 @@ class ChoreSensorManager:
             self.async_add_entities(summary_sensors_to_add)
             LOGGER.info("Added %d summary sensor(s)", len(summary_sensors_to_add))
 
-        # Update all existing summary sensors - schedule immediate updates
+        # Update all existing summary sensors - batch updates for consistency
         if self.summary_sensors:
+            update_tasks = []
             for summary_sensor in self.summary_sensors.values():
-                summary_sensor.async_schedule_update_ha_state(force_refresh=True)
+                update_tasks.append(
+                    summary_sensor.async_update_ha_state(force_refresh=True)
+                )
+            if update_tasks:
+                await asyncio.gather(*update_tasks)
 
 
 class ChoreSensor(RestoreEntity, SensorEntity):
