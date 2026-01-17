@@ -214,12 +214,24 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
 
     # Mark all matching sensors as complete and award points immediately
     affected_users = set()
+    state_update_tasks = []
+
     for sensor in matching_sensors:
         # Only award points if transitioning from non-complete state
         # Read from _attr_native_value directly to get the most current state
         was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
-        await sensor.set_state(ChoreState.COMPLETE)
+
+        # Update state directly and batch the HA state update
+        sensor._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
         affected_users.add(sensor.assignee)
+
+        # Audit log: chore marked complete
+        LOGGER.info(
+            "%s marked '%s' complete",
+            sensor.assignee,
+            sensor.chore.name,
+        )
 
         # Award points for newly completed chore
         if not was_complete and points_storage:
@@ -233,6 +245,10 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
                 chore_slug,
             )
 
+    # Await all chore sensor updates to complete
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
+
     if user:
         LOGGER.info("Marked chore '%s' as complete for user '%s'", chore_slug, user)
     else:
@@ -242,9 +258,10 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
             len(matching_sensors),
         )
 
-    # Update summary sensors for all affected users
-    for affected_user in affected_users:
-        await _update_summary_sensors(hass, affected_user)
+    # Update summary sensors for all affected users (after all chore sensors updated)
+    if affected_users:
+        for affected_user in affected_users:
+            await _update_summary_sensors(hass, affected_user)
 
 
 async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -276,12 +293,24 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
 
     # Mark all matching sensors as pending and deduct points if previously complete
     affected_users = set()
+    state_update_tasks = []
+
     for sensor in matching_sensors:
         # Deduct points if transitioning from complete to pending
         # Read from _attr_native_value directly to get the most current state
         was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
-        await sensor.set_state(ChoreState.PENDING)
+
+        # Update state directly and batch the HA state update
+        sensor._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
         affected_users.add(sensor.assignee)
+
+        # Audit log: chore marked pending
+        LOGGER.info(
+            "%s marked '%s' pending",
+            sensor.assignee,
+            sensor.chore.name,
+        )
 
         # Deduct points for un-completing a chore
         if was_complete and points_storage:
@@ -295,6 +324,10 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
                 chore_slug,
             )
 
+    # Await all chore sensor updates to complete
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
+
     if user:
         LOGGER.info("Marked chore '%s' as pending for user '%s'", chore_slug, user)
     else:
@@ -304,9 +337,10 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
             len(matching_sensors),
         )
 
-    # Update summary sensors for all affected users
-    for affected_user in affected_users:
-        await _update_summary_sensors(hass, affected_user)
+    # Update summary sensors for all affected users (after all chore sensors updated)
+    if affected_users:
+        for affected_user in affected_users:
+            await _update_summary_sensors(hass, affected_user)
 
 
 async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -337,9 +371,24 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
 
     # Mark all matching sensors as not requested
     affected_users = set()
+    state_update_tasks = []
+
     for sensor in matching_sensors:
-        await sensor.set_state(ChoreState.NOT_REQUESTED)
+        # Update state directly and batch the HA state update
+        sensor._attr_native_value = ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
         affected_users.add(sensor.assignee)
+
+        # Audit log: chore marked not requested
+        LOGGER.info(
+            "%s unmarked '%s'",
+            sensor.assignee,
+            sensor.chore.name,
+        )
+
+    # Await all chore sensor updates to complete
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
 
     if user:
         LOGGER.info(
@@ -352,9 +401,10 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
             len(matching_sensors),
         )
 
-    # Update summary sensors for all affected users
-    for affected_user in affected_users:
-        await _update_summary_sensors(hass, affected_user)
+    # Update summary sensors for all affected users (after all chore sensors updated)
+    if affected_users:
+        for affected_user in affected_users:
+            await _update_summary_sensors(hass, affected_user)
 
 
 async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -373,6 +423,9 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
     sanitized_user = sanitize_entity_id(user) if user else None
 
     reset_count = 0
+    affected_users = set()
+    state_update_tasks = []
+
     for sensor_id, sensor in sensors.items():
         # If user specified, only reset their chores
         if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
@@ -381,16 +434,32 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
         # Only reset sensors that are currently COMPLETE
         # Read from _attr_native_value directly to get the most current state
         if sensor._attr_native_value == ChoreState.COMPLETE.value:  # noqa: SLF001
-            await sensor.set_state(ChoreState.NOT_REQUESTED)
+            # Update state directly and batch the HA state update
+            sensor._attr_native_value = ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+            state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+            affected_users.add(sensor.assignee)
             reset_count += 1
+
+            # Audit log: chore reset
+            LOGGER.info(
+                "%s's completed chore '%s' was reset",
+                sensor.assignee,
+                sensor.chore.name,
+            )
+
+    # Await all chore sensor updates to complete
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
 
     if user:
         LOGGER.info("Reset %d completed chore(s) for user '%s'", reset_count, user)
     else:
         LOGGER.info("Reset %d completed chore(s) for all users", reset_count)
 
-    # Update summary sensors to reflect new state
-    await _update_summary_sensors(hass)
+    # Update summary sensors for all affected users (after all chore sensors updated)
+    if affected_users:
+        for affected_user in affected_users:
+            await _update_summary_sensors(hass, affected_user)
 
 
 async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -483,6 +552,15 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     for sensor, new_state in state_changes:
         sensor._attr_native_value = new_state.value
         update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+        # Audit log: chore reset for new day
+        action = "reset to pending" if new_state == ChoreState.PENDING else "unmarked"
+        LOGGER.info(
+            "New day: %s's chore '%s' %s",
+            sensor.assignee,
+            sensor.chore.name,
+            action,
+        )
 
     # Await all sensor updates to complete before updating summary
     if update_tasks:
@@ -640,7 +718,28 @@ async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None
             LOGGER.error(msg)
             raise ServiceValidationError(msg)
 
+    # Force update all chore sensors first to ensure current state
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    if sensors:
+        update_tasks = []
+        sanitized_user = sanitize_entity_id(user) if user else None
+
+        for sensor_id, sensor in sensors.items():
+            # If user specified, only update their chore sensors
+            if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
+                continue
+            update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+        if update_tasks:
+            await asyncio.gather(*update_tasks)
+
+    # Now update summary sensors with fresh chore sensor data
     await _update_summary_sensors(hass, user)
+
+    if user:
+        LOGGER.info("Refreshed summary sensor for user '%s'", user)
+    else:
+        LOGGER.info("Refreshed all summary sensors")
 
 
 async def handle_adjust_points(hass: HomeAssistant, call: ServiceCall) -> None:

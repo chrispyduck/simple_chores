@@ -54,7 +54,7 @@ def mock_sensor(hass) -> ChoreSensor:
     )
     with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
         sensor = ChoreSensor(hass, chore, "alice")
-        sensor.set_state = AsyncMock()
+        sensor.async_update_ha_state = AsyncMock()
     return sensor
 
 
@@ -102,7 +102,7 @@ class TestMarkCompleteService:
         await async_setup_services(hass)
 
         # Reset mock to ignore initialization calls
-        mock_sensor.set_state.reset_mock()
+        mock_sensor.async_update_ha_state.reset_mock()
 
         # Execute service
         await hass.services.async_call(
@@ -112,8 +112,9 @@ class TestMarkCompleteService:
             blocking=True,
         )
 
-        # Verify - should be called with COMPLETE (may be called multiple times due to internals)
-        mock_sensor.set_state.assert_called_with(ChoreState.COMPLETE)
+        # Verify state was set and sensor was updated
+        assert mock_sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
+        mock_sensor.async_update_ha_state.assert_called()
 
     @pytest.mark.asyncio
     async def test_mark_complete_logs_info(
@@ -242,7 +243,7 @@ class TestMarkPendingService:
         service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         # Reset mock to ignore initialization calls
-        mock_sensor.set_state.reset_mock()
+        mock_sensor.async_update_ha_state.reset_mock()
 
         await hass.services.async_call(
             DOMAIN,
@@ -251,7 +252,9 @@ class TestMarkPendingService:
             blocking=True,
         )
 
-        mock_sensor.set_state.assert_called_with(ChoreState.PENDING)
+        # Verify state was set and sensor was updated
+        assert mock_sensor._attr_native_value == ChoreState.PENDING.value  # noqa: SLF001
+        mock_sensor.async_update_ha_state.assert_called()
 
     @pytest.mark.asyncio
     async def test_mark_pending_logs_info(
@@ -358,7 +361,7 @@ class TestMarkNotRequestedService:
         service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         # Reset mock to ignore initialization calls
-        mock_sensor.set_state.reset_mock()
+        mock_sensor.async_update_ha_state.reset_mock()
 
         await hass.services.async_call(
             DOMAIN,
@@ -367,7 +370,9 @@ class TestMarkNotRequestedService:
             blocking=True,
         )
 
-        mock_sensor.set_state.assert_called_with(ChoreState.NOT_REQUESTED)
+        # Verify state was set and sensor was updated
+        assert mock_sensor._attr_native_value == ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+        mock_sensor.async_update_ha_state.assert_called()
 
     @pytest.mark.asyncio
     async def test_mark_not_requested_logs_info(
@@ -537,7 +542,7 @@ class TestServiceIntegration:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(hass, chore, "alice")
-            sensor.set_state = AsyncMock()
+            sensor.async_update_ha_state = AsyncMock()
 
         # Simulate sensor platform setup storing sensors
         hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}}
@@ -549,7 +554,7 @@ class TestServiceIntegration:
         service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
         # Reset mock to ignore initialization calls
-        sensor.set_state.reset_mock()
+        sensor.async_update_ha_state.reset_mock()
 
         # Call the mark_complete service
         await hass.services.async_call(
@@ -557,7 +562,8 @@ class TestServiceIntegration:
         )
 
         # Verify sensor state was updated
-        sensor.set_state.assert_called_with(ChoreState.COMPLETE)
+        assert sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor.async_update_ha_state.assert_called()
 
     @pytest.mark.asyncio
     async def test_multiple_sensors_different_users(self, hass) -> None:
@@ -573,8 +579,8 @@ class TestServiceIntegration:
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor_alice = ChoreSensor(hass, chore, "alice")
             sensor_bob = ChoreSensor(hass, chore, "bob")
-            sensor_alice.set_state = AsyncMock()
-            sensor_bob.set_state = AsyncMock()
+            sensor_alice.async_update_ha_state = AsyncMock()
+            sensor_bob.async_update_ha_state = AsyncMock()
 
         hass.data[DOMAIN] = {
             "sensors": {"alice_dishes": sensor_alice, "bob_dishes": sensor_bob}
@@ -585,30 +591,29 @@ class TestServiceIntegration:
         # Call service for alice
         service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"}
 
-        # Reset mocks to ignore initialization calls
-        sensor_alice.set_state.reset_mock()
-        sensor_bob.set_state.reset_mock()
-
         # Call service for alice
         await hass.services.async_call(
             DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
         )
 
         # Only alice's sensor should be updated
-        sensor_alice.set_state.assert_called_with(ChoreState.COMPLETE)
-        sensor_bob.set_state.assert_not_called()
+        assert sensor_alice._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor_alice.async_update_ha_state.assert_called()
+        # Bob's sensor should not have been updated
+        sensor_bob.async_update_ha_state.assert_not_called()
 
         # Reset and call for bob
-        sensor_alice.set_state.reset_mock()
-        sensor_bob.set_state.reset_mock()
+        sensor_alice.async_update_ha_state.reset_mock()
+        sensor_bob.async_update_ha_state.reset_mock()
         service_data = {ATTR_USER: "bob", ATTR_CHORE_SLUG: "dishes"}
         await hass.services.async_call(
             DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
         )
 
         # Only bob's sensor should be updated
-        sensor_alice.set_state.assert_not_called()
-        sensor_bob.set_state.assert_called_with(ChoreState.COMPLETE)
+        sensor_alice.async_update_ha_state.assert_not_called()
+        assert sensor_bob._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor_bob.async_update_ha_state.assert_called()
 
     @pytest.mark.asyncio
     async def test_service_with_special_characters_in_slug(self, hass) -> None:
@@ -622,7 +627,7 @@ class TestServiceIntegration:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(hass, chore, "alice")
-            sensor.set_state = AsyncMock()
+            sensor.async_update_ha_state = AsyncMock()
 
         # Key should be sanitized: hyphens converted to underscores
         hass.data[DOMAIN] = {"sensors": {"alice_test_chore_123": sensor}}
@@ -632,14 +637,16 @@ class TestServiceIntegration:
         service_data = {ATTR_USER: "alice", ATTR_CHORE_SLUG: "test-chore_123"}
 
         # Reset mock to ignore initialization calls
-        sensor.set_state.reset_mock()
+        sensor.async_update_ha_state.reset_mock()
 
         # Call the service
         await hass.services.async_call(
             DOMAIN, SERVICE_MARK_COMPLETE, service_data, blocking=True
         )
 
-        sensor.set_state.assert_called_with(ChoreState.COMPLETE)
+        # Verify sensor state was updated
+        assert sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor.async_update_ha_state.assert_called()
 
 
 class TestMarkAllAssignees:
@@ -878,16 +885,16 @@ class TestResetCompletedService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor1 = ChoreSensor(hass, chore1, "alice")
-            sensor1.set_state = AsyncMock()
-            sensor1._attr_native_value = ChoreState.COMPLETE.value
+            sensor1.async_update_ha_state = AsyncMock()
+            sensor1._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
 
             sensor2 = ChoreSensor(hass, chore2, "bob")
-            sensor2.set_state = AsyncMock()
-            sensor2._attr_native_value = ChoreState.COMPLETE.value
+            sensor2.async_update_ha_state = AsyncMock()
+            sensor2._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
 
             sensor3 = ChoreSensor(hass, chore3, "alice")
-            sensor3.set_state = AsyncMock()
-            sensor3._attr_native_value = ChoreState.PENDING.value
+            sensor3.async_update_ha_state = AsyncMock()
+            sensor3._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
 
         hass.data[DOMAIN] = {
             "sensors": {
@@ -911,11 +918,11 @@ class TestResetCompletedService:
             blocking=True,
         )
 
-        # Both COMPLETE sensors should be reset
-        sensor1.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
-        sensor2.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
-        # PENDING sensor should not be touched
-        sensor3.set_state.assert_not_called()
+        # Both COMPLETE sensors should be reset to NOT_REQUESTED
+        assert sensor1._attr_native_value == ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+        assert sensor2._attr_native_value == ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+        # Pending sensor should remain pending
+        assert sensor3._attr_native_value == ChoreState.PENDING.value  # noqa: SLF001
 
     @pytest.mark.asyncio
     async def test_reset_completed_specific_user(self, hass) -> None:
@@ -936,12 +943,12 @@ class TestResetCompletedService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor_alice = ChoreSensor(hass, chore1, "alice")
-            sensor_alice.set_state = AsyncMock()
-            sensor_alice._attr_native_value = ChoreState.COMPLETE.value
+            sensor_alice.async_update_ha_state = AsyncMock()
+            sensor_alice._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
 
             sensor_bob = ChoreSensor(hass, chore2, "bob")
-            sensor_bob.set_state = AsyncMock()
-            sensor_bob._attr_native_value = ChoreState.COMPLETE.value
+            sensor_bob.async_update_ha_state = AsyncMock()
+            sensor_bob._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
 
         hass.data[DOMAIN] = {
             "sensors": {
@@ -963,8 +970,9 @@ class TestResetCompletedService:
         )
 
         # Only alice's sensor should be reset
-        sensor_alice.set_state.assert_called_once_with(ChoreState.NOT_REQUESTED)
-        sensor_bob.set_state.assert_not_called()
+        assert sensor_alice._attr_native_value == ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+        # Bob's should remain complete
+        assert sensor_bob._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
 
     @pytest.mark.asyncio
     async def test_reset_completed_no_completed_chores(self, hass) -> None:
@@ -978,7 +986,7 @@ class TestResetCompletedService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(hass, chore, "alice")
-            sensor.set_state = AsyncMock()
+            sensor.async_update_ha_state = AsyncMock()
             sensor._attr_native_value = ChoreState.PENDING.value
 
         hass.data[DOMAIN] = {"sensors": {"alice_dishes": sensor}}
@@ -994,8 +1002,8 @@ class TestResetCompletedService:
             blocking=True,
         )
 
-        # Sensor should not be reset since it's not COMPLETE
-        sensor.set_state.assert_not_called()
+        # Sensor should not be updated since it's not COMPLETE
+        sensor.async_update_ha_state.assert_not_called()
 
 
 """Test code for reset_by_frequency service - will be added to test_services.py"""
@@ -1122,7 +1130,7 @@ class TestStartNewDayService:
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(hass, chore, "alice")
-            sensor.set_state = AsyncMock()
+            sensor.async_update_ha_state = AsyncMock()
             sensor._attr_native_value = ChoreState.PENDING.value
 
         hass.data[DOMAIN] = {"sensors": {"alice_manual_task": sensor}}
@@ -1138,8 +1146,8 @@ class TestStartNewDayService:
             blocking=True,
         )
 
-        # Sensor should not be reset since it's not COMPLETE
-        sensor.set_state.assert_not_called()
+        # Sensor should not be updated since it's not COMPLETE
+        sensor.async_update_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_start_new_day_mixed_states(self, hass) -> None:
@@ -1854,8 +1862,8 @@ class TestSummarySensorUpdates:
         )
 
         # Verify summary sensor was updated
-        # Should be called twice: once from set_state, once from _update_summary_sensors
-        assert mock_summary.async_update_ha_state.call_count == 2
+        # Should be called once from _update_summary_sensors
+        assert mock_summary.async_update_ha_state.call_count == 1
 
     @pytest.mark.asyncio
     async def test_mark_pending_updates_summary_sensor(self, hass) -> None:
@@ -1893,8 +1901,8 @@ class TestSummarySensorUpdates:
         )
 
         # Verify summary sensor was updated
-        # Should be called twice: once from set_state, once from _update_summary_sensors
-        assert mock_summary.async_update_ha_state.call_count == 2
+        # Should be called once from _update_summary_sensors
+        assert mock_summary.async_update_ha_state.call_count == 1
 
     @pytest.mark.asyncio
     async def test_mark_not_requested_updates_summary_sensor(self, hass) -> None:
@@ -1932,8 +1940,8 @@ class TestSummarySensorUpdates:
         )
 
         # Verify summary sensor was updated
-        # Should be called twice: once from set_state, once from _update_summary_sensors
-        assert mock_summary.async_update_ha_state.call_count == 2
+        # Should be called once from _update_summary_sensors
+        assert mock_summary.async_update_ha_state.call_count == 1
 
     @pytest.mark.asyncio
     async def test_reset_completed_updates_summary_sensor(self, hass) -> None:
@@ -1972,8 +1980,8 @@ class TestSummarySensorUpdates:
         )
 
         # Verify summary sensor was updated
-        # Should be called twice: once from set_state, once from _update_summary_sensors
-        assert mock_summary.async_update_ha_state.call_count == 2
+        # Should be called once from _update_summary_sensors
+        assert mock_summary.async_update_ha_state.call_count == 1
 
     @pytest.mark.asyncio
     async def test_start_new_day_updates_summary_sensor(self, hass) -> None:
@@ -2052,9 +2060,9 @@ class TestSummarySensorUpdates:
         )
 
         # Verify both summary sensors were updated
-        # Each sensor updated twice: once from each sensor's set_state, once from _update_summary_sensors
-        assert mock_summary_alice.async_update_ha_state.call_count == 2
-        assert mock_summary_bob.async_update_ha_state.call_count == 2
+        # Each sensor updated once from _update_summary_sensors
+        assert mock_summary_alice.async_update_ha_state.call_count == 1
+        assert mock_summary_bob.async_update_ha_state.call_count == 1
 
 
 class TestRefreshSummaryService:
@@ -2316,11 +2324,13 @@ class TestSummarySensorAttributes:
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             pending_sensor = ChoreSensor(hass, pending_chore, "alice")
             pending_sensor.async_update_ha_state = AsyncMock()
-            await pending_sensor.set_state(ChoreState.PENDING)
+            pending_sensor._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+            await pending_sensor.async_update_ha_state(force_refresh=True)
 
             complete_sensor = ChoreSensor(hass, complete_chore, "alice")
             complete_sensor.async_update_ha_state = AsyncMock()
-            await complete_sensor.set_state(ChoreState.COMPLETE)
+            complete_sensor._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+            await complete_sensor.async_update_ha_state(force_refresh=True)
 
         manager.sensors = {
             "alice_pending_chore": pending_sensor,

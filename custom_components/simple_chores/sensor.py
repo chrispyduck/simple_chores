@@ -422,33 +422,6 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         self._attr_icon = chore.icon
         self.async_write_ha_state()
 
-    async def set_state(self, state: ChoreState) -> None:
-        """
-        Set the chore state.
-
-        Args:
-            state: New state for the chore
-
-        """
-        self._attr_native_value = state.value
-
-        # Use async_update_ha_state to ensure the state is written before returning
-        await self.async_update_ha_state(force_refresh=True)
-
-        # Yield to event loop to ensure state update is fully processed
-        await asyncio.sleep(0)
-
-        # Update summary sensor for this assignee
-        if DOMAIN in self.hass.data and "summary_sensors" in self.hass.data[DOMAIN]:
-            summary_sensors = self.hass.data[DOMAIN]["summary_sensors"]
-            if self._assignee in summary_sensors:
-                # Await the summary sensor update to ensure it completes
-                await summary_sensors[self._assignee].async_update_ha_state(
-                    force_refresh=True
-                )
-                # Yield again to ensure summary update is processed
-                await asyncio.sleep(0)
-
 
 class ChoreSummarySensor(SensorEntity):
     """Summary sensor showing pending chore count for an assignee."""

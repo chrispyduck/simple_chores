@@ -224,7 +224,8 @@ class TestChoreSummarySensor:
         assert initial_attrs["total_chores"] == 2
 
         # Change dishes to PENDING using set_state
-        await alice_dishes.set_state(ChoreState.PENDING)
+        alice_dishes._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+        await alice_dishes.async_update_ha_state(force_refresh=True)
 
         # Check summary sensor attributes reflect the change
         attrs_after_pending = alice_summary.extra_state_attributes
@@ -241,7 +242,8 @@ class TestChoreSummarySensor:
         assert alice_summary.native_value == 1
 
         # Change vacuum to COMPLETE using set_state
-        await alice_vacuum.set_state(ChoreState.COMPLETE)
+        alice_vacuum._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        await alice_vacuum.async_update_ha_state(force_refresh=True)
 
         # Check summary sensor attributes reflect both changes
         attrs_after_complete = alice_summary.extra_state_attributes
@@ -258,7 +260,8 @@ class TestChoreSummarySensor:
         assert alice_summary.native_value == 1
 
         # Change dishes to COMPLETE
-        await alice_dishes.set_state(ChoreState.COMPLETE)
+        alice_dishes._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        await alice_dishes.async_update_ha_state(force_refresh=True)
 
         # Check summary sensor shows all complete
         attrs_all_complete = alice_summary.extra_state_attributes

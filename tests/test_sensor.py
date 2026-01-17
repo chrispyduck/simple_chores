@@ -390,7 +390,8 @@ class TestChoreSensor:
         sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
-        await sensor.set_state(ChoreState.PENDING)
+        sensor._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+        await sensor.async_update_ha_state(force_refresh=True)
 
         assert sensor.native_value == ChoreState.PENDING.value
         # Icon should remain as configured in chore, not change with state
@@ -403,7 +404,8 @@ class TestChoreSensor:
         sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
-        await sensor.set_state(ChoreState.COMPLETE)
+        sensor._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        await sensor.async_update_ha_state(force_refresh=True)
 
         assert sensor.native_value == ChoreState.COMPLETE.value
         # Icon should remain as configured in chore, not change with state
@@ -418,7 +420,8 @@ class TestChoreSensor:
         sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
-        await sensor.set_state(ChoreState.NOT_REQUESTED)
+        sensor._attr_native_value = ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+        await sensor.async_update_ha_state(force_refresh=True)
 
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value
         assert sensor.icon == "mdi:clipboard-list-outline"
@@ -453,27 +456,20 @@ class TestChoreSensor:
         assert sensor1._assignee == "alice"
 
     @pytest.mark.asyncio
-    async def test_set_state_updates_summary_sensor(
+    async def test_state_can_be_set_directly(
         self, hass, sample_chore: ChoreConfig
     ) -> None:
-        """Test that changing a chore state updates the summary sensor."""
-        # Create mock summary sensor
-        mock_summary = Mock()
-        mock_summary.async_update_ha_state = AsyncMock()
-
-        # Setup hass.data with summary sensor
-        hass.data["simple_chores"] = {
-            "states": {},
-            "summary_sensors": {"alice": mock_summary},
-        }
-
+        """Test that chore state can be set directly on _attr_native_value."""
         sensor = ChoreSensor(hass, sample_chore, "alice")
         sensor.async_update_ha_state = AsyncMock()
 
-        await sensor.set_state(ChoreState.COMPLETE)
+        # Set state directly (like service handlers do)
+        sensor._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        await sensor.async_update_ha_state(force_refresh=True)
 
-        # Verify summary sensor state was written
-        mock_summary.async_update_ha_state.assert_called_once()
+        # Verify state was set
+        assert sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_icon_preserved_with_custom_icon(self, hass) -> None:
@@ -493,15 +489,18 @@ class TestChoreSensor:
         assert sensor.icon == "mdi:broom"
 
         # Change state to PENDING
-        await sensor.set_state(ChoreState.PENDING)
+        sensor._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+        await sensor.async_update_ha_state(force_refresh=True)
         assert sensor.icon == "mdi:broom"  # Icon should NOT change
 
         # Change state to COMPLETE
-        await sensor.set_state(ChoreState.COMPLETE)
+        sensor._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        await sensor.async_update_ha_state(force_refresh=True)
         assert sensor.icon == "mdi:broom"  # Icon should still NOT change
 
         # Change state back to NOT_REQUESTED
-        await sensor.set_state(ChoreState.NOT_REQUESTED)
+        sensor._attr_native_value = ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+        await sensor.async_update_ha_state(force_refresh=True)
         assert sensor.icon == "mdi:broom"  # Icon should remain custom icon
 
     def test_sensor_should_not_poll(self, hass, sample_chore: ChoreConfig) -> None:
@@ -515,26 +514,3 @@ class TestChoreSensor:
         sensor = ChoreSensor(hass, sample_chore, "alice")
 
         assert sensor.has_entity_name is False
-
-    @pytest.mark.asyncio
-    async def test_summary_sensor_state_is_written(
-        self, hass, sample_chore: ChoreConfig
-    ) -> None:
-        """Test that summary sensor state is written when chore state changes."""
-        mock_summary = Mock()
-        mock_summary.async_update_ha_state = AsyncMock()
-
-        # Setup hass.data with summary sensor
-        hass.data["simple_chores"] = {
-            "states": {},
-            "summary_sensors": {"alice": mock_summary},
-        }
-
-        sensor = ChoreSensor(hass, sample_chore, "alice")
-        sensor.async_update_ha_state = AsyncMock()
-
-        # Set state and verify the summary state was written
-        await sensor.set_state(ChoreState.PENDING)
-
-        # Verify the summary sensor state was written
-        mock_summary.async_update_ha_state.assert_called_once()
