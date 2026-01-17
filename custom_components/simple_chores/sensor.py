@@ -530,15 +530,24 @@ class ChoreSummarySensor(SensorEntity):
 
         all_entities = pending_entities + complete_entities + not_requested_entities
 
+        # Calculate points for pending chores (current day's opportunities not yet earned/missed)
+        pending_points = 0
+        for sensor in self._manager.sensors.values():
+            if (
+                sensor.assignee == self._assignee
+                and sensor._attr_native_value == ChoreState.PENDING.value  # noqa: SLF001
+            ):
+                pending_points += sensor.chore.points
+
         # Get total points for this assignee
         total_points = self._manager.points_storage.get_points(self._assignee)
         # points_earned is resettable (updated when points added, reset by reset_points)
         points_earned = self._manager.points_storage.get_points_earned(self._assignee)
         # points_missed is cumulative (only updated by start_new_day)
         points_missed = self._manager.points_storage.get_points_missed(self._assignee)
-        # points_possible is the total opportunity (earned + missed)
-        # INVARIANT: points_earned + points_missed = points_possible
-        points_possible = points_earned + points_missed
+        # points_possible is the total opportunity since last reset:
+        # = what was earned + what was missed + what's still pending
+        points_possible = points_earned + points_missed + pending_points
 
         return {
             "assignee": self._assignee,
