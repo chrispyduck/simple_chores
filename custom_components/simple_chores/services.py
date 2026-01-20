@@ -123,7 +123,7 @@ async def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) 
         sanitized_user = sanitize_entity_id(user)
         if sanitized_user in summary_sensors:
             update_tasks.append(
-                summary_sensors[sanitized_user].async_update_ha_state(
+                summary_sensors[sanitized_user].async_schedule_update_ha_state(
                     force_refresh=True
                 )
             )
@@ -131,7 +131,7 @@ async def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) 
         # Batch all summary sensor updates
         for summary_sensor in summary_sensors.values():
             update_tasks.append(
-                summary_sensor.async_update_ha_state(force_refresh=True)
+                summary_sensor.async_schedule_update_ha_state(force_refresh=True)
             )
 
     # Await all summary sensor updates to complete

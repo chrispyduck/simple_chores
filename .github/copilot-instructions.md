@@ -59,6 +59,14 @@ Services that modify chore/point state MUST call `_update_summary_sensors(hass, 
 - create_chore, update_chore, delete_chore
 - adjust_points, reset_points
 
+**Summary Sensor Update Pattern:**
+- The `_update_summary_sensors()` function uses `async_schedule_update_ha_state(force_refresh=True)`
+- This method calls `async_update()` to refresh the entity, then writes the updated state
+- It returns a coroutine that should be awaited (we use `asyncio.gather()` for batch updates)
+- This ensures properties like `native_value` and `extra_state_attributes` are re-evaluated before writing
+- For sensors with empty `async_update()` methods, the re-evaluation happens via property getters
+- `PARALLEL_UPDATES = 0` in sensor.py - we manage our own parallelism with `asyncio.gather()`
+
 **State Reading Pattern (CRITICAL!):**
 - **ALWAYS use `sensor._attr_native_value` when reading current sensor state in service handlers**
 - **NEVER use `sensor.native_value`** - it may return cached values from the state machine
@@ -69,11 +77,6 @@ Services that modify chore/point state MUST call `_update_summary_sensors(hass, 
   - Read state for summary sensor attribute calculations
 - Example: `was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001`
 - The summary sensor's `extra_state_attributes` property also uses this pattern for the same reason
-
-**Event Loop Synchronization:**
-- After batch state updates (e.g., `asyncio.gather()`), add `await asyncio.sleep(0)` to yield to event loop
-- This ensures state updates are fully processed before reading them elsewhere
-- Example in `start_new_day`: yield after sensor updates, then yield after summary updates
 
 ## Development Workflow
 

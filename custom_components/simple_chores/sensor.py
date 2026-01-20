@@ -22,6 +22,11 @@ if TYPE_CHECKING:
     from .config_loader import ConfigLoader
 
 
+# We manage our own parallelism using asyncio.gather() in services.py
+# Our async_update() is empty, so there's no I/O to limit
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
