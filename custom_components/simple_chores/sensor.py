@@ -492,6 +492,11 @@ class ChoreSummarySensor(SensorEntity):
             "points_possible": 0,
         }
 
+    async def async_added_to_hass(self) -> None:
+        """Called when entity is added to hass - populate cache with initial data."""
+        await super().async_added_to_hass()
+        await self.async_update()
+
     async def async_update(self) -> None:
         """
         Update the sensor by computing current values from chore sensors.

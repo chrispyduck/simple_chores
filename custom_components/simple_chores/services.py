@@ -591,10 +591,9 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         )
 
     # Update summary sensors to reflect new state (after all chore states are updated)
-    # Only update affected users' summary sensors
-    if affected_users:
-        for affected_user in affected_users:
-            await _update_summary_sensors(hass, affected_user)
+    # Update summary sensors for the specified user or all users
+    # (points_missed gets updated even if no chores were completed)
+    await _update_summary_sensors(hass, user)
 
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
