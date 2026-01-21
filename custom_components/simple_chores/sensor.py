@@ -53,7 +53,13 @@ async def async_setup_entry(
 
     # Store sensors and points storage in hass.data for service access
     hass.data[DOMAIN]["sensors"] = manager.sensors
+    hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
+    LOGGER.debug(
+        "Stored %d chore sensors and %d summary sensors in hass.data (config entry setup)",
+        len(manager.sensors),
+        len(manager.summary_sensors),
+    )
 
     # Register callback for config changes
     config_loader.register_callback(manager.async_config_changed)
@@ -89,6 +95,11 @@ async def async_setup_platform(
     hass.data[DOMAIN]["sensors"] = manager.sensors
     hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
+    LOGGER.debug(
+        "Stored %d chore sensors and %d summary sensors in hass.data (YAML setup)",
+        len(manager.sensors),
+        len(manager.summary_sensors),
+    )
 
     # Register callback for config changes
     config_loader.register_callback(manager.async_config_changed)
@@ -495,6 +506,10 @@ class ChoreSummarySensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Called when entity is added to hass - populate cache with initial data."""
         await super().async_added_to_hass()
+        LOGGER.debug(
+            "Summary sensor for %s added to Home Assistant, initializing cache",
+            self._assignee,
+        )
         await self.async_update()
 
     async def async_update(self) -> None:
@@ -550,6 +565,19 @@ class ChoreSummarySensor(SensorEntity):
             "points_missed": points_missed,
             "points_possible": points_possible,
         }
+
+        LOGGER.debug(
+            "Summary sensor updated for %s: %d pending, %d complete, %d not_requested, "
+            "points(total=%d, earned=%d, missed=%d, possible=%d)",
+            self._assignee,
+            pending_count,
+            len(complete_entities),
+            len(not_requested_entities),
+            total_points,
+            points_earned,
+            points_missed,
+            points_possible,
+        )
 
     @property
     def native_value(self) -> int:

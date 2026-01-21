@@ -253,13 +253,19 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         # Award points for newly completed chore
         if not was_complete and points_storage:
             chore_points = sensor.chore.points
+            old_total = points_storage.get_points(sensor.assignee)
+            old_earned = points_storage.get_points_earned(sensor.assignee)
             await points_storage.add_points(sensor.assignee, chore_points)
             await points_storage.add_points_earned(sensor.assignee, chore_points)
             LOGGER.debug(
-                "Awarded %d points to '%s' for completing chore '%s'",
+                "Awarded %d points to '%s' for completing chore '%s' (total: %d→%d, earned: %d→%d)",
                 chore_points,
                 sensor.assignee,
                 chore_slug,
+                old_total,
+                old_total + chore_points,
+                old_earned,
+                old_earned + chore_points,
             )
 
     # Await all chore sensor updates to complete
@@ -332,13 +338,19 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
         # Deduct points for un-completing a chore
         if was_complete and points_storage:
             chore_points = sensor.chore.points
+            old_total = points_storage.get_points(sensor.assignee)
+            old_earned = points_storage.get_points_earned(sensor.assignee)
             await points_storage.add_points(sensor.assignee, -chore_points)
             await points_storage.add_points_earned(sensor.assignee, -chore_points)
             LOGGER.debug(
-                "Deducted %d points from '%s' for un-completing chore '%s'",
+                "Deducted %d points from '%s' for un-completing chore '%s' (total: %d→%d, earned: %d→%d)",
                 chore_points,
                 sensor.assignee,
                 chore_slug,
+                old_total,
+                old_total - chore_points,
+                old_earned,
+                old_earned - chore_points,
             )
 
     # Await all chore sensor updates to complete
