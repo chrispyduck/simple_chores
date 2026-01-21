@@ -77,22 +77,26 @@ class TestChoreSummarySensor:
         await manager.async_setup()
 
         alice_summary = manager.summary_sensors["alice"]
+        await alice_summary.async_update()
 
         # Initially, no chores are pending
         assert alice_summary.native_value == 0
 
         # Set alice's dishes to pending (directly set state without calling async_write_ha_state)
         manager.sensors["alice_dishes"]._attr_native_value = ChoreState.PENDING.value
+        await alice_summary.async_update()
         assert alice_summary.native_value == 1
 
         # Set alice's vacuum to pending
         manager.sensors["alice_vacuum"]._attr_native_value = ChoreState.PENDING.value
+        await alice_summary.async_update()
         assert alice_summary.native_value == 2
 
         # Set dishes back to not requested
         manager.sensors[
             "alice_dishes"
         ]._attr_native_value = ChoreState.NOT_REQUESTED.value
+        await alice_summary.async_update()
         assert alice_summary.native_value == 1
 
     @pytest.mark.asyncio
@@ -114,6 +118,7 @@ class TestChoreSummarySensor:
         # alice has: alice_dishes, alice_vacuum (bob_dishes is bob's)
         manager.sensors["alice_dishes"]._attr_native_value = ChoreState.PENDING.value
         manager.sensors["alice_vacuum"]._attr_native_value = ChoreState.COMPLETE.value
+        await alice_summary.async_update()
 
         attrs = alice_summary.extra_state_attributes
 
@@ -132,6 +137,7 @@ class TestChoreSummarySensor:
 
         # Test with bob to verify not_requested_chores attribute exists
         bob_summary = manager.summary_sensors["bob"]
+        await bob_summary.async_update()
         bob_attrs = bob_summary.extra_state_attributes
 
         # bob has: bob_dishes, bob_laundry (both default to NOT_REQUESTED)
@@ -166,6 +172,8 @@ class TestChoreSummarySensor:
         manager.sensors["bob_dishes"]._attr_native_value = ChoreState.PENDING.value
         manager.sensors["alice_vacuum"]._attr_native_value = ChoreState.PENDING.value
         manager.sensors["bob_laundry"]._attr_native_value = ChoreState.PENDING.value
+        await alice_summary.async_update()
+        await bob_summary.async_update()
 
         # Alice has 2 pending chores (dishes and vacuum)
         assert alice_summary.native_value == 2
@@ -215,6 +223,7 @@ class TestChoreSummarySensor:
         alice_summary = manager.summary_sensors["alice"]
         alice_dishes = manager.sensors["alice_dishes"]
         alice_vacuum = manager.sensors["alice_vacuum"]
+        await alice_summary.async_update()
 
         # Initial state - both chores should be NOT_REQUESTED
         initial_attrs = alice_summary.extra_state_attributes
@@ -226,6 +235,7 @@ class TestChoreSummarySensor:
         # Change dishes to PENDING using set_state
         alice_dishes._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
         await alice_dishes.async_update_ha_state(force_refresh=True)
+        await alice_summary.async_update()
 
         # Check summary sensor attributes reflect the change
         attrs_after_pending = alice_summary.extra_state_attributes
@@ -244,6 +254,7 @@ class TestChoreSummarySensor:
         # Change vacuum to COMPLETE using set_state
         alice_vacuum._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
         await alice_vacuum.async_update_ha_state(force_refresh=True)
+        await alice_summary.async_update()
 
         # Check summary sensor attributes reflect both changes
         attrs_after_complete = alice_summary.extra_state_attributes
@@ -262,6 +273,7 @@ class TestChoreSummarySensor:
         # Change dishes to COMPLETE
         alice_dishes._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
         await alice_dishes.async_update_ha_state(force_refresh=True)
+        await alice_summary.async_update()
 
         # Check summary sensor shows all complete
         attrs_all_complete = alice_summary.extra_state_attributes
@@ -303,6 +315,7 @@ class TestChoreSummarySensor:
         await points_storage.set_points("alice", 100)
         await points_storage.set_points_earned("alice", 50)
         await points_storage.set_points_missed("alice", 10)
+        await alice_summary.async_update()
 
         attrs = alice_summary.extra_state_attributes
 

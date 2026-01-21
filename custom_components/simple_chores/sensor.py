@@ -476,58 +476,48 @@ class ChoreSummarySensor(SensorEntity):
             suggested_area="Household",
         )
 
+        # Initialize cached values with defaults
+        # These will be updated by async_update()
+        self._pending_count = 0
+        self._cached_attributes = {
+            "assignee": self._assignee,
+            "pending_chores": [],
+            "complete_chores": [],
+            "not_requested_chores": [],
+            "all_chores": [],
+            "total_chores": 0,
+            "total_points": 0,
+            "points_earned": 0,
+            "points_missed": 0,
+            "points_possible": 0,
+        }
+
     async def async_update(self) -> None:
         """
-        Update the sensor.
+        Update the sensor by computing current values from chore sensors.
 
-        This method doesn't fetch data since we compute everything from properties,
-        but implementing it ensures Home Assistant re-evaluates our properties
-        when force_refresh=True is used.
-        """
-        # Properties are computed dynamically from manager.sensors
-        # This method just needs to exist to trigger property re-evaluation
-
-    @property
-    def native_value(self) -> int:
-        """
-        Return the number of pending chores.
-
-        Returns:
-            Count of pending chores for this assignee
-
-        """
-        pending_count = 0
-        for sensor in self._manager.sensors.values():
-            if (
-                sensor.assignee == self._assignee
-                and sensor._attr_native_value == ChoreState.PENDING.value  # noqa: SLF001
-            ):
-                pending_count += 1
-        return pending_count
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """
-        Return the state attributes.
-
-        Returns:
-            Dictionary of state attributes with entity IDs by state
-
+        This follows the standard Home Assistant pattern:
+        - Compute/fetch data here
+        - Cache it in instance variables
+        - Properties return the cached values
         """
         pending_entities = []
         complete_entities = []
         not_requested_entities = []
+        pending_count = 0
+        pending_points = 0
 
         for entity_id, sensor in self._manager.sensors.items():
             if sensor.assignee == self._assignee:
                 full_entity_id = f"sensor.simple_chore_{entity_id}"
                 # Read from _attr_native_value directly to get the most current state.
                 # This ensures we see updates immediately, even before the state machine updates.
-                # Without the private member access the summary value won't be updated correctly.
                 current_state = sensor._attr_native_value  # noqa: SLF001
 
                 if current_state == ChoreState.PENDING.value:
                     pending_entities.append(full_entity_id)
+                    pending_count += 1
+                    pending_points += sensor.chore.points
                 elif current_state == ChoreState.COMPLETE.value:
                     complete_entities.append(full_entity_id)
                 elif current_state == ChoreState.NOT_REQUESTED.value:
@@ -535,26 +525,15 @@ class ChoreSummarySensor(SensorEntity):
 
         all_entities = pending_entities + complete_entities + not_requested_entities
 
-        # Calculate points for pending chores (current day's opportunities not yet earned/missed)
-        pending_points = 0
-        for sensor in self._manager.sensors.values():
-            if (
-                sensor.assignee == self._assignee
-                and sensor._attr_native_value == ChoreState.PENDING.value  # noqa: SLF001
-            ):
-                pending_points += sensor.chore.points
-
-        # Get total points for this assignee
+        # Get points data
         total_points = self._manager.points_storage.get_points(self._assignee)
-        # points_earned is resettable (updated when points added, reset by reset_points)
         points_earned = self._manager.points_storage.get_points_earned(self._assignee)
-        # points_missed is cumulative (only updated by start_new_day)
         points_missed = self._manager.points_storage.get_points_missed(self._assignee)
-        # points_possible is the total opportunity since last reset:
-        # = what was earned + what was missed + what's still pending
         points_possible = points_earned + points_missed + pending_points
 
-        return {
+        # Cache the computed values
+        self._pending_count = pending_count
+        self._cached_attributes = {
             "assignee": self._assignee,
             "pending_chores": pending_entities,
             "complete_chores": complete_entities,
@@ -566,3 +545,25 @@ class ChoreSummarySensor(SensorEntity):
             "points_missed": points_missed,
             "points_possible": points_possible,
         }
+
+    @property
+    def native_value(self) -> int:
+        """
+        Return the number of pending chores.
+
+        Returns:
+            Count of pending chores for this assignee (from cached value)
+
+        """
+        return self._pending_count
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """
+        Return the state attributes.
+
+        Returns:
+            Dictionary of state attributes (from cached values)
+
+        """
+        return self._cached_attributes
