@@ -119,16 +119,25 @@ async def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) 
     """
     summary_sensors = hass.data[DOMAIN].get("summary_sensors", {})
     if not summary_sensors:
+        LOGGER.debug("No summary sensors found to update")
         return
 
     if user:
         sanitized_user = sanitize_entity_id(user)
         if sanitized_user in summary_sensors:
+            LOGGER.debug("Updating summary sensor for user '%s'", user)
             await summary_sensors[sanitized_user].async_update_ha_state(
                 force_refresh=True
             )
+        else:
+            LOGGER.warning(
+                "Summary sensor not found for user '%s' (sanitized: '%s')",
+                user,
+                sanitized_user,
+            )
     else:
         # Update all summary sensors
+        LOGGER.debug("Updating all %d summary sensors", len(summary_sensors))
         update_tasks = []
         for summary_sensor in summary_sensors.values():
             update_tasks.append(
