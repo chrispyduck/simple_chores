@@ -11,7 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 from .const import LOGGER
-from .models import ChoreConfig, SimpleChoresConfig
+from .models import ChoreConfig, PrivilegeConfig, SimpleChoresConfig
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -282,7 +282,9 @@ class ConfigLoader:
 
         # Add chore to config
         new_chores = list(self._config.chores) + [chore]
-        new_config = SimpleChoresConfig(chores=new_chores)
+        new_config = SimpleChoresConfig(
+            chores=new_chores, privileges=self._config.privileges
+        )
 
         # Save and notify
         await self.async_save(new_config)
@@ -347,7 +349,9 @@ class ConfigLoader:
         new_chores = [
             updated_chore if c.slug == slug else c for c in self._config.chores
         ]
-        new_config = SimpleChoresConfig(chores=new_chores)
+        new_config = SimpleChoresConfig(
+            chores=new_chores, privileges=self._config.privileges
+        )
 
         # Save and notify
         await self.async_save(new_config)
@@ -377,10 +381,139 @@ class ConfigLoader:
 
         # Remove from config
         new_chores = [c for c in self._config.chores if c.slug != slug]
-        new_config = SimpleChoresConfig(chores=new_chores)
+        new_config = SimpleChoresConfig(
+            chores=new_chores, privileges=self._config.privileges
+        )
 
         # Save and notify
         await self.async_save(new_config)
         await self._notify_callbacks()
 
         LOGGER.info("Deleted chore '%s'", slug)
+
+    async def async_create_privilege(self, privilege: PrivilegeConfig) -> None:
+        """
+        Create a new privilege and save to YAML.
+
+        Args:
+            privilege: Privilege configuration to create
+
+        Raises:
+            ConfigLoadError: If privilege already exists or save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        # Check if privilege with this slug already exists
+        if self._config.get_privilege_by_slug(privilege.slug):
+            msg = f"Privilege with slug '{privilege.slug}' already exists"
+            raise ConfigLoadError(msg)
+
+        # Add privilege to config
+        new_privileges = list(self._config.privileges) + [privilege]
+        new_config = SimpleChoresConfig(
+            chores=self._config.chores, privileges=new_privileges
+        )
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Created privilege '%s'", privilege.slug)
+
+    async def async_update_privilege(
+        self,
+        slug: str,
+        name: str | None = None,
+        icon: str | None = None,
+        behavior: str | None = None,
+        linked_chores: list[str] | None = None,
+        assignees: list[str] | None = None,
+    ) -> None:
+        """
+        Update an existing privilege and save to YAML.
+
+        Args:
+            slug: Slug of the privilege to update
+            name: New name (None to keep current)
+            icon: New icon (None to keep current)
+            behavior: New behavior (None to keep current)
+            linked_chores: New linked chores list (None to keep current)
+            assignees: New assignees list (None to keep current)
+
+        Raises:
+            ConfigLoadError: If privilege not found or save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        # Find the privilege
+        privilege = self._config.get_privilege_by_slug(slug)
+        if not privilege:
+            msg = f"Privilege with slug '{slug}' not found"
+            raise ConfigLoadError(msg)
+
+        # Create updated privilege
+        updated_data = privilege.model_dump()
+        if name is not None:
+            updated_data["name"] = name
+        if icon is not None:
+            updated_data["icon"] = icon
+        if behavior is not None:
+            updated_data["behavior"] = behavior
+        if linked_chores is not None:
+            updated_data["linked_chores"] = linked_chores
+        if assignees is not None:
+            updated_data["assignees"] = assignees
+
+        updated_privilege = PrivilegeConfig(**updated_data)
+
+        # Replace in config
+        new_privileges = [
+            updated_privilege if p.slug == slug else p for p in self._config.privileges
+        ]
+        new_config = SimpleChoresConfig(
+            chores=self._config.chores, privileges=new_privileges
+        )
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Updated privilege '%s'", slug)
+
+    async def async_delete_privilege(self, slug: str) -> None:
+        """
+        Delete a privilege and save to YAML.
+
+        Args:
+            slug: Slug of the privilege to delete
+
+        Raises:
+            ConfigLoadError: If privilege not found or save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        # Check if privilege exists
+        if not self._config.get_privilege_by_slug(slug):
+            msg = f"Privilege with slug '{slug}' not found"
+            raise ConfigLoadError(msg)
+
+        # Remove from config
+        new_privileges = [p for p in self._config.privileges if p.slug != slug]
+        new_config = SimpleChoresConfig(
+            chores=self._config.chores, privileges=new_privileges
+        )
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Deleted privilege '%s'", slug)
