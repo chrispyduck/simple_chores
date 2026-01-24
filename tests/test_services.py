@@ -96,7 +96,7 @@ class TestServiceSetup:
 
         # Verify all services are in the correct domain
         services = hass.services.async_services_for_domain(DOMAIN)
-        assert len(services) == 18  # 11 chore services + 7 privilege services
+        assert len(services) == 11  # Should have exactly 11 services
 
 
 class TestMarkCompleteService:
@@ -1478,7 +1478,9 @@ class TestStartNewDayService:
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor1 = ChoreSensor(hass, chore1, "alice")
             sensor1.async_update_ha_state = AsyncMock()
-            sensor1.set_state(ChoreState.PENDING.value)  # Will add 15 to missed
+            sensor1.set_state(
+                ChoreState.PENDING.value
+            )  # Will add 15 to missed
 
             sensor2 = ChoreSensor(hass, chore2, "alice")
             sensor2.async_update_ha_state = AsyncMock()
@@ -1550,7 +1552,9 @@ class TestStartNewDayService:
 
             sensor2 = ChoreSensor(hass, chore2, "alice")
             sensor2.async_update_ha_state = AsyncMock()
-            sensor2.set_state(ChoreState.NOT_REQUESTED.value)  # Should be ignored
+            sensor2.set_state(
+                ChoreState.NOT_REQUESTED.value
+            )  # Should be ignored
 
         hass.data[DOMAIN] = {
             "sensors": {
@@ -1833,11 +1837,15 @@ class TestStartNewDayService:
         assert len(updated_attrs["not_requested_chores"]) == 1  # complete2 (manual)
 
         # Verify the actual sensor states were updated
-        assert sensor1.get_state() == ChoreState.PENDING.value  # daily -> pending
+        assert (
+            sensor1.get_state() == ChoreState.PENDING.value
+        )  # daily -> pending
         assert (
             sensor2.get_state() == ChoreState.NOT_REQUESTED.value
         )  # manual -> not_requested
-        assert sensor3.get_state() == ChoreState.PENDING.value  # was already pending
+        assert (
+            sensor3.get_state() == ChoreState.PENDING.value
+        )  # was already pending
 
 
 class TestSummarySensorUpdates:
@@ -2341,12 +2349,12 @@ class TestSummarySensorAttributes:
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             pending_sensor = ChoreSensor(hass, pending_chore, "alice")
             pending_sensor.async_update_ha_state = AsyncMock()
-            pending_sensor.set_state(ChoreState.PENDING.value)
+            pending_sensor.set_state(ChoreState.PENDING.value)  #
             await pending_sensor.async_update_ha_state(force_refresh=True)
 
             complete_sensor = ChoreSensor(hass, complete_chore, "alice")
             complete_sensor.async_update_ha_state = AsyncMock()
-            complete_sensor.set_state(ChoreState.COMPLETE.value)
+            complete_sensor.set_state(ChoreState.COMPLETE.value)  #
             await complete_sensor.async_update_ha_state(force_refresh=True)
 
         manager.sensors = {

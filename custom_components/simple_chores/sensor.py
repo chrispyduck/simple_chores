@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
@@ -15,14 +14,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, LOGGER, sanitize_entity_id
 from .data import PointsStorage
-from .models import (
-    ChoreConfig,
-    ChoreState,
-    PrivilegeBehavior,
-    PrivilegeConfig,
-    PrivilegeState,
-    SimpleChoresConfig,
-)
+from .models import ChoreConfig, ChoreState, SimpleChoresConfig
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -62,14 +54,11 @@ async def async_setup_entry(
     # Store sensors and points storage in hass.data for service access
     hass.data[DOMAIN]["sensors"] = manager.sensors
     hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
-    hass.data[DOMAIN]["privilege_sensors"] = manager.privilege_sensors
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
-    hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
-        "Stored %d chore sensors, %d summary sensors, %d privilege sensors in hass.data (config entry setup)",
+        "Stored %d chore sensors and %d summary sensors in hass.data (config entry setup)",
         len(manager.sensors),
         len(manager.summary_sensors),
-        len(manager.privilege_sensors),
     )
 
     # Register callback for config changes
@@ -105,14 +94,11 @@ async def async_setup_platform(
     # Store sensors and points storage in hass.data for service access
     hass.data[DOMAIN]["sensors"] = manager.sensors
     hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
-    hass.data[DOMAIN]["privilege_sensors"] = manager.privilege_sensors
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
-    hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
-        "Stored %d chore sensors, %d summary sensors, %d privilege sensors in hass.data (YAML setup)",
+        "Stored %d chore sensors and %d summary sensors in hass.data (YAML setup)",
         len(manager.sensors),
         len(manager.summary_sensors),
-        len(manager.privilege_sensors),
     )
 
     # Register callback for config changes
@@ -142,7 +128,6 @@ class ChoreSensorManager:
         self.config_loader = config_loader
         self.sensors: dict[str, ChoreSensor] = {}
         self.summary_sensors: dict[str, ChoreSummarySensor] = {}  # type: ignore[name-defined]
-        self.privilege_sensors: dict[str, PrivilegeSensor] = {}  # type: ignore[name-defined]
         self.points_storage = PointsStorage(hass)
 
     async def async_setup(self) -> None:
@@ -150,7 +135,6 @@ class ChoreSensorManager:
         await self.points_storage.async_load()
         config = self.config_loader.config
         await self._create_sensors_from_config(config)
-        await self._create_privilege_sensors(config)
         await self._create_summary_sensors(config)
 
     async def async_config_changed(self, config: SimpleChoresConfig) -> None:
@@ -163,7 +147,6 @@ class ChoreSensorManager:
         """
         LOGGER.debug("Config changed, updating sensors")
         await self._update_sensors_from_config(config)
-        await self._update_privilege_sensors(config)
         await self._update_summary_sensors(config)
 
     async def _create_sensors_from_config(self, config: SimpleChoresConfig) -> None:
@@ -337,97 +320,6 @@ class ChoreSensorManager:
                 )
             if update_tasks:
                 await asyncio.gather(*update_tasks)
-
-    async def _create_privilege_sensors(self, config: SimpleChoresConfig) -> None:
-        """
-        Create privilege sensors from configuration.
-
-        Args:
-            config: Configuration to create sensors from
-
-        """
-        sensors_to_add = []
-
-        for privilege in config.privileges:
-            for assignee in privilege.assignees:
-                entity_id = f"{sanitize_entity_id(assignee)}_{sanitize_entity_id(privilege.slug)}"
-
-                if entity_id not in self.privilege_sensors:
-                    sensor = PrivilegeSensor(self.hass, privilege, assignee, self)
-                    self.privilege_sensors[entity_id] = sensor
-                    sensors_to_add.append(sensor)
-                    LOGGER.debug(
-                        "Created privilege sensor for privilege %s, assignee %s",
-                        privilege.slug,
-                        assignee,
-                    )
-
-        if sensors_to_add:
-            self.async_add_entities(sensors_to_add)
-            LOGGER.info("Added %d privilege sensor(s)", len(sensors_to_add))
-
-    async def _update_privilege_sensors(self, config: SimpleChoresConfig) -> None:
-        """
-        Update privilege sensors based on new configuration.
-
-        Args:
-            config: New configuration
-
-        """
-        # Build set of expected entity IDs from config
-        expected_entities = set()
-        for privilege in config.privileges:
-            for assignee in privilege.assignees:
-                expected_entities.add(
-                    f"{sanitize_entity_id(assignee)}_{sanitize_entity_id(privilege.slug)}"
-                )
-
-        # Remove sensors that are no longer in config
-        sensors_to_remove = []
-        for entity_id, sensor in self.privilege_sensors.items():
-            if entity_id not in expected_entities:
-                sensors_to_remove.append(entity_id)
-                if sensor.hass is not None and hasattr(sensor, "platform"):
-                    try:
-                        await sensor.async_remove()
-                        LOGGER.debug("Removed privilege sensor %s", entity_id)
-                    except Exception as err:
-                        LOGGER.warning(
-                            "Failed to remove privilege sensor %s: %s", entity_id, err
-                        )
-                else:
-                    LOGGER.debug(
-                        "Privilege sensor %s not yet registered, skipping removal",
-                        entity_id,
-                    )
-
-        for entity_id in sensors_to_remove:
-            del self.privilege_sensors[entity_id]
-
-        if sensors_to_remove:
-            LOGGER.info("Removed %d privilege sensor(s)", len(sensors_to_remove))
-
-        # Update existing sensors and create new ones
-        sensors_to_add = []
-        for privilege in config.privileges:
-            for assignee in privilege.assignees:
-                entity_id = f"{sanitize_entity_id(assignee)}_{sanitize_entity_id(privilege.slug)}"
-
-                if entity_id in self.privilege_sensors:
-                    # Update existing sensor
-                    sensor = self.privilege_sensors[entity_id]
-                    sensor.update_privilege_config(privilege)
-                    LOGGER.debug("Updated privilege sensor %s", entity_id)
-                else:
-                    # Create new sensor
-                    sensor = PrivilegeSensor(self.hass, privilege, assignee, self)
-                    self.privilege_sensors[entity_id] = sensor
-                    sensors_to_add.append(sensor)
-                    LOGGER.debug("Created privilege sensor %s", entity_id)
-
-        if sensors_to_add:
-            self.async_add_entities(sensors_to_add)
-            LOGGER.info("Added %d privilege sensor(s)", len(sensors_to_add))
 
 
 class ChoreSensor(RestoreEntity, SensorEntity):
@@ -728,291 +620,3 @@ class ChoreSummarySensor(SensorEntity):
 
         """
         return self._cached_attributes
-
-
-class PrivilegeSensor(RestoreEntity, SensorEntity):
-    """Sensor representing a privilege for a specific assignee."""
-
-    _attr_has_entity_name = False
-    _attr_should_poll = False
-
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        privilege: PrivilegeConfig,
-        assignee: str,
-        manager: ChoreSensorManager,
-    ) -> None:
-        """
-        Initialize the privilege sensor.
-
-        Args:
-            hass: Home Assistant instance
-            privilege: Privilege configuration
-            assignee: Username of the assignee
-            manager: Sensor manager to access chore sensors and storage
-
-        """
-        self.hass = hass
-        self._privilege = privilege
-        self._assignee = assignee
-        self._manager = manager
-        sanitized_assignee = sanitize_entity_id(assignee)
-        sanitized_slug = sanitize_entity_id(privilege.slug)
-        self._attr_unique_id = (
-            f"{DOMAIN}_privilege_{sanitized_assignee}_{sanitized_slug}"
-        )
-        self._attr_name = f"{privilege.name} - {assignee}"
-
-        # Set entity ID: sensor.simple_chore_privilege_{assignee}_{slug}
-        self.entity_id = (
-            f"sensor.simple_chore_privilege_{sanitized_assignee}_{sanitized_slug}"
-        )
-
-        # Use privilege-specific icon
-        self._attr_icon = privilege.icon
-
-        # Set device info to group all privileges/chores for this person
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, assignee)},
-            name=f"{assignee.title()} - Chores",
-            manufacturer="Simple Chores",
-            model="Chore Tracker",
-            entry_type=dr.DeviceEntryType.SERVICE,
-            suggested_area="Household",
-        )
-
-        # Initialize state - will be restored/computed in async_added_to_hass
-        self._attr_native_value = PrivilegeState.DISABLED.value
-        self._disable_until: datetime | None = None
-
-    async def async_added_to_hass(self) -> None:
-        """Restore previous state when entity is added to hass."""
-        await super().async_added_to_hass()
-
-        # Restore state from storage
-        stored_state = self._manager.points_storage.get_privilege_state(
-            self._assignee, self._privilege.slug
-        )
-        if stored_state in [
-            PrivilegeState.ENABLED.value,
-            PrivilegeState.DISABLED.value,
-            PrivilegeState.TEMPORARILY_DISABLED.value,
-        ]:
-            self._attr_native_value = stored_state
-            LOGGER.debug(
-                "Restored privilege state for %s: %s",
-                self.entity_id,
-                stored_state,
-            )
-
-        # Restore temporary disable end time
-        self._disable_until = self._manager.points_storage.get_privilege_disable_until(
-            self._assignee, self._privilege.slug
-        )
-
-        # Check if temporary disable has expired
-        if self._attr_native_value == PrivilegeState.TEMPORARILY_DISABLED.value:
-            if self._disable_until and datetime.now(UTC) >= self._disable_until:
-                # Expired, transition back based on behavior
-                await self._check_and_update_state()
-
-    @property
-    def privilege(self) -> PrivilegeConfig:
-        """Return the privilege configuration."""
-        return self._privilege
-
-    @property
-    def assignee(self) -> str:
-        """Return the assignee username."""
-        return self._assignee
-
-    @property
-    def disable_until(self) -> datetime | None:
-        """Return the temporary disable end time."""
-        return self._disable_until
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes."""
-        attrs = {
-            "privilege_name": self._privilege.name,
-            "privilege_slug": self._privilege.slug,
-            "assignee": self._assignee,
-            "behavior": self._privilege.behavior.value,
-            "linked_chores": self._privilege.linked_chores,
-            "icon": self._privilege.icon,
-        }
-        if self._disable_until:
-            attrs["disable_until"] = self._disable_until.isoformat()
-        return attrs
-
-    def get_state(self) -> str:
-        """Get the current state value."""
-        return self._attr_native_value
-
-    def set_state(self, state: str) -> None:
-        """Set the state value."""
-        self._attr_native_value = state
-
-    def update_privilege_config(self, privilege: PrivilegeConfig) -> None:
-        """Update the privilege configuration."""
-        self._privilege = privilege
-        self._attr_name = f"{privilege.name} - {self._assignee}"
-        self._attr_icon = privilege.icon
-        self.async_write_ha_state()
-
-    def _are_linked_chores_complete(self) -> bool:
-        """Check if all linked chores are complete for this assignee."""
-        if not self._privilege.linked_chores:
-            return False
-
-        for chore_slug in self._privilege.linked_chores:
-            sensor_id = (
-                f"{sanitize_entity_id(self._assignee)}_{sanitize_entity_id(chore_slug)}"
-            )
-            sensor = self._manager.sensors.get(sensor_id)
-            if not sensor:
-                # If sensor doesn't exist, chore is not complete
-                LOGGER.debug(
-                    "Linked chore sensor not found: %s for privilege %s",
-                    sensor_id,
-                    self._privilege.slug,
-                )
-                return False
-            if sensor.get_state() != ChoreState.COMPLETE.value:
-                return False
-        return True
-
-    async def _check_and_update_state(self) -> None:
-        """Check linked chores and update state for automatic behavior."""
-        if self._privilege.behavior != PrivilegeBehavior.AUTOMATIC:
-            return
-
-        # Check if temporarily disabled and not expired
-        if self._attr_native_value == PrivilegeState.TEMPORARILY_DISABLED.value:
-            if self._disable_until and datetime.now(UTC) < self._disable_until:
-                # Still temporarily disabled
-                return
-            # Expired, clear the disable time
-            self._disable_until = None
-            await self._manager.points_storage.set_privilege_disable_until(
-                self._assignee, self._privilege.slug, None
-            )
-
-        # Determine new state based on linked chores
-        if self._are_linked_chores_complete():
-            new_state = PrivilegeState.ENABLED.value
-        else:
-            new_state = PrivilegeState.DISABLED.value
-
-        if self._attr_native_value != new_state:
-            self._attr_native_value = new_state
-            await self._manager.points_storage.set_privilege_state(
-                self._assignee, self._privilege.slug, new_state
-            )
-            LOGGER.info(
-                "Privilege '%s' for %s automatically changed to %s",
-                self._privilege.name,
-                self._assignee,
-                new_state,
-            )
-
-    async def async_enable(self) -> None:
-        """Enable the privilege (manual action)."""
-        # Clear any temporary disable
-        self._disable_until = None
-        await self._manager.points_storage.set_privilege_disable_until(
-            self._assignee, self._privilege.slug, None
-        )
-
-        self._attr_native_value = PrivilegeState.ENABLED.value
-        await self._manager.points_storage.set_privilege_state(
-            self._assignee, self._privilege.slug, PrivilegeState.ENABLED.value
-        )
-        LOGGER.info(
-            "Privilege '%s' manually enabled for %s",
-            self._privilege.name,
-            self._assignee,
-        )
-
-    async def async_disable(self) -> None:
-        """Disable the privilege (manual action)."""
-        # Clear any temporary disable
-        self._disable_until = None
-        await self._manager.points_storage.set_privilege_disable_until(
-            self._assignee, self._privilege.slug, None
-        )
-
-        self._attr_native_value = PrivilegeState.DISABLED.value
-        await self._manager.points_storage.set_privilege_state(
-            self._assignee, self._privilege.slug, PrivilegeState.DISABLED.value
-        )
-        LOGGER.info(
-            "Privilege '%s' manually disabled for %s",
-            self._privilege.name,
-            self._assignee,
-        )
-
-    async def async_temporarily_disable(self, duration_minutes: int) -> None:
-        """Temporarily disable the privilege for a duration."""
-        self._disable_until = datetime.now(UTC) + __import__("datetime").timedelta(
-            minutes=duration_minutes
-        )
-        await self._manager.points_storage.set_privilege_disable_until(
-            self._assignee, self._privilege.slug, self._disable_until
-        )
-
-        self._attr_native_value = PrivilegeState.TEMPORARILY_DISABLED.value
-        await self._manager.points_storage.set_privilege_state(
-            self._assignee,
-            self._privilege.slug,
-            PrivilegeState.TEMPORARILY_DISABLED.value,
-        )
-        LOGGER.info(
-            "Privilege '%s' temporarily disabled for %s until %s",
-            self._privilege.name,
-            self._assignee,
-            self._disable_until.isoformat(),
-        )
-
-    async def async_adjust_temporary_disable(self, adjustment_minutes: int) -> None:
-        """Adjust the temporary disable duration."""
-        if self._attr_native_value != PrivilegeState.TEMPORARILY_DISABLED.value:
-            LOGGER.warning(
-                "Cannot adjust temporary disable for privilege '%s' - not temporarily disabled",
-                self._privilege.slug,
-            )
-            return
-
-        if self._disable_until is None:
-            LOGGER.warning(
-                "Cannot adjust temporary disable for privilege '%s' - no end time set",
-                self._privilege.slug,
-            )
-            return
-
-        from datetime import timedelta
-
-        self._disable_until = self._disable_until + timedelta(
-            minutes=adjustment_minutes
-        )
-
-        # If adjustment moves end time to past, re-evaluate state
-        if self._disable_until <= datetime.now(UTC):
-            await self._check_and_update_state()
-        else:
-            await self._manager.points_storage.set_privilege_disable_until(
-                self._assignee, self._privilege.slug, self._disable_until
-            )
-            LOGGER.info(
-                "Privilege '%s' temporary disable adjusted by %d minutes for %s, new end: %s",
-                self._privilege.name,
-                adjustment_minutes,
-                self._assignee,
-                self._disable_until.isoformat(),
-            )
-
-    async def async_update_from_chores(self) -> None:
-        """Update privilege state based on linked chore states (for automatic behavior)."""
-        await self._check_and_update_state()
