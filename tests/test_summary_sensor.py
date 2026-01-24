@@ -83,19 +83,17 @@ class TestChoreSummarySensor:
         assert alice_summary.native_value == 0
 
         # Set alice's dishes to pending (directly set state without calling async_write_ha_state)
-        manager.sensors["alice_dishes"]._attr_native_value = ChoreState.PENDING.value
+        manager.sensors["alice_dishes"].set_state(ChoreState.PENDING.value)
         await alice_summary.async_update()
         assert alice_summary.native_value == 1
 
         # Set alice's vacuum to pending
-        manager.sensors["alice_vacuum"]._attr_native_value = ChoreState.PENDING.value
+        manager.sensors["alice_vacuum"].set_state(ChoreState.PENDING.value)
         await alice_summary.async_update()
         assert alice_summary.native_value == 2
 
         # Set dishes back to not requested
-        manager.sensors[
-            "alice_dishes"
-        ]._attr_native_value = ChoreState.NOT_REQUESTED.value
+        manager.sensors["alice_dishes"].set_state(ChoreState.NOT_REQUESTED.value)
         await alice_summary.async_update()
         assert alice_summary.native_value == 1
 
@@ -116,8 +114,8 @@ class TestChoreSummarySensor:
 
         # Set different states for alice's chores
         # alice has: alice_dishes, alice_vacuum (bob_dishes is bob's)
-        manager.sensors["alice_dishes"]._attr_native_value = ChoreState.PENDING.value
-        manager.sensors["alice_vacuum"]._attr_native_value = ChoreState.COMPLETE.value
+        manager.sensors["alice_dishes"].set_state(ChoreState.PENDING.value)
+        manager.sensors["alice_vacuum"].set_state(ChoreState.COMPLETE.value)
         await alice_summary.async_update()
 
         attrs = alice_summary.extra_state_attributes
@@ -168,10 +166,10 @@ class TestChoreSummarySensor:
         bob_summary = manager.summary_sensors["bob"]
 
         # Set all chores to pending (directly set state)
-        manager.sensors["alice_dishes"]._attr_native_value = ChoreState.PENDING.value
-        manager.sensors["bob_dishes"]._attr_native_value = ChoreState.PENDING.value
-        manager.sensors["alice_vacuum"]._attr_native_value = ChoreState.PENDING.value
-        manager.sensors["bob_laundry"]._attr_native_value = ChoreState.PENDING.value
+        manager.sensors["alice_dishes"].set_state(ChoreState.PENDING.value)
+        manager.sensors["bob_dishes"].set_state(ChoreState.PENDING.value)
+        manager.sensors["alice_vacuum"].set_state(ChoreState.PENDING.value)
+        manager.sensors["bob_laundry"].set_state(ChoreState.PENDING.value)
         await alice_summary.async_update()
         await bob_summary.async_update()
 
@@ -233,7 +231,7 @@ class TestChoreSummarySensor:
         assert initial_attrs["total_chores"] == 2
 
         # Change dishes to PENDING using set_state
-        alice_dishes._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+        alice_dishes.set_state(ChoreState.PENDING.value)
         await alice_dishes.async_update_ha_state(force_refresh=True)
         await alice_summary.async_update()
 
@@ -252,7 +250,7 @@ class TestChoreSummarySensor:
         assert alice_summary.native_value == 1
 
         # Change vacuum to COMPLETE using set_state
-        alice_vacuum._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        alice_vacuum.set_state(ChoreState.COMPLETE.value)
         await alice_vacuum.async_update_ha_state(force_refresh=True)
         await alice_summary.async_update()
 
@@ -271,7 +269,7 @@ class TestChoreSummarySensor:
         assert alice_summary.native_value == 1
 
         # Change dishes to COMPLETE
-        alice_dishes._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        alice_dishes.set_state(ChoreState.COMPLETE.value)
         await alice_dishes.async_update_ha_state(force_refresh=True)
         await alice_summary.async_update()
 

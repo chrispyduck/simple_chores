@@ -52,7 +52,7 @@ class TestSensorStatePersistence:
 
         # Create first sensor and set state
         sensor1 = ChoreSensor(hass, chore, "alice")
-        sensor1._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor1.set_state(ChoreState.COMPLETE.value)
         await sensor1.async_update_ha_state(force_refresh=True)
 
         # Create mock last state with the saved value
@@ -81,9 +81,9 @@ class TestSensorStatePersistence:
         sensor_bob = ChoreSensor(hass, chore, "bob")
 
         # Set different states
-        sensor_alice._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor_alice.set_state(ChoreState.COMPLETE.value)
         await sensor_alice.async_update_ha_state(force_refresh=True)
-        sensor_bob._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+        sensor_bob.set_state(ChoreState.PENDING.value)
         await sensor_bob.async_update_ha_state(force_refresh=True)
 
         # States should be independent
@@ -110,9 +110,9 @@ class TestSensorStatePersistence:
         sensor2 = ChoreSensor(hass, chore2, "alice")
 
         # Set different states
-        sensor1._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor1.set_state(ChoreState.COMPLETE.value)
         await sensor1.async_update_ha_state(force_refresh=True)
-        sensor2._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+        sensor2.set_state(ChoreState.PENDING.value)
         await sensor2.async_update_ha_state(force_refresh=True)
 
         # States should be independent
@@ -132,7 +132,7 @@ class TestSensorStatePersistence:
         )
 
         sensor1 = ChoreSensor(hass, chore, "alice")
-        sensor1._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor1.set_state(ChoreState.COMPLETE.value)
         await sensor1.async_update_ha_state(force_refresh=True)
 
         # Create mock last state
@@ -158,7 +158,7 @@ class TestSensorStatePersistence:
         )
 
         sensor1 = ChoreSensor(hass, chore, "alice.smith")
-        sensor1._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor1.set_state(ChoreState.COMPLETE.value)
         await sensor1.async_update_ha_state(force_refresh=True)
 
         # Create mock last state
@@ -419,17 +419,17 @@ class TestSensorIconStates:
         assert sensor.icon == "mdi:clipboard-list-outline"
 
         # Set to pending - icon should NOT change
-        sensor._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+        sensor.set_state(ChoreState.PENDING.value)
         await sensor.async_update_ha_state(force_refresh=True)
         assert sensor.icon == "mdi:clipboard-list-outline"
 
         # Set to complete - icon should NOT change
-        sensor._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor.set_state(ChoreState.COMPLETE.value)
         await sensor.async_update_ha_state(force_refresh=True)
         assert sensor.icon == "mdi:clipboard-list-outline"
 
         # Set back to not requested - icon should remain the same
-        sensor._attr_native_value = ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+        sensor.set_state(ChoreState.NOT_REQUESTED.value)
         await sensor.async_update_ha_state(force_refresh=True)
         assert sensor.icon == "mdi:clipboard-list-outline"
 
