@@ -430,6 +430,26 @@ class ChoreSensor(RestoreEntity, SensorEntity):
             "points": self._chore.points,
         }
 
+    def get_state(self) -> str:
+        """
+        Get the current state value.
+
+        Returns:
+            str: The current state value
+
+        """
+        return self._attr_native_value
+
+    def set_state(self, state: str) -> None:
+        """
+        Set the state value.
+
+        Args:
+            state: The new state value
+
+        """
+        self._attr_native_value = state
+
     def update_chore_config(self, chore: ChoreConfig) -> None:
         """
         Update the chore configuration.
