@@ -93,9 +93,7 @@ class TestChoreSummarySensor:
         assert alice_summary.native_value == 2
 
         # Set dishes back to not requested
-        manager.sensors[
-            "alice_dishes"
-        ].set_state(ChoreState.NOT_REQUESTED.value)
+        manager.sensors["alice_dishes"].set_state(ChoreState.NOT_REQUESTED.value)
         await alice_summary.async_update()
         assert alice_summary.native_value == 1
 

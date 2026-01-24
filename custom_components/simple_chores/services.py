@@ -13,20 +13,29 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from .const import (
     ATTR_ADJUSTMENT,
     ATTR_ASSIGNEES,
+    ATTR_BEHAVIOR,
     ATTR_CHORE_SLUG,
     ATTR_DESCRIPTION,
+    ATTR_DURATION,
     ATTR_FREQUENCY,
     ATTR_ICON,
+    ATTR_LINKED_CHORES,
     ATTR_NAME,
     ATTR_POINTS,
+    ATTR_PRIVILEGE_SLUG,
     ATTR_RESET_TOTAL,
     ATTR_SLUG,
     ATTR_USER,
     DOMAIN,
     LOGGER,
     SERVICE_ADJUST_POINTS,
+    SERVICE_ADJUST_TEMPORARY_DISABLE,
     SERVICE_CREATE_CHORE,
+    SERVICE_CREATE_PRIVILEGE,
     SERVICE_DELETE_CHORE,
+    SERVICE_DELETE_PRIVILEGE,
+    SERVICE_DISABLE_PRIVILEGE,
+    SERVICE_ENABLE_PRIVILEGE,
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_NOT_REQUESTED,
     SERVICE_MARK_PENDING,
@@ -34,10 +43,18 @@ from .const import (
     SERVICE_RESET_COMPLETED,
     SERVICE_RESET_POINTS,
     SERVICE_START_NEW_DAY,
+    SERVICE_TEMPORARILY_DISABLE_PRIVILEGE,
     SERVICE_UPDATE_CHORE,
+    SERVICE_UPDATE_PRIVILEGE,
     sanitize_entity_id,
 )
-from .models import ChoreConfig, ChoreFrequency, ChoreState
+from .models import (
+    ChoreConfig,
+    ChoreFrequency,
+    ChoreState,
+    PrivilegeBehavior,
+    PrivilegeConfig,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant, ServiceCall
@@ -201,6 +218,62 @@ RESET_POINTS_SCHEMA = vol.Schema(
     }
 )
 
+# Privilege service schemas
+PRIVILEGE_SERVICE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_USER): cv.string,
+        vol.Required(ATTR_PRIVILEGE_SLUG): cv.string,
+    }
+)
+
+TEMPORARILY_DISABLE_PRIVILEGE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_USER): cv.string,
+        vol.Required(ATTR_PRIVILEGE_SLUG): cv.string,
+        vol.Required(ATTR_DURATION): vol.All(vol.Coerce(int), vol.Range(min=1)),
+    }
+)
+
+ADJUST_TEMPORARY_DISABLE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_USER): cv.string,
+        vol.Required(ATTR_PRIVILEGE_SLUG): cv.string,
+        vol.Required(ATTR_ADJUSTMENT): vol.All(
+            vol.Coerce(int), vol.Range(min=-1000000, max=1000000)
+        ),
+    }
+)
+
+CREATE_PRIVILEGE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_NAME): cv.string,
+        vol.Required(ATTR_SLUG): cv.string,
+        vol.Optional(ATTR_ICON, default="mdi:star"): cv.string,
+        vol.Optional(ATTR_BEHAVIOR, default="automatic"): vol.In(
+            ["automatic", "manual"]
+        ),
+        vol.Optional(ATTR_LINKED_CHORES, default=""): cv.string,
+        vol.Required(ATTR_ASSIGNEES): cv.string,
+    }
+)
+
+UPDATE_PRIVILEGE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SLUG): cv.string,
+        vol.Optional(ATTR_NAME): cv.string,
+        vol.Optional(ATTR_ICON): cv.string,
+        vol.Optional(ATTR_BEHAVIOR): vol.In(["automatic", "manual"]),
+        vol.Optional(ATTR_LINKED_CHORES): cv.string,
+        vol.Optional(ATTR_ASSIGNEES): cv.string,
+    }
+)
+
+DELETE_PRIVILEGE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SLUG): cv.string,
+    }
+)
+
 
 async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the mark_complete service call."""
@@ -285,6 +358,8 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
     if affected_users:
         for affected_user in affected_users:
             await _update_summary_sensors(hass, affected_user)
+            # Update privilege sensors based on chore completion
+            await _update_privilege_sensors_from_chores(hass, affected_user)
 
 
 async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -370,6 +445,8 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
     if affected_users:
         for affected_user in affected_users:
             await _update_summary_sensors(hass, affected_user)
+            # Update privilege sensors based on chore state change
+            await _update_privilege_sensors_from_chores(hass, affected_user)
 
 
 async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -615,6 +692,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     # Update summary sensors for the specified user or all users
     # (points_missed gets updated even if no chores were completed)
     await _update_summary_sensors(hass, user)
+    # Update privilege sensors based on chore state changes
+    await _update_privilege_sensors_from_chores(hass, user)
 
 
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -878,6 +957,380 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
         )
 
 
+def _find_matching_privilege_sensors(
+    privilege_sensors: dict, privilege_slug: str, user: str | None = None
+) -> list:
+    """
+    Find privilege sensors matching slug and optionally user.
+
+    Args:
+        privilege_sensors: Dictionary of privilege sensors
+        privilege_slug: Privilege slug to match
+        user: Optional user to filter by
+
+    Returns:
+        List of matching privilege sensors
+
+    """
+    sanitized_slug = sanitize_entity_id(privilege_slug)
+    matching_sensors = []
+
+    if user:
+        # Specific user
+        sensor_id = f"{sanitize_entity_id(user)}_{sanitized_slug}"
+        if sensor_id in privilege_sensors:
+            matching_sensors.append(privilege_sensors[sensor_id])
+    else:
+        # All assignees for this privilege
+        for sensor_id, sensor in privilege_sensors.items():
+            if sensor_id.endswith(f"_{sanitized_slug}"):
+                matching_sensors.append(sensor)
+
+    return matching_sensors
+
+
+async def _update_privilege_sensors_from_chores(
+    hass: HomeAssistant, user: str | None = None
+) -> None:
+    """
+    Update privilege sensors based on chore state changes.
+
+    Args:
+        hass: Home Assistant instance
+        user: Optional user to update, or None for all users
+
+    """
+    privilege_sensors = hass.data[DOMAIN].get("privilege_sensors", {})
+    if not privilege_sensors:
+        return
+
+    update_tasks = []
+    for sensor_id, sensor in privilege_sensors.items():
+        if user:
+            sanitized_user = sanitize_entity_id(user)
+            if not sensor_id.startswith(f"{sanitized_user}_"):
+                continue
+        # Update the privilege sensor state based on linked chores
+        update_tasks.append(sensor.async_update_from_chores())
+
+    if update_tasks:
+        await asyncio.gather(*update_tasks)
+        # Write updated states
+        state_tasks = []
+        for sensor_id, sensor in privilege_sensors.items():
+            if user:
+                sanitized_user = sanitize_entity_id(user)
+                if not sensor_id.startswith(f"{sanitized_user}_"):
+                    continue
+            state_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+        if state_tasks:
+            await asyncio.gather(*state_tasks)
+
+
+async def handle_enable_privilege(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the enable_privilege service call."""
+    user = call.data.get(ATTR_USER)
+    privilege_slug = call.data[ATTR_PRIVILEGE_SLUG]
+
+    LOGGER.info(
+        "Service 'enable_privilege' called with user='%s', privilege_slug='%s'",
+        user if user else "all assignees",
+        privilege_slug,
+    )
+
+    _validate_integration_loaded(hass)
+    privilege_sensors = hass.data[DOMAIN].get("privilege_sensors", {})
+    matching_sensors = _find_matching_privilege_sensors(
+        privilege_sensors, privilege_slug, user
+    )
+
+    if not matching_sensors:
+        if user:
+            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+        else:
+            msg = f"No privilege sensors found for privilege '{privilege_slug}'"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    # Enable all matching privilege sensors
+    state_update_tasks = []
+    for sensor in matching_sensors:
+        await sensor.async_enable()
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
+
+    if user:
+        LOGGER.info("Enabled privilege '%s' for user '%s'", privilege_slug, user)
+    else:
+        LOGGER.info(
+            "Enabled privilege '%s' for %d assignee(s)",
+            privilege_slug,
+            len(matching_sensors),
+        )
+
+
+async def handle_disable_privilege(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the disable_privilege service call."""
+    user = call.data.get(ATTR_USER)
+    privilege_slug = call.data[ATTR_PRIVILEGE_SLUG]
+
+    LOGGER.info(
+        "Service 'disable_privilege' called with user='%s', privilege_slug='%s'",
+        user if user else "all assignees",
+        privilege_slug,
+    )
+
+    _validate_integration_loaded(hass)
+    privilege_sensors = hass.data[DOMAIN].get("privilege_sensors", {})
+    matching_sensors = _find_matching_privilege_sensors(
+        privilege_sensors, privilege_slug, user
+    )
+
+    if not matching_sensors:
+        if user:
+            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+        else:
+            msg = f"No privilege sensors found for privilege '{privilege_slug}'"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    # Disable all matching privilege sensors
+    state_update_tasks = []
+    for sensor in matching_sensors:
+        await sensor.async_disable()
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
+
+    if user:
+        LOGGER.info("Disabled privilege '%s' for user '%s'", privilege_slug, user)
+    else:
+        LOGGER.info(
+            "Disabled privilege '%s' for %d assignee(s)",
+            privilege_slug,
+            len(matching_sensors),
+        )
+
+
+async def handle_temporarily_disable_privilege(
+    hass: HomeAssistant, call: ServiceCall
+) -> None:
+    """Handle the temporarily_disable_privilege service call."""
+    user = call.data.get(ATTR_USER)
+    privilege_slug = call.data[ATTR_PRIVILEGE_SLUG]
+    duration = call.data[ATTR_DURATION]
+
+    LOGGER.info(
+        "Service 'temporarily_disable_privilege' called with user='%s', privilege_slug='%s', duration=%d",
+        user if user else "all assignees",
+        privilege_slug,
+        duration,
+    )
+
+    _validate_integration_loaded(hass)
+    privilege_sensors = hass.data[DOMAIN].get("privilege_sensors", {})
+    matching_sensors = _find_matching_privilege_sensors(
+        privilege_sensors, privilege_slug, user
+    )
+
+    if not matching_sensors:
+        if user:
+            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+        else:
+            msg = f"No privilege sensors found for privilege '{privilege_slug}'"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    # Temporarily disable all matching privilege sensors
+    state_update_tasks = []
+    for sensor in matching_sensors:
+        await sensor.async_temporarily_disable(duration)
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
+
+    if user:
+        LOGGER.info(
+            "Temporarily disabled privilege '%s' for user '%s' for %d minutes",
+            privilege_slug,
+            user,
+            duration,
+        )
+    else:
+        LOGGER.info(
+            "Temporarily disabled privilege '%s' for %d assignee(s) for %d minutes",
+            privilege_slug,
+            len(matching_sensors),
+            duration,
+        )
+
+
+async def handle_adjust_temporary_disable(
+    hass: HomeAssistant, call: ServiceCall
+) -> None:
+    """Handle the adjust_temporary_disable service call."""
+    user = call.data.get(ATTR_USER)
+    privilege_slug = call.data[ATTR_PRIVILEGE_SLUG]
+    adjustment = call.data[ATTR_ADJUSTMENT]
+
+    LOGGER.info(
+        "Service 'adjust_temporary_disable' called with user='%s', privilege_slug='%s', adjustment=%d",
+        user if user else "all assignees",
+        privilege_slug,
+        adjustment,
+    )
+
+    _validate_integration_loaded(hass)
+    privilege_sensors = hass.data[DOMAIN].get("privilege_sensors", {})
+    matching_sensors = _find_matching_privilege_sensors(
+        privilege_sensors, privilege_slug, user
+    )
+
+    if not matching_sensors:
+        if user:
+            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+        else:
+            msg = f"No privilege sensors found for privilege '{privilege_slug}'"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    # Adjust temporary disable for all matching privilege sensors
+    state_update_tasks = []
+    for sensor in matching_sensors:
+        await sensor.async_adjust_temporary_disable(adjustment)
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
+
+    if user:
+        LOGGER.info(
+            "Adjusted temporary disable for privilege '%s' by %d minutes for user '%s'",
+            privilege_slug,
+            adjustment,
+            user,
+        )
+    else:
+        LOGGER.info(
+            "Adjusted temporary disable for privilege '%s' by %d minutes for %d assignee(s)",
+            privilege_slug,
+            adjustment,
+            len(matching_sensors),
+        )
+
+
+async def handle_create_privilege(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the create_privilege service call."""
+    LOGGER.info(
+        "Service 'create_privilege' called with slug='%s', name='%s', assignees='%s'",
+        call.data.get(ATTR_SLUG),
+        call.data.get(ATTR_NAME),
+        call.data.get(ATTR_ASSIGNEES),
+    )
+
+    _validate_integration_loaded(hass)
+    config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+    # Parse assignees from comma-separated string
+    assignees_str = call.data[ATTR_ASSIGNEES]
+    assignees = [a.strip() for a in assignees_str.split(",") if a.strip()]
+
+    if not assignees:
+        msg = "At least one assignee is required"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    # Parse linked chores from comma-separated string
+    linked_chores_str = call.data.get(ATTR_LINKED_CHORES, "")
+    linked_chores = [c.strip() for c in linked_chores_str.split(",") if c.strip()]
+
+    try:
+        privilege = PrivilegeConfig(
+            name=call.data[ATTR_NAME],
+            slug=call.data[ATTR_SLUG],
+            icon=call.data.get(ATTR_ICON, "mdi:star"),
+            behavior=PrivilegeBehavior(call.data.get(ATTR_BEHAVIOR, "automatic")),
+            linked_chores=linked_chores,
+            assignees=assignees,
+        )
+        await config_loader.async_create_privilege(privilege)
+        LOGGER.info("Created privilege '%s'", privilege.slug)
+    except Exception as err:
+        msg = f"Failed to create privilege: {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
+
+
+async def handle_update_privilege(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the update_privilege service call."""
+    LOGGER.info(
+        "Service 'update_privilege' called with slug='%s', updates=%s",
+        call.data.get(ATTR_SLUG),
+        {k: v for k, v in call.data.items() if k != ATTR_SLUG},
+    )
+
+    _validate_integration_loaded(hass)
+    config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+    slug = call.data[ATTR_SLUG]
+    name = call.data.get(ATTR_NAME)
+    icon = call.data.get(ATTR_ICON)
+    behavior = call.data.get(ATTR_BEHAVIOR)
+    linked_chores_str = call.data.get(ATTR_LINKED_CHORES)
+    assignees_str = call.data.get(ATTR_ASSIGNEES)
+
+    # Parse linked chores if provided
+    linked_chores = None
+    if linked_chores_str is not None:
+        linked_chores = [c.strip() for c in linked_chores_str.split(",") if c.strip()]
+
+    # Parse assignees if provided
+    assignees = None
+    if assignees_str:
+        assignees = [a.strip() for a in assignees_str.split(",") if a.strip()]
+        if not assignees:
+            msg = "At least one assignee is required when updating assignees"
+            LOGGER.error(msg)
+            raise ServiceValidationError(msg)
+
+    try:
+        await config_loader.async_update_privilege(
+            slug=slug,
+            name=name,
+            icon=icon,
+            behavior=behavior,
+            linked_chores=linked_chores,
+            assignees=assignees,
+        )
+        LOGGER.info("Updated privilege '%s'", slug)
+    except Exception as err:
+        msg = f"Failed to update privilege '{slug}': {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
+
+
+async def handle_delete_privilege(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the delete_privilege service call."""
+    slug = call.data[ATTR_SLUG]
+
+    LOGGER.info("Service 'delete_privilege' called with slug='%s'", slug)
+
+    _validate_integration_loaded(hass)
+    config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+    try:
+        await config_loader.async_delete_privilege(slug)
+        LOGGER.info("Deleted privilege '%s'", slug)
+    except Exception as err:
+        msg = f"Failed to delete privilege '{slug}': {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
+
+
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up services for the Simple Chores integration."""
     hass.services.async_register(
@@ -945,5 +1398,48 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_RESET_POINTS,
         partial(handle_reset_points, hass),
         schema=RESET_POINTS_SCHEMA,
+    )
+    # Privilege services
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ENABLE_PRIVILEGE,
+        partial(handle_enable_privilege, hass),
+        schema=PRIVILEGE_SERVICE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DISABLE_PRIVILEGE,
+        partial(handle_disable_privilege, hass),
+        schema=PRIVILEGE_SERVICE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_TEMPORARILY_DISABLE_PRIVILEGE,
+        partial(handle_temporarily_disable_privilege, hass),
+        schema=TEMPORARILY_DISABLE_PRIVILEGE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ADJUST_TEMPORARY_DISABLE,
+        partial(handle_adjust_temporary_disable, hass),
+        schema=ADJUST_TEMPORARY_DISABLE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CREATE_PRIVILEGE,
+        partial(handle_create_privilege, hass),
+        schema=CREATE_PRIVILEGE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UPDATE_PRIVILEGE,
+        partial(handle_update_privilege, hass),
+        schema=UPDATE_PRIVILEGE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DELETE_PRIVILEGE,
+        partial(handle_delete_privilege, hass),
+        schema=DELETE_PRIVILEGE_SCHEMA,
     )
     LOGGER.debug("Registered Simple Chores services")
