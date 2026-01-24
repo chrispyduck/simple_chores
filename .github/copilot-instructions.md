@@ -68,14 +68,18 @@ Services that modify chore/point state MUST call `_update_summary_sensors(hass, 
 - `PARALLEL_UPDATES = 0` in sensor.py - we manage our own parallelism with `asyncio.gather()`
 
 **State Reading Pattern (CRITICAL!):**
-- **ALWAYS use `sensor._attr_native_value` when reading current sensor state in service handlers**
+- **ALWAYS use `sensor.get_state()` when reading current sensor state in service handlers**
+- **ALWAYS use `sensor.set_state(value)` when setting sensor state in service handlers**
 - **NEVER use `sensor.native_value`** - it may return cached values from the state machine
-- The `_attr_native_value` is the actual internal state that reflects the most recent update
+- The `ChoreSensor` class provides public accessor methods:
+  - `get_state()`: Returns the current `_attr_native_value`
+  - `set_state(state)`: Sets the `_attr_native_value`
+- These methods access the actual internal state that reflects the most recent update
 - This is especially critical in services that:
   - Check previous state before awarding/deducting points (mark_complete, mark_pending)
   - Check current state before resetting (reset_completed, start_new_day)
   - Read state for summary sensor attribute calculations
-- Example: `was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001`
+- Example: `was_complete = sensor.get_state() == ChoreState.COMPLETE.value`
 - The summary sensor's `extra_state_attributes` property also uses this pattern for the same reason
 
 ## Development Workflow

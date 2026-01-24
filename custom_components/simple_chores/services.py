@@ -235,11 +235,11 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
 
     for sensor in matching_sensors:
         # Only award points if transitioning from non-complete state
-        # Read from _attr_native_value directly to get the most current state
-        was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
+        # Read current state using public accessor
+        was_complete = sensor.get_state() == ChoreState.COMPLETE.value
 
         # Update state directly and batch the HA state update
-        sensor._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor.set_state(ChoreState.COMPLETE.value)
         state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
         affected_users.add(sensor.assignee)
 
@@ -320,11 +320,11 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
 
     for sensor in matching_sensors:
         # Deduct points if transitioning from complete to pending
-        # Read from _attr_native_value directly to get the most current state
-        was_complete = sensor._attr_native_value == ChoreState.COMPLETE.value  # noqa: SLF001
+        # Read current state using public accessor
+        was_complete = sensor.get_state() == ChoreState.COMPLETE.value
 
         # Update state directly and batch the HA state update
-        sensor._attr_native_value = ChoreState.PENDING.value  # noqa: SLF001
+        sensor.set_state(ChoreState.PENDING.value)
         state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
         affected_users.add(sensor.assignee)
 
@@ -404,7 +404,7 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
 
     for sensor in matching_sensors:
         # Update state directly and batch the HA state update
-        sensor._attr_native_value = ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+        sensor.set_state(ChoreState.NOT_REQUESTED.value)
         state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
         affected_users.add(sensor.assignee)
 
@@ -461,10 +461,10 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
             continue
 
         # Only reset sensors that are currently COMPLETE
-        # Read from _attr_native_value directly to get the most current state
-        if sensor._attr_native_value == ChoreState.COMPLETE.value:  # noqa: SLF001
+        # Read current state using public accessor
+        if sensor.get_state() == ChoreState.COMPLETE.value:
             # Update state directly and batch the HA state update
-            sensor._attr_native_value = ChoreState.NOT_REQUESTED.value  # noqa: SLF001
+            sensor.set_state(ChoreState.NOT_REQUESTED.value)
             state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
             affected_users.add(sensor.assignee)
             reset_count += 1
@@ -524,8 +524,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         if assignee not in assignee_stats:
             assignee_stats[assignee] = {"missed": 0}
 
-        # Read from _attr_native_value directly to get the most current state
-        current_state = sensor._attr_native_value  # noqa: SLF001
+        # Read current state using public accessor
+        current_state = sensor.get_state()
         chore_points = sensor.chore.points
 
         # Count pending chores as missed (will be added to cumulative total)
@@ -562,8 +562,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             continue
 
         # Only reset sensors that are currently COMPLETE
-        # Read from _attr_native_value directly to get the most current state
-        if sensor._attr_native_value == ChoreState.COMPLETE.value:  # noqa: SLF001
+        # Read current state using public accessor
+        if sensor.get_state() == ChoreState.COMPLETE.value:
             chore_frequency = sensor.chore.frequency
             affected_users.add(sensor.assignee)
 
@@ -579,7 +579,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     # Apply all state changes without triggering individual summary updates
     update_tasks = []
     for sensor, new_state in state_changes:
-        sensor._attr_native_value = new_state.value
+        sensor.set_state(new_state.value)
         update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
 
         # Audit log: chore reset for new day

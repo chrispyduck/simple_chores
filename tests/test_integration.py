@@ -426,7 +426,7 @@ class TestSensorManagerIntegration:
 
         # Create sensor and set state directly (not using removed set_state method)
         sensor1 = ChoreSensor(hass, chore1, "alice")
-        sensor1._attr_native_value = ChoreState.COMPLETE.value  # noqa: SLF001
+        sensor1.set_state(ChoreState.COMPLETE.value)
 
         # Simulate config change - chore name updated
         chore2 = ChoreConfig(
