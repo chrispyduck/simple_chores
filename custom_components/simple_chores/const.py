@@ -16,9 +16,9 @@ STATE_COMPLETE = "Complete"
 STATE_NOT_REQUESTED = "Not Requested"
 
 # Privilege states
-STATE_ENABLED = "Enabled"
-STATE_DISABLED = "Disabled"
-STATE_TEMPORARILY_DISABLED = "Temporarily Disabled"
+STATE_ENABLED = "Availabile"
+STATE_DISABLED = "Not Available"
+STATE_TEMPORARILY_DISABLED = "Blocked"
 
 # Chore Services
 SERVICE_MARK_COMPLETE = "mark_complete"

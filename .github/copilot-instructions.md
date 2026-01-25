@@ -242,6 +242,18 @@ Attributes: ATTR_USER, ATTR_SLUG, ATTR_NAME, ATTR_DESCRIPTION, ATTR_FREQUENCY, A
 7. Update SERVICES.md documentation
 8. Update service count in README.md
 
+## Documentation Guidelines
+
+### README.md Updates
+When adding new features (services, entities, configuration options), always update README.md following these patterns:
+- **Services**: Add to the bullet list under "The following actions are defined..."
+- **Configuration fields**: Add to the appropriate `**Configuration Fields:**` or `**Privilege Fields:**` bullet list with format: `- \`field_name\`: Description (required/optional, constraints)`
+- **New configuration sections**: Follow the pattern of showing a YAML example first, then field descriptions
+- **New entity types**: Document the entity ID format and available states/attributes
+
+### SERVICES.md Updates
+Document detailed service parameters, examples, and edge cases in SERVICES.md for user-facing documentation.
+
 ## Testing Checklist
 - [ ] All state transitions tested
 - [ ] Summary sensor updates verified

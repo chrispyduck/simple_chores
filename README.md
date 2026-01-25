@@ -104,6 +104,45 @@ chores:
 
 The configuration file is automatically reloaded when changes are detected (checked every 5 seconds).
 
+### Privileges Configuration
+
+Privileges are rewards that can be earned by completing chores or managed manually. Each privilege creates a sensor at `sensor.simple_chore_privilege_{assignee}_{slug}` with state `Enabled`, `Disabled`, or `Temporarily Disabled`.
+
+Example configuration:
+
+```yaml
+privileges:
+  - name: "Screen Time"
+    slug: "screen_time"
+    icon: "mdi:television"
+    behavior: "automatic"
+    linked_chores:
+      - "homework"
+      - "clean_room"
+    assignees:
+      - "john"
+      - "jane"
+
+  - name: "Extra Dessert"
+    slug: "extra_dessert"
+    icon: "mdi:cupcake"
+    behavior: "manual"
+    assignees:
+      - "john"
+```
+
+**Privilege Fields:**
+- `name`: Display name of the privilege (required)
+- `slug`: Unique identifier for the privilege, used in entity IDs (required, lowercase alphanumeric with hyphens/underscores)
+- `icon`: Material Design Icon for the privilege (optional, default: `mdi:star`)
+- `behavior`: How the privilege state is managed (required)
+  - `automatic`: State is determined by linked chore completion - enabled when all linked chores are complete
+  - `manual`: State is controlled via services only
+- `linked_chores`: List of chore slugs that grant this privilege when completed (required for `automatic` behavior, must reference existing chores)
+- `assignees`: List of Home Assistant usernames who can earn this privilege (required, at least one)
+
+The summary sensor for each assignee includes a `privileges` attribute containing all privileges with their current state and metadata.
+
 ## Automation Examples
 
 An example automation for daily chore reset is provided in `automations/start_new_day.yaml`. This automation calls the `start_new_day` service at 2:00 AM each day to:
