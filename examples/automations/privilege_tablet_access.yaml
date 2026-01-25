@@ -1,0 +1,50 @@
+# Example automation: Control tablet internet access based on privilege state
+#
+# This automation demonstrates how to react to privilege state changes.
+# When the "tablet" privilege is enabled, internet access is granted.
+# When disabled (manually or temporarily), internet access is revoked.
+#
+# Assumes:
+# - Privilege sensor: sensor.simple_chore_privilege_john_tablet
+# - Switch entity: switch.john_tablet_internet_access
+
+alias: "John's Tablet Internet Access"
+description: "Enable or disable tablet internet based on chore privilege status"
+mode: single
+
+trigger:
+  - platform: state
+    entity_id: sensor.simple_chore_privilege_john_tablet
+
+action:
+  - choose:
+      # When privilege is enabled, turn on internet access
+      - conditions:
+          - condition: state
+            entity_id: sensor.simple_chore_privilege_john_tablet
+            state: "Enabled"
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: switch.john_tablet_internet_access
+          - service: notify.notify
+            data:
+              message: "John's tablet internet access has been enabled!"
+
+      # When privilege is disabled or temporarily disabled, turn off internet access
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: sensor.simple_chore_privilege_john_tablet
+                state: "Disabled"
+              - condition: state
+                entity_id: sensor.simple_chore_privilege_john_tablet
+                state: "Temporarily Disabled"
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: switch.john_tablet_internet_access
+          - service: notify.notify
+            data:
+              message: "John's tablet internet access has been disabled."

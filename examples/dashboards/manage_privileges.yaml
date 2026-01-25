@@ -1,0 +1,130 @@
+# Dashboard card for managing privileges for a single user
+# Requires: custom:auto-entities, custom:multiple-entity-row, card-mod
+#
+# Features:
+# - One row per privilege with icon and name
+# - Displays current state with color coding
+# - Shows "until <time>" for temporarily disabled privileges
+# - Button to add 1 day (1440 minutes) to temporary disable
+# - Enable/Disable buttons for manual privileges
+
+square: false
+type: grid
+cards:
+  - type: custom:auto-entities
+    card:
+      square: false
+      type: grid
+      columns: 1
+    card_param: cards
+    filter:
+      template: >-
+        {% set ns = namespace(
+          user='george',
+          output_cards=[],
+        ) %}
+
+        {% for privilege_id in states.sensor['simple_chore_meta_' + ns.user +
+        '_summary'].attributes.privileges | sort %}
+          {% set priv = states[privilege_id] %}
+          {% set is_manual = priv.attributes.behavior == 'manual' %}
+          {% set is_temp_disabled = priv.state == 'Temporarily Disabled' %}
+          {% set disable_until = priv.attributes.disable_until | default(None) %}
+
+          {# Format secondary text with state and optional disable time #}
+          {% if is_temp_disabled and disable_until %}
+            {% set until_dt = disable_until | as_datetime | as_local %}
+            {% set today = now().date() %}
+            {% set until_date = until_dt.date() %}
+            {% if until_date == today %}
+              {% set until_str = 'today at ' + until_dt.strftime('%H:%M') %}
+            {% elif until_date == today + timedelta(days=1) %}
+              {% set until_str = 'tomorrow at ' + until_dt.strftime('%H:%M') %}
+            {% else %}
+              {% set until_str = until_dt.strftime('%a %b %d at %H:%M') %}
+            {% endif %}
+            {% set secondary_text = 'Temporarily disabled until ' + until_str %}
+          {% elif priv.state == 'Enabled' %}
+            {% set secondary_text = 'Enabled' %}
+          {% else %}
+            {% set secondary_text = 'Disabled' %}
+          {% endif %}
+
+          {# Build button list based on privilege type and state #}
+          {% set buttons = [] %}
+
+          {# Add time button - extends or starts temporary disable #}
+          {% set buttons = buttons + [{
+            'icon': 'mdi:clock-plus',
+            'name': '+1 Day',
+            'tap_action': {
+              'action': 'call-service',
+              'service': 'simple_chores.adjust_temporary_disable' if is_temp_disabled else 'simple_chores.temporarily_disable_privilege',
+              'service_data': {
+                'user': ns.user,
+                'privilege_slug': priv.attributes.privilege_slug,
+              } | combine({'adjustment': 1440} if is_temp_disabled else {'duration': 1440}),
+            },
+          }] %}
+
+          {# Manual privileges get enable/disable buttons #}
+          {% if is_manual %}
+            {% if priv.state == 'Enabled' %}
+              {% set buttons = buttons + [{
+                'icon': 'mdi:close-circle',
+                'name': 'Disable',
+                'tap_action': {
+                  'action': 'call-service',
+                  'service': 'simple_chores.disable_privilege',
+                  'service_data': {
+                    'user': ns.user,
+                    'privilege_slug': priv.attributes.privilege_slug,
+                  },
+                },
+              }] %}
+            {% else %}
+              {% set buttons = buttons + [{
+                'icon': 'mdi:check-circle',
+                'name': 'Enable',
+                'tap_action': {
+                  'action': 'call-service',
+                  'service': 'simple_chores.enable_privilege',
+                  'service_data': {
+                    'user': ns.user,
+                    'privilege_slug': priv.attributes.privilege_slug,
+                  },
+                },
+              }] %}
+            {% endif %}
+          {% endif %}
+
+          {%- set ns.output_cards = ns.output_cards + [{
+            'type': 'custom:multiple-entity-row',
+            'entity': priv.entity_id,
+            'section_mode': false,
+            'icon': priv.attributes.icon,
+            'name': priv.attributes.privilege_name,
+            'show_state': false,
+            'secondary_info': secondary_text,
+            'entities': buttons,
+            'card_mod': {
+              'style': {
+                'hui-generic-entity-row': {
+                  '$': '
+                    state-badge {
+                      color: lime
+                  ' if priv.state == 'Enabled' else '
+                    state-badge {
+                      color: orange
+                  ' if priv.state == 'Temporarily Disabled' else '
+                    state-badge {
+                      color: red
+                  '
+                }
+              }
+            },
+          }] -%}
+        {% endfor %}
+
+        {{ ns.output_cards }}
+columns: 1

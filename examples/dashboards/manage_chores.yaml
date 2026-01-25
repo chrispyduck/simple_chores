@@ -1,0 +1,89 @@
+square: false
+type: grid
+cards:
+  - type: custom:auto-entities
+    card:
+      square: false
+      type: grid
+      columns: 1
+    card_param: cards
+    filter:
+      template: >-
+        {% set ns = namespace(
+          user='george',
+          output_cards=[],
+          first=True,
+        ) %}
+
+        {% for chore_id in states.sensor['simple_chore_meta_' + ns.user +
+        '_summary'].attributes.all_chores | sort %}
+          {% set chore = states[chore_id] %}
+          {%- set ns.output_cards = ns.output_cards + [{
+            'type': 'custom:multiple-entity-row',
+            'entity': chore.entity_id,
+            'section_mode': false,
+            'icon': chore.attributes.icon,
+            'name': chore.attributes.chore_name,
+            'show_state': false,
+            'secondary_info': {
+              'entity': chore.entity_id,
+              'name': chore.attributes.frequency.title() + ', ' + (chore.attributes.points | string) + ' point(s), '
+            },
+            'entities': [
+              {
+                'icon': 'mdi:plus',
+                'name': 'Request',
+                'tap_action': {
+                  'action': 'call-service',
+                  'service': 'simple_chores.mark_pending',
+                  'service_data': {
+                    'user': ns.user,
+                    'chore_slug': chore.attributes.chore_slug,
+                  },
+                },
+              },
+              {
+                'icon': 'mdi:check',
+                'name': 'Complete',
+                'tap_action': {
+                  'action': 'call-service',
+                  'service': 'simple_chores.mark_complete',
+                  'service_data': {
+                    'user': ns.user,
+                    'chore_slug': chore.attributes.chore_slug,
+                  },
+                },
+              },
+              {
+                'icon': 'mdi:minus',
+                'name': 'Clear',
+                'tap_action': {
+                  'action': 'call-service',
+                  'service': 'simple_chores.mark_not_requested',
+                  'service_data': {
+                    'user': ns.user,
+                    'chore_slug': chore.attributes.chore_slug,
+                  },
+                },
+              }
+            ],
+            'card_mod': {
+              'style': {
+                'hui-generic-entity-row': {
+                  '$': '
+                    state-badge {
+                      color: lime
+                  ' if chore.state == 'Complete' else '
+                    state-badge {
+                      color: orange
+                  ' if chore.state == 'Pending' else ''
+                }
+              }
+            },
+          }] -%}
+          {%- set ns.first = False -%}
+        {% endfor %}
+
+
+        {{ ns.output_cards }}
+columns: 1

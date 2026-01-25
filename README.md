@@ -138,7 +138,7 @@ privileges:
 - `behavior`: How the privilege state is managed (required)
   - `automatic`: State is determined by linked chore completion - enabled when all linked chores are complete
   - `manual`: State is controlled via services only
-- `linked_chores`: List of chore slugs that grant this privilege when completed (required for `automatic` behavior, must reference existing chores)
+- `linked_chores`: List of chore slugs that grant this privilege when completed (optional for `automatic` behavior). If omitted or empty, the privilege is enabled when ALL requested chores (pending or complete) for the assignee are complete.
 - `assignees`: List of Home Assistant usernames who can earn this privilege (required, at least one)
 
 The summary sensor for each assignee includes a `privileges` attribute containing all privileges with their current state and metadata.
