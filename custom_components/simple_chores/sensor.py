@@ -680,23 +680,12 @@ class ChoreSummarySensor(SensorEntity):
         points_missed = self._manager.points_storage.get_points_missed(self._assignee)
         points_possible = points_earned + points_missed + pending_points
 
-        # Build privileges list with metadata
+        # Build privileges list (entity IDs only, matching chore list pattern)
         privileges_list = []
         for entity_id, priv_sensor in self._manager.privilege_sensors.items():
             if priv_sensor.assignee == self._assignee:
                 full_entity_id = f"sensor.simple_chore_privilege_{entity_id}"
-                priv_config = priv_sensor.privilege
-                disable_until = priv_sensor.disable_until
-                privileges_list.append({
-                    "entity_id": full_entity_id,
-                    "name": priv_config.name,
-                    "slug": priv_config.slug,
-                    "state": priv_sensor._attr_native_value,  # noqa: SLF001
-                    "behavior": priv_config.behavior.value,
-                    "linked_chores": priv_config.linked_chores,
-                    "icon": priv_config.icon,
-                    "disable_until": disable_until.isoformat() if disable_until else None,
-                })
+                privileges_list.append(full_entity_id)
 
         # Cache the computed values
         self._pending_count = pending_count
