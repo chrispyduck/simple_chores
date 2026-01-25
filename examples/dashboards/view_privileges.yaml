@@ -1,0 +1,72 @@
+square: false
+type: grid
+cards:
+  - type: custom:auto-entities
+    card:
+      type: entities
+    card_param: entities
+    filter:
+      template: >-
+        {% set ns = namespace(
+          user='george',
+          output_cards=[],
+          icon_styles={
+            'Enabled': {
+              'hui-generic-entity-row': {
+                '$': 'state-badge { color: lime }'
+              }
+            },
+            'Disabled': {
+              'hui-generic-entity-row': {
+                '$': 'state-badge { color: grey; opacity: 0.6 }'
+              }
+            },
+            'Temporarily Disabled': {
+              'hui-generic-entity-row': {
+                '$': 'state-badge { color: red; opacity: 0.9 }'
+              }
+            },
+          },
+        ) %}
+
+        {% set ns.summary = states.sensor['simple_chore_meta_' + ns.user +
+        '_summary'] %}
+
+
+        {% for priv_id in ns.summary.attributes.privileges | sort %}
+          {%- set privilege = states[priv_id] -%}
+          {%- set card_mod_style = ns.icon_styles.get(privilege.state, {}) -%}
+
+          {# Format state display - include disable time for temporarily disabled #}
+          {%- set disable_until = privilege.attributes.disable_until | default(None) -%}
+          {%- if privilege.state == 'Temporarily Disabled' and disable_until -%}
+            {%- set until_dt = disable_until | as_datetime | as_local -%}
+            {%- set today = now().date() -%}
+            {%- set until_date = until_dt.date() -%}
+            {%- if until_date == today -%}
+              {%- set state_display = 'Disabled until today at ' + until_dt.strftime('%H:%M') -%}
+            {%- elif until_date == today + timedelta(days=1) -%}
+              {%- set state_display = 'Disabled until tomorrow at ' + until_dt.strftime('%H:%M') -%}
+            {%- else -%}
+              {%- set state_display = 'Disabled until ' + until_dt.strftime('%A at %H:%M') -%}
+            {%- endif -%}
+          {%- else -%}
+            {%- set state_display = privilege.state -%}
+          {%- endif -%}
+
+          {%- set ns.output_cards = ns.output_cards + [{
+            'type': 'custom:multiple-entity-row',
+            'entity': privilege.entity_id,
+            'icon': privilege.attributes.icon,
+            'name': privilege.attributes.privilege_name,
+            'show_state': false,
+            'secondary_info': state_display,
+            'card_mod': {
+              'style': card_mod_style,
+            },
+          }] -%}
+        {% endfor %}
+
+
+        {{ ns.output_cards }}
+columns: 1
