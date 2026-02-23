@@ -18,7 +18,7 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
   * State: chore state is one of: `Pending`, `Complete`, `Not Requested`
   * **Note**: A daily chore must be requested at least once (marked as Pending or Complete) before it becomes a daily chore. Until then, it behaves like a manual chore.
 * Each assignee has a summary sensor at `sensor.simple_chore_summary_{assignee}` that tracks:
-  * Count of pending/complete/not requested chores (`total_pending`, `total_complete`)
+  * Count of pending/complete/not requested chores (`total_pending`, `total_complete`, `total_chores_today`)
   * Lists of chores in each state (`pending_chores`, `complete_chores`, `not_requested_chores`)
   * **Points tracking**:
     * `total_points`: Lifetime earned points (cumulative)

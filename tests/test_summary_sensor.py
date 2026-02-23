@@ -130,6 +130,7 @@ class TestChoreSummarySensor:
         assert attrs["total_chores"] == 2
         assert attrs["total_pending"] == 1
         assert attrs["total_complete"] == 1
+        assert attrs["total_chores_today"] == 2  # pending + complete
         # Test all_chores attribute
         assert "sensor.simple_chore_alice_dishes" in attrs["all_chores"]
         assert "sensor.simple_chore_alice_vacuum" in attrs["all_chores"]
@@ -148,6 +149,7 @@ class TestChoreSummarySensor:
         assert bob_attrs["total_chores"] == 2
         assert bob_attrs["total_pending"] == 0
         assert bob_attrs["total_complete"] == 0
+        assert bob_attrs["total_chores_today"] == 0  # no pending or complete
         # Test all_chores attribute for bob
         assert "sensor.simple_chore_bob_dishes" in bob_attrs["all_chores"]
         assert "sensor.simple_chore_bob_laundry" in bob_attrs["all_chores"]
@@ -359,6 +361,7 @@ class TestChoreSummarySensor:
         # Verify counts are correctly tracked (both happen to be 1 in this case)
         assert attrs["total_pending"] == 1
         assert attrs["total_complete"] == 1
+        assert attrs["total_chores_today"] == 2  # 1 pending + 1 complete
 
         # Now change states to have different values: 2 pending, 0 complete
         manager.sensors["alice_vacuum"].set_state(ChoreState.PENDING.value)
@@ -367,6 +370,7 @@ class TestChoreSummarySensor:
         attrs = alice_summary.extra_state_attributes
         assert attrs["total_pending"] == 2
         assert attrs["total_complete"] == 0
+        assert attrs["total_chores_today"] == 2  # 2 pending + 0 complete
         assert attrs["total_pending"] != attrs["total_complete"]
 
         # Change to opposite: 0 pending, 2 complete
@@ -377,4 +381,5 @@ class TestChoreSummarySensor:
         attrs = alice_summary.extra_state_attributes
         assert attrs["total_pending"] == 0
         assert attrs["total_complete"] == 2
+        assert attrs["total_chores_today"] == 2  # 0 pending + 2 complete
         assert attrs["total_pending"] != attrs["total_complete"]
