@@ -14,6 +14,7 @@ class ChoreFrequency(str, Enum):
 
     DAILY = "daily"
     MANUAL = "manual"
+    ONCE = "once"
 
 
 class ChoreState(str, Enum):

@@ -42,6 +42,15 @@ chores:
       - "john"
       - "jane"
 
+  - name: "Shovel Driveway"
+    slug: "shovel_driveway"
+    description: "Shovel snow from the driveway (one-off after snowfall)"
+    frequency: "once"  # once: deleted after completion when start_new_day is called
+    icon: "mdi:snowflake"
+    points: 20
+    assignees:
+      - "john"
+
 # Privileges are rewards that can be granted or revoked based on chore completion
 privileges:
   - name: "Screen Time"

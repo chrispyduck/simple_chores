@@ -1839,6 +1839,77 @@ class TestStartNewDayService:
         )  # manual -> not_requested
         assert sensor3.get_state() == ChoreState.PENDING.value  # was already pending
 
+    @pytest.mark.asyncio
+    async def test_start_new_day_deletes_once_chores(self, hass) -> None:
+        """Test that completed once chores are deleted on start_new_day."""
+        from custom_components.simple_chores.config_loader import ConfigLoader
+
+        # Create chores with different frequencies
+        chore_once_complete = ChoreConfig(
+            name="One-off Task",
+            slug="one_off_task",
+            frequency=ChoreFrequency.ONCE,
+            assignees=["alice"],
+        )
+        chore_once_pending = ChoreConfig(
+            name="Another One-off",
+            slug="another_one_off",
+            frequency=ChoreFrequency.ONCE,
+            assignees=["alice"],
+        )
+        chore_daily = ChoreConfig(
+            name="Daily Task",
+            slug="daily_task",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_once_complete = ChoreSensor(hass, chore_once_complete, "alice")
+            sensor_once_complete.async_update_ha_state = AsyncMock()
+            sensor_once_complete.set_state(ChoreState.COMPLETE.value)
+
+            sensor_once_pending = ChoreSensor(hass, chore_once_pending, "alice")
+            sensor_once_pending.async_update_ha_state = AsyncMock()
+            sensor_once_pending.set_state(ChoreState.PENDING.value)
+
+            sensor_daily = ChoreSensor(hass, chore_daily, "alice")
+            sensor_daily.async_update_ha_state = AsyncMock()
+            sensor_daily.set_state(ChoreState.COMPLETE.value)
+
+        # Mock config_loader
+        mock_config_loader = MagicMock(spec=ConfigLoader)
+        mock_config_loader.async_delete_chore = AsyncMock()
+
+        hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_one_off_task": sensor_once_complete,
+                "alice_another_one_off": sensor_once_pending,
+                "alice_daily_task": sensor_daily,
+            },
+            "config_loader": mock_config_loader,
+        }
+
+        await async_setup_services(hass)
+
+        # Call start_new_day
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            {},
+            blocking=True,
+        )
+
+        # Completed once chore should be deleted
+        mock_config_loader.async_delete_chore.assert_called_once_with("one_off_task")
+
+        # Pending once chore should NOT be deleted
+        assert mock_config_loader.async_delete_chore.call_count == 1
+
+        # Daily chore should be reset to pending (not deleted)
+        assert sensor_daily.get_state() == ChoreState.PENDING.value
+        sensor_daily.async_update_ha_state.assert_called()
+
 
 class TestSummarySensorUpdates:
     """Tests to verify all state-changing operations update summary sensors."""

@@ -872,7 +872,8 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         self.async_write_ha_state()
 
     def _are_linked_chores_complete(self) -> bool:
-        """Check if all linked chores are complete for this assignee.
+        """
+        Check if all linked chores are complete for this assignee.
 
         If linked_chores is empty, checks that ALL requested chores (pending or
         complete) for this assignee are complete. This allows privileges to be

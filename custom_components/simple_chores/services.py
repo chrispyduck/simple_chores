@@ -169,7 +169,7 @@ CREATE_CHORE_SCHEMA = vol.Schema(
         vol.Required(ATTR_NAME): cv.string,
         vol.Required(ATTR_SLUG): cv.string,
         vol.Optional(ATTR_DESCRIPTION, default=""): cv.string,
-        vol.Required(ATTR_FREQUENCY): vol.In(["daily", "manual"]),
+        vol.Required(ATTR_FREQUENCY): vol.In(["daily", "manual", "once"]),
         vol.Required(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON, default="mdi:clipboard-list-outline"): cv.string,
         vol.Optional(ATTR_POINTS, default=1): vol.All(
@@ -183,7 +183,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Required(ATTR_SLUG): cv.string,
         vol.Optional(ATTR_NAME): cv.string,
         vol.Optional(ATTR_DESCRIPTION): cv.string,
-        vol.Optional(ATTR_FREQUENCY): vol.In(["daily", "manual"]),
+        vol.Optional(ATTR_FREQUENCY): vol.In(["daily", "manual", "once"]),
         vol.Optional(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON): cv.string,
         vol.Optional(ATTR_POINTS): vol.All(vol.Coerce(int), vol.Range(min=0)),
@@ -575,6 +575,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     Resets completed chores based on their frequency:
     - manual: Reset to NOT_REQUESTED
     - daily: Reset to PENDING
+    - once: Delete the chore entirely
     """
     user = call.data.get(ATTR_USER)
 
@@ -586,6 +587,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
     points_storage = hass.data[DOMAIN].get("points_storage")
+    config_loader: ConfigLoader | None = hass.data[DOMAIN].get("config_loader")
 
     # Sanitize user if provided for matching
     sanitized_user = sanitize_entity_id(user) if user else None
@@ -628,11 +630,14 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     reset_count = 0
     manual_count = 0
     daily_count = 0
+    once_count = 0
 
     # Collect all state changes first, then apply them
     # Track affected users to update only their summary sensors
     affected_users = set()
     state_changes = []
+    once_chores_to_delete = []  # Track once chores to delete
+
     for sensor_id, sensor in sensors.items():
         # If user specified, only reset their chores
         if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
@@ -644,7 +649,12 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             chore_frequency = sensor.chore.frequency
             affected_users.add(sensor.assignee)
 
-            if chore_frequency == ChoreFrequency.MANUAL:
+            if chore_frequency == ChoreFrequency.ONCE:
+                # Mark once chore for deletion
+                once_chores_to_delete.append(sensor.chore.slug)
+                reset_count += 1
+                once_count += 1
+            elif chore_frequency == ChoreFrequency.MANUAL:
                 state_changes.append((sensor, ChoreState.NOT_REQUESTED))
                 reset_count += 1
                 manual_count += 1
@@ -668,24 +678,39 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             action,
         )
 
-    # Await all sensor updates to complete before updating summary
+    # Await all sensor updates to complete before deleting one-time chores
     if update_tasks:
         await asyncio.gather(*update_tasks)
 
+    # Delete one-time chores that were completed
+    for slug in once_chores_to_delete:
+        if not config_loader:
+            LOGGER.warning(
+                "Cannot delete one-time chore '%s': config_loader not available", slug
+            )
+            continue
+        try:
+            await config_loader.async_delete_chore(slug)
+            LOGGER.info("New day: deleted one-time chore '%s'", slug)
+        except Exception as err:
+            LOGGER.error("Failed to delete one-time chore '%s': %s", slug, err)
+
     if user:
         LOGGER.info(
-            "Reset %d completed chore(s) for user '%s' (%d manual to not_requested, %d daily to pending)",
+            "Reset %d completed chore(s) for user '%s' (%d manual to not_requested, %d daily to pending, %d once deleted)",
             reset_count,
             user,
             manual_count,
             daily_count,
+            once_count,
         )
     else:
         LOGGER.info(
-            "Reset %d completed chore(s) for all users (%d manual to not_requested, %d daily to pending)",
+            "Reset %d completed chore(s) for all users (%d manual to not_requested, %d daily to pending, %d once deleted)",
             reset_count,
             manual_count,
             daily_count,
+            once_count,
         )
 
     # Update summary sensors to reflect new state (after all chore states are updated)

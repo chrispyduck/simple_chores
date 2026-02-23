@@ -11,7 +11,7 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
 ## Basics
 
 * All configuration is file-based, in a single yaml file. State is maintained within Home Assistant.
-* Chores consist of a name, description, frequency (daily, manual), list of assignees, and slug (used to identify the chore in code).
+* Chores consist of a name, description, frequency (daily, manual, once), list of assignees, and slug (used to identify the chore in code).
 * Assignees are Home Assistant users and are identified by name, not ID, in the config file.
 * Each chore is represented in Home Assistant as a sensor following the format `sensor.simple_chore_{assignee}_{slug}`.
   * Attributes: the sensor includes all configured chore information (full name, description, frequency, points) as sensor attributes.
@@ -30,7 +30,7 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
   * `simple_chores.mark_pending` - Marks a chore as pending. Takes a chore slug and optional user as parameters. If user is not specified, marks pending for all assignees.
   * `simple_chores.mark_not_requested` - Marks a chore as not requested. Takes a chore slug and optional user as parameters. If user is not specified, marks not requested for all assignees.
   * `simple_chores.reset_completed` - Resets all completed chores to not requested. Takes an optional user parameter to reset only that user's chores.
-  * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending. Calculates daily points statistics before resetting. Takes an optional user parameter.
+  * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending, once chores are deleted entirely. Calculates daily points statistics before resetting. Takes an optional user parameter.
   * `simple_chores.create_chore` - Dynamically create a new chore at runtime with specified properties including points.
   * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon.
   * `simple_chores.delete_chore` - Remove a chore from the system.
@@ -95,9 +95,10 @@ chores:
 - `name`: Display name of the chore (required)
 - `slug`: Unique identifier for the chore, used in entity IDs (required, lowercase alphanumeric with hyphens/underscores)
 - `description`: Description of what the chore involves (optional)
-- `frequency`: How often the chore should be done - `daily` or `manual` (required)
+- `frequency`: How often the chore should be done - `daily`, `manual`, or `once` (required)
   - `daily`: Chore will be reset to Pending each day after being completed (must be requested at least once first)
   - `manual`: Chore will be reset to Not Requested each day after being completed
+  - `once`: One-off chore that is deleted entirely after completion when start_new_day is called (useful for temporary or ad-hoc tasks)
 - `assignees`: List of Home Assistant usernames who can be assigned this chore (required, at least one)
 - `points`: Number of points awarded when the chore is completed (optional, default: 1, must be >= 0)
 - `icon`: Material Design Icon for the chore (optional, default: `mdi:clipboard-list-outline`)

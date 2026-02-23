@@ -12,7 +12,7 @@ Service actions have been implemented to allow external automation and scripts t
 2. `simple_chores.mark_pending` - Mark a chore as pending for a specific user or all assignees (deducts points if chore was previously complete)
 3. `simple_chores.mark_not_requested` - Mark a chore as not requested for a specific user or all assignees
 4. `simple_chores.reset_completed` - Reset all completed chores to not requested (optionally for a specific user)
-5. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, daily chores to pending (calculates missed points for pending chores)
+5. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, daily chores to pending, once chores are deleted entirely (calculates missed points for pending chores)
 6. `simple_chores.create_chore` - Dynamically create a new chore at runtime
 7. `simple_chores.update_chore` - Update an existing chore's properties (including points)
 8. `simple_chores.delete_chore` - Delete a chore
@@ -198,7 +198,7 @@ The integration includes a comprehensive points system to gamify chore completio
 - The `start_new_day` service:
   - Awards points for all completed chores (updates `total_points` and `points_earned`)
   - Adds pending chore points to cumulative `points_missed` total
-  - Then resets chore states based on frequency
+  - Then resets chore states based on frequency (manual → Not Requested, daily → Pending, once → deleted)
 - Points tracking can be reset using the `reset_points` service:
   - By default, resets points_earned and cumulative points_missed to zero
   - With `reset_total: true`, also resets lifetime total_points to zero
