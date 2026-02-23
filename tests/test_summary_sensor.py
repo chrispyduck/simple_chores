@@ -128,6 +128,8 @@ class TestChoreSummarySensor:
         assert len(attrs["complete_chores"]) == 1
         assert len(attrs["not_requested_chores"]) == 0
         assert attrs["total_chores"] == 2
+        assert attrs["total_pending"] == 1
+        assert attrs["total_complete"] == 1
         # Test all_chores attribute
         assert "sensor.simple_chore_alice_dishes" in attrs["all_chores"]
         assert "sensor.simple_chore_alice_vacuum" in attrs["all_chores"]
@@ -144,6 +146,8 @@ class TestChoreSummarySensor:
         assert "sensor.simple_chore_bob_laundry" in bob_attrs["not_requested_chores"]
         assert len(bob_attrs["not_requested_chores"]) == 2
         assert bob_attrs["total_chores"] == 2
+        assert bob_attrs["total_pending"] == 0
+        assert bob_attrs["total_complete"] == 0
         # Test all_chores attribute for bob
         assert "sensor.simple_chore_bob_dishes" in bob_attrs["all_chores"]
         assert "sensor.simple_chore_bob_laundry" in bob_attrs["all_chores"]
@@ -329,3 +333,48 @@ class TestChoreSummarySensor:
         assert attrs["points_missed"] == 10
         # INVARIANT: points_possible = points_earned + points_missed
         assert attrs["points_possible"] == 60  # 50 + 10
+
+    @pytest.mark.asyncio
+    async def test_summary_sensor_different_complete_and_pending_counts(
+        self, hass, sample_config: SimpleChoresConfig
+    ) -> None:
+        """Test that total_complete and total_pending can have different values."""
+        hass.data = {}
+        mock_config_loader = MagicMock()
+        mock_config_loader.config = sample_config
+        async_add_entities = Mock()
+
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
+        await manager.async_setup()
+
+        alice_summary = manager.summary_sensors["alice"]
+
+        # Set chores to different states: one pending, one complete
+        manager.sensors["alice_dishes"].set_state(ChoreState.PENDING.value)
+        manager.sensors["alice_vacuum"].set_state(ChoreState.COMPLETE.value)
+        await alice_summary.async_update()
+
+        attrs = alice_summary.extra_state_attributes
+
+        # Verify counts are correctly tracked (both happen to be 1 in this case)
+        assert attrs["total_pending"] == 1
+        assert attrs["total_complete"] == 1
+
+        # Now change states to have different values: 2 pending, 0 complete
+        manager.sensors["alice_vacuum"].set_state(ChoreState.PENDING.value)
+        await alice_summary.async_update()
+
+        attrs = alice_summary.extra_state_attributes
+        assert attrs["total_pending"] == 2
+        assert attrs["total_complete"] == 0
+        assert attrs["total_pending"] != attrs["total_complete"]
+
+        # Change to opposite: 0 pending, 2 complete
+        manager.sensors["alice_dishes"].set_state(ChoreState.COMPLETE.value)
+        manager.sensors["alice_vacuum"].set_state(ChoreState.COMPLETE.value)
+        await alice_summary.async_update()
+
+        attrs = alice_summary.extra_state_attributes
+        assert attrs["total_pending"] == 0
+        assert attrs["total_complete"] == 2
+        assert attrs["total_pending"] != attrs["total_complete"]
