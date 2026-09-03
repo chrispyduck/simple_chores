@@ -1248,6 +1248,7 @@ class TestStartNewDayService:
         # Create manager and sensors
         manager = MagicMock(spec=ChoreSensorManager)
         manager.sensors = {}
+        manager.privilege_sensors = {}
         # Add points_storage mock
         mock_points_storage = MagicMock()
         mock_points_storage.get_points.return_value = 0
@@ -1489,6 +1490,7 @@ class TestStartNewDayService:
             "alice_chore1": sensor1,
             "alice_chore2": sensor2,
         }
+        manager.privilege_sensors = {}
         manager.points_storage = points_storage
 
         hass.data[DOMAIN] = {
@@ -1653,6 +1655,7 @@ class TestStartNewDayService:
         # Create manager
         manager = MagicMock(spec=ChoreSensorManager)
         manager.points_storage = points_storage
+        manager.privilege_sensors = {}
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             # One complete, one pending
@@ -1764,6 +1767,7 @@ class TestStartNewDayService:
 
         manager = MagicMock(spec=ChoreSensorManager)
         manager.points_storage = points_storage
+        manager.privilege_sensors = {}
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             # Two complete chores
@@ -2408,6 +2412,7 @@ class TestSummarySensorAttributes:
 
         manager = MagicMock(spec=ChoreSensorManager)
         manager.points_storage = points_storage
+        manager.privilege_sensors = {}
 
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             pending_sensor = ChoreSensor(hass, pending_chore, "alice")
@@ -2458,6 +2463,7 @@ class TestSummarySensorAttributes:
         manager = MagicMock(spec=ChoreSensorManager)
         manager.sensors = {}
         manager.points_storage = points_storage
+        manager.privilege_sensors = {}
 
         summary_sensor = ChoreSummarySensor(hass, "bob", manager)
         summary_sensor.async_update_ha_state = make_summary_update_mock(summary_sensor)
