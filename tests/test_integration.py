@@ -1,8 +1,8 @@
 """Integration tests for simple_chores."""
 
 import asyncio
-from pathlib import Path
-from typing import Any
+import contextlib
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -21,6 +21,9 @@ from custom_components.simple_chores.models import (
     SimpleChoresConfig,
 )
 from custom_components.simple_chores.sensor import ChoreSensor, ChoreSensorManager
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
@@ -42,8 +45,7 @@ def hass() -> MagicMock:
 @pytest.fixture
 def temp_config_file(tmp_path: Path) -> Path:
     """Create a temporary config file."""
-    config_path = tmp_path / "simple_chores.yaml"
-    return config_path
+    return tmp_path / "simple_chores.yaml"
 
 
 @pytest.fixture
@@ -139,10 +141,8 @@ class TestFullIntegrationSetup:
         # Watch task should be stopped
         if real_loader._watch_task is not None and not real_loader._watch_task.done():
             real_loader._watch_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await real_loader._watch_task
-            except asyncio.CancelledError:
-                pass
         assert real_loader._watch_task is None or real_loader._watch_task.cancelled()
 
     @pytest.mark.asyncio
@@ -182,11 +182,10 @@ class TestFullIntegrationSetup:
         await asyncio.sleep(0.1)
         temp_config_file.write_text(yaml.dump(modified_data))
 
-        # Wait for callback (max 6 seconds)
-        try:
+        # Wait for callback (max 6 seconds; may not complete in time, but
+        # that's ok for this test)
+        with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(callback_called.wait(), timeout=6)
-        except TimeoutError:
-            pass  # May not complete in time, but that's ok for this test
 
         await loader.async_stop_watching()
 
@@ -332,17 +331,17 @@ class TestModelValidationIntegration:
         # Alice has 2 chores
         alice_chores = config.get_chores_for_assignee("alice")
         assert len(alice_chores) == 2
-        assert set(c.slug for c in alice_chores) == {"dishes", "laundry"}
+        assert {c.slug for c in alice_chores} == {"dishes", "laundry"}
 
         # Bob has 2 chores
         bob_chores = config.get_chores_for_assignee("bob")
         assert len(bob_chores) == 2
-        assert set(c.slug for c in bob_chores) == {"dishes", "vacuum"}
+        assert {c.slug for c in bob_chores} == {"dishes", "vacuum"}
 
         # Charlie has 2 chores
         charlie_chores = config.get_chores_for_assignee("charlie")
         assert len(charlie_chores) == 2
-        assert set(c.slug for c in charlie_chores) == {"vacuum", "laundry"}
+        assert {c.slug for c in charlie_chores} == {"vacuum", "laundry"}
 
 
 class TestSensorManagerIntegration:

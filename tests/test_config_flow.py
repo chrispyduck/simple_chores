@@ -1,15 +1,18 @@
 """Test the Simple Chores config flow."""
 
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.simple_chores.config_flow import (
     SimpleChoresConfigFlow,
     SimpleChoresOptionsFlow,
 )
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 
 class TestConfigFlow:

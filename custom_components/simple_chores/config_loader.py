@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
-from collections.abc import Awaitable, Callable
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
@@ -15,6 +14,9 @@ from .const import LOGGER
 from .models import ChoreConfig, PrivilegeConfig, SimpleChoresConfig
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+    from pathlib import Path
+
     from homeassistant.core import HomeAssistant
 
 
@@ -96,7 +98,6 @@ class ConfigLoader:
                 "Loaded configuration with %d chore(s)",
                 len(self._config.chores),
             )
-            return self._config
 
         except yaml.YAMLError as err:
             msg = f"Invalid YAML in config file: {err}"
@@ -110,6 +111,8 @@ class ConfigLoader:
             msg = f"Unexpected error loading config: {err}"
             LOGGER.exception(msg)
             raise ConfigLoadError(msg) from err
+        else:
+            return self._config
 
     def register_callback(
         self,
@@ -136,7 +139,7 @@ class ConfigLoader:
                     await callback(self._config)
                 else:
                     await self.hass.async_add_executor_job(callback, self._config)
-            except Exception:
+            except Exception:  # noqa: BLE001 - a bad callback must not stop the rest
                 LOGGER.exception("Error in config change callback")
 
     async def _check_for_changes(self) -> bool:
@@ -158,7 +161,7 @@ class ConfigLoader:
             if self._last_mtime is None or current_mtime > self._last_mtime:
                 return True
 
-        except Exception:
+        except Exception:  # noqa: BLE001 - a bad stat() must not crash the watcher
             LOGGER.exception("Error checking for config file changes")
 
         return False
@@ -186,7 +189,7 @@ class ConfigLoader:
             except asyncio.CancelledError:
                 LOGGER.debug("Config file watcher stopped")
                 break
-            except Exception:
+            except Exception:  # noqa: BLE001 - keep the watcher loop alive
                 LOGGER.exception("Error in config file watcher")
 
     async def async_start_watching(self) -> None:
@@ -204,10 +207,8 @@ class ConfigLoader:
             return
 
         self._watch_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await self._watch_task
-        except asyncio.CancelledError:
-            pass
 
         self._watch_task = None
         LOGGER.info("Config file watcher stopped")
@@ -282,7 +283,7 @@ class ConfigLoader:
             raise ConfigLoadError(msg)
 
         # Add chore to config
-        new_chores = list(self._config.chores) + [chore]
+        new_chores = [*list(self._config.chores), chore]
         new_config = SimpleChoresConfig(
             chores=new_chores, privileges=self._config.privileges
         )
@@ -413,7 +414,7 @@ class ConfigLoader:
             raise ConfigLoadError(msg)
 
         # Add privilege to config
-        new_privileges = list(self._config.privileges) + [privilege]
+        new_privileges = [*list(self._config.privileges), privilege]
         new_config = SimpleChoresConfig(
             chores=self._config.chores, privileges=new_privileges
         )

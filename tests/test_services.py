@@ -5,16 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 from homeassistant.exceptions import ServiceValidationError
 
-
-def make_summary_update_mock(summary_sensor):
-    """Create a mock async_update_ha_state that calls async_update."""
-
-    async def update_side_effect(*args, **kwargs):
-        await summary_sensor.async_update()
-
-    return AsyncMock(side_effect=update_side_effect)
-
-
 from custom_components.simple_chores.const import (
     ATTR_ADJUSTMENT,
     ATTR_CHORE_SLUG,
@@ -43,9 +33,18 @@ from custom_components.simple_chores.sensor import ChoreSensor, ChoreSummarySens
 from custom_components.simple_chores.services import async_setup_services
 
 
+def make_summary_update_mock(summary_sensor):
+    """Create a mock async_update_ha_state that calls async_update."""
+
+    async def update_side_effect(*args, **kwargs):
+        await summary_sensor.async_update()
+
+    return AsyncMock(side_effect=update_side_effect)
+
+
 @pytest.fixture(autouse=True)
 async def setup_hass_data(hass):
-    """Setup hass.data for all tests in this file."""
+    """Set up hass.data for all tests in this file."""
     # Ensure DOMAIN data exists
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
@@ -233,7 +232,8 @@ class TestMarkCompleteService:
 
         # Verify state changed to COMPLETE
         assert sensor.native_value == ChoreState.COMPLETE.value, (
-            f"Expected state to be '{ChoreState.COMPLETE.value}' but got '{sensor.native_value}'"
+            f"Expected state to be '{ChoreState.COMPLETE.value}' "
+            f"but got '{sensor.native_value}'"
         )
 
 
@@ -351,7 +351,8 @@ class TestMarkPendingService:
 
         # Verify the state actually changed to PENDING
         assert sensor.native_value == ChoreState.PENDING.value, (
-            f"Expected state to be '{ChoreState.PENDING.value}' but got '{sensor.native_value}'"
+            f"Expected state to be '{ChoreState.PENDING.value}' "
+            f"but got '{sensor.native_value}'"
         )
 
 
@@ -466,7 +467,8 @@ class TestMarkNotRequestedService:
 
         # Verify state changed to NOT_REQUESTED
         assert sensor.native_value == ChoreState.NOT_REQUESTED.value, (
-            f"Expected state to be '{ChoreState.NOT_REQUESTED.value}' but got '{sensor.native_value}'"
+            f"Expected state to be '{ChoreState.NOT_REQUESTED.value}' "
+            f"but got '{sensor.native_value}'"
         )
 
 
@@ -855,14 +857,16 @@ class TestMarkAllAssignees:
 
         service_data = {ATTR_CHORE_SLUG: "nonexistent"}
 
-        with caplog.at_level("ERROR"):
-            with pytest.raises(ServiceValidationError, match="No sensors found"):
-                await hass.services.async_call(
-                    DOMAIN,
-                    SERVICE_MARK_COMPLETE,
-                    service_data,
-                    blocking=True,
-                )
+        with (
+            caplog.at_level("ERROR"),
+            pytest.raises(ServiceValidationError, match="No sensors found"),
+        ):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_COMPLETE,
+                service_data,
+                blocking=True,
+            )
 
         assert "No sensors found for chore 'nonexistent'" in caplog.text
 
@@ -1512,9 +1516,10 @@ class TestStartNewDayService:
         # Verify cumulative points_missed
         assert points_storage.get_points_missed("alice") == 15
 
-        # Verify dynamic points_possible calculation after reset
-        # After start_new_day, chore2 (complete) is reset to pending
-        # points_possible = earned (25) + missed (15) + pending (both chores: 15 + 25 = 40)
+        # Verify dynamic points_possible calculation after reset. After
+        # start_new_day, chore2 (complete) is reset to pending, so the
+        # expected total is earned (25) plus missed (15) plus pending
+        # (both chores: 15 + 25), i.e. 40.
         summary_sensor = ChoreSummarySensor(hass, "alice", manager)
         summary_sensor.async_update_ha_state = make_summary_update_mock(summary_sensor)
         await summary_sensor.async_update()
@@ -1706,7 +1711,8 @@ class TestStartNewDayService:
         mid_attrs = summary_sensor.extra_state_attributes
         assert mid_attrs["total_points"] == 10
         assert mid_attrs["points_earned"] == 10
-        # points_possible = earned + missed + pending = 10 + 0 + 5 (chore2 still pending)
+        # points_possible is earned plus missed plus pending: 10 + 0 + 5
+        # (chore2 still pending)
         assert mid_attrs["points_possible"] == 15
 
         # Call start_new_day (should update missed points, reset chore states)
@@ -1725,7 +1731,8 @@ class TestStartNewDayService:
         assert updated_attrs["total_points"] == 10  # Unchanged (already awarded)
         assert updated_attrs["points_earned"] == 10  # Unchanged
         assert updated_attrs["points_missed"] == 5  # Missed from pending chore2
-        # points_possible = earned + missed + pending = 10 + 5 + 15 (both chores now pending)
+        # points_possible is earned plus missed plus pending: 10 + 5 + 15
+        # (both chores now pending)
         assert updated_attrs["points_possible"] == 30
 
         # CRITICAL: Verify that complete_chores list is empty after reset
@@ -1735,7 +1742,7 @@ class TestStartNewDayService:
 
     @pytest.mark.asyncio
     async def test_start_new_day_clears_complete_chores_list(self, hass) -> None:
-        """Test that start_new_day properly clears the complete_chores list in summary sensor."""
+        """Test that start_new_day clears complete_chores in the summary sensor."""
         from custom_components.simple_chores.data import PointsStorage
         from custom_components.simple_chores.sensor import ChoreSensorManager
 
@@ -1833,7 +1840,7 @@ class TestStartNewDayService:
         # Daily chore should now be pending (was complete, now reset to pending)
         assert len(updated_attrs["pending_chores"]) == 2  # pending1 + complete1 (daily)
 
-        # Manual chore should be not_requested (was complete, now reset to not_requested)
+        # Manual chore should be not_requested (was complete, now reset)
         assert len(updated_attrs["not_requested_chores"]) == 1  # complete2 (manual)
 
         # Verify the actual sensor states were updated
@@ -2112,7 +2119,7 @@ class TestSummarySensorUpdates:
         )
 
         # Verify summary sensor was updated
-        # Should be called once from _update_summary_sensors (not from individual sensors)
+        # Should be called once from _update_summary_sensors (not individual sensors)
         mock_summary.async_update_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
@@ -2378,11 +2385,11 @@ class TestAdjustPointsService:
 
 
 class TestSummarySensorAttributes:
-    """Tests for summary sensor attributes including points_missed and points_possible."""
+    """Tests for summary sensor attributes: points_missed and points_possible."""
 
     @pytest.mark.asyncio
     async def test_summary_sensor_includes_points_stats(self, hass) -> None:
-        """Test that summary sensor calculates points_missed and points_possible from current chore states."""
+        """Test summary sensor stats include points_missed and points_possible."""
         from custom_components.simple_chores.data import PointsStorage
         from custom_components.simple_chores.sensor import (
             ChoreSensorManager,
@@ -2445,7 +2452,8 @@ class TestSummarySensorAttributes:
         assert attrs["total_points"] == 100
         # points_missed is cumulative from storage (not set yet, so 0)
         assert attrs["points_missed"] == 0
-        # points_possible = earned + missed + pending = 0 + 0 + 10 (pending_chore is pending)
+        # points_possible is earned plus missed plus pending: 0 + 0 + 10,
+        # since pending_chore is pending.
         assert attrs["points_possible"] == 10
 
     @pytest.mark.asyncio
@@ -2482,7 +2490,7 @@ class TestResetPointsService:
 
     @pytest.mark.asyncio
     async def test_reset_points_daily_stats_only(self, hass) -> None:
-        """Test reset_points resets cumulative points_missed but not total points by default."""
+        """Test that reset_points, by default, resets points_missed but not total."""
         from custom_components.simple_chores.data import PointsStorage
 
         points_storage = PointsStorage(hass)
@@ -2510,7 +2518,7 @@ class TestResetPointsService:
 
     @pytest.mark.asyncio
     async def test_reset_points_with_total(self, hass) -> None:
-        """Test reset_points resets both cumulative missed and total points when requested."""
+        """Test reset_points resets both missed and total points when requested."""
         from custom_components.simple_chores.data import PointsStorage
 
         points_storage = PointsStorage(hass)
@@ -2705,7 +2713,7 @@ class TestResetPointsService:
 
     @pytest.mark.asyncio
     async def test_points_earned_increments_with_mark_complete(self, hass) -> None:
-        """Test that points_earned and total_points increment when chores are marked complete."""
+        """Test points_earned and total_points increment on mark_complete."""
         from custom_components.simple_chores.data import PointsStorage
 
         points_storage = PointsStorage(hass)

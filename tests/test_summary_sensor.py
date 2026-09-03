@@ -82,7 +82,7 @@ class TestChoreSummarySensor:
         # Initially, no chores are pending
         assert alice_summary.native_value == 0
 
-        # Set alice's dishes to pending (directly set state without calling async_write_ha_state)
+        # Set alice's dishes to pending (set state directly, skip async_write_ha_state)
         manager.sensors["alice_dishes"].set_state(ChoreState.PENDING.value)
         await alice_summary.async_update()
         assert alice_summary.native_value == 1
@@ -210,7 +210,7 @@ class TestChoreSummarySensor:
     async def test_summary_attributes_update_after_set_state(
         self, hass, sample_config: SimpleChoresConfig
     ) -> None:
-        """Test summary sensor attributes update when chore state changes via set_state."""
+        """Test summary sensor attributes update when chore state changes."""
         from custom_components.simple_chores.const import DOMAIN
 
         hass.data = {DOMAIN: {"states": {}, "summary_sensors": {}}}
@@ -333,7 +333,7 @@ class TestChoreSummarySensor:
         assert attrs["total_points"] == 100
         assert attrs["points_earned"] == 50
         assert attrs["points_missed"] == 10
-        # INVARIANT: points_possible = points_earned + points_missed
+        # Invariant: points_possible is always points_earned plus points_missed
         assert attrs["points_possible"] == 60  # 50 + 10
 
     @pytest.mark.asyncio

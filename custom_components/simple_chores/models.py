@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .const import sanitize_entity_id
 
 
-class ChoreFrequency(str, Enum):
+class ChoreFrequency(StrEnum):
     """Frequency for chores."""
 
     DAILY = "daily"
@@ -17,7 +17,7 @@ class ChoreFrequency(str, Enum):
     ONCE = "once"
 
 
-class ChoreState(str, Enum):
+class ChoreState(StrEnum):
     """State of a chore."""
 
     PENDING = "Pending"
@@ -25,14 +25,14 @@ class ChoreState(str, Enum):
     NOT_REQUESTED = "Not Requested"
 
 
-class PrivilegeBehavior(str, Enum):
+class PrivilegeBehavior(StrEnum):
     """Behavior mode for privileges."""
 
     AUTOMATIC = "automatic"
     MANUAL = "manual"
 
 
-class PrivilegeState(str, Enum):
+class PrivilegeState(StrEnum):
     """State of a privilege."""
 
     ENABLED = "Enabled"

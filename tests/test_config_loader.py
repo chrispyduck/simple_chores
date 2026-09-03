@@ -1,8 +1,7 @@
 """Tests for simple_chores config_loader."""
 
 import asyncio
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
@@ -18,6 +17,9 @@ from custom_components.simple_chores.models import (
     SimpleChoresConfig,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 @pytest.fixture
 def hass() -> MagicMock:
@@ -30,8 +32,7 @@ def hass() -> MagicMock:
 @pytest.fixture
 def temp_config_file(tmp_path: Path) -> Path:
     """Create a temporary config file."""
-    config_path = tmp_path / "simple_chores.yaml"
-    return config_path
+    return tmp_path / "simple_chores.yaml"
 
 
 @pytest.fixture
