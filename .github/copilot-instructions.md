@@ -134,11 +134,13 @@ pytest --cov              # With coverage
 ### Service Implementation
 1. **Schema Definition** (voluptuous):
 ```python
-SERVICE_MARK_COMPLETE_SCHEMA = vol.Schema({
-    vol.Required(ATTR_USER): cv.string,  # or vol.Optional
-    vol.Required(ATTR_SLUG): cv.string,
-    # ... other params
-})
+SERVICE_MARK_COMPLETE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_USER): cv.string,  # or vol.Optional
+        vol.Required(ATTR_SLUG): cv.string,
+        # ... other params
+    }
+)
 ```
 
 2. **Handler Function:**
@@ -230,10 +232,12 @@ Attributes: ATTR_USER, ATTR_SLUG, ATTR_NAME, ATTR_DESCRIPTION, ATTR_FREQUENCY, A
 1. Add SERVICE_MY_ACTION to const.py
 2. Create schema in services.py:
    ```python
-   SERVICE_MY_ACTION_SCHEMA = vol.Schema({
-       vol.Optional(ATTR_USER): cv.string,
-       # ... params
-   })
+   SERVICE_MY_ACTION_SCHEMA = vol.Schema(
+       {
+           vol.Optional(ATTR_USER): cv.string,
+           # ... params
+       }
+   )
    ```
 3. Create handler that calls `await _update_summary_sensors(hass, user)`
 4. Register in async_setup_services() in __init__.py

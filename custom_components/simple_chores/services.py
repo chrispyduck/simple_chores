@@ -282,7 +282,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
 
     LOGGER.info(
         "Service 'mark_complete' called with user='%s', chore_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         chore_slug,
     )
 
@@ -369,7 +369,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
 
     LOGGER.info(
         "Service 'mark_pending' called with user='%s', chore_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         chore_slug,
     )
 
@@ -456,7 +456,7 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
 
     LOGGER.info(
         "Service 'mark_not_requested' called with user='%s', chore_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         chore_slug,
     )
 
@@ -519,7 +519,7 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
 
     LOGGER.info(
         "Service 'reset_completed' called with user='%s'",
-        user if user else "all users",
+        user or "all users",
     )
 
     _validate_integration_loaded(hass)
@@ -581,7 +581,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
     LOGGER.info(
         "Service 'start_new_day' called with user='%s'",
-        user if user else "all users",
+        user or "all users",
     )
 
     _validate_integration_loaded(hass)
@@ -829,7 +829,7 @@ async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None
 
     LOGGER.info(
         "Service 'refresh_summary' called with user='%s'",
-        user if user else "all users",
+        user or "all users",
     )
 
     _validate_integration_loaded(hass)
@@ -924,7 +924,7 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
 
     LOGGER.info(
         "Service 'reset_points' called with user='%s', reset_total=%s",
-        user if user else "all users",
+        user or "all users",
         reset_total,
     )
 
@@ -1059,7 +1059,7 @@ async def handle_enable_privilege(hass: HomeAssistant, call: ServiceCall) -> Non
 
     LOGGER.info(
         "Service 'enable_privilege' called with user='%s', privilege_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         privilege_slug,
     )
 
@@ -1103,7 +1103,7 @@ async def handle_disable_privilege(hass: HomeAssistant, call: ServiceCall) -> No
 
     LOGGER.info(
         "Service 'disable_privilege' called with user='%s', privilege_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         privilege_slug,
     )
 
@@ -1150,7 +1150,7 @@ async def handle_temporarily_disable_privilege(
 
     LOGGER.info(
         "Service 'temporarily_disable_privilege' called with user='%s', privilege_slug='%s', duration=%d",
-        user if user else "all assignees",
+        user or "all assignees",
         privilege_slug,
         duration,
     )
@@ -1204,7 +1204,7 @@ async def handle_adjust_temporary_disable(
 
     LOGGER.info(
         "Service 'adjust_temporary_disable' called with user='%s', privilege_slug='%s', adjustment=%d",
-        user if user else "all assignees",
+        user or "all assignees",
         privilege_slug,
         adjustment,
     )
