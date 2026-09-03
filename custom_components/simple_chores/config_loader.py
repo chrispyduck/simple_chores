@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -131,7 +132,7 @@ class ConfigLoader:
 
         for callback in self._callbacks:
             try:
-                if asyncio.iscoroutinefunction(callback):
+                if inspect.iscoroutinefunction(callback):
                     await callback(self._config)
                 else:
                     await self.hass.async_add_executor_job(callback, self._config)
