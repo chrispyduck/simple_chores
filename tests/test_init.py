@@ -52,8 +52,7 @@ def mock_config_entry() -> MagicMock:
 @pytest.fixture
 def temp_config_file(tmp_path: Path) -> Path:
     """Create a temporary config file."""
-    config_path = tmp_path / "simple_chores.yaml"
-    return config_path
+    return tmp_path / "simple_chores.yaml"
 
 
 @pytest.fixture

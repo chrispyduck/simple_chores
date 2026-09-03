@@ -21,8 +21,11 @@ from .sensor import async_setup_platform
 from .services import async_setup_services
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity import Entity
 
 
 PLATFORMS: list[Platform] = [
@@ -36,7 +39,7 @@ CONFIG_SCHEMA = vol.Schema(
 )
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:  # noqa: ARG001
     """
     Set up the Simple Chores component from yaml configuration.
 
@@ -81,7 +84,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     # Load sensor platform directly by importing and calling it
     # This avoids the deprecated hass.helpers.discovery pattern
-    def add_entities(new_entities, update_before_add: bool = False) -> None:  # noqa: FBT001, FBT002
+    def add_entities(
+        new_entities: Iterable[Entity],
+        update_before_add: bool = False,  # noqa: FBT001, FBT002
+    ) -> None:
         """Add entities callback (no-op for YAML setup)."""
 
     await async_setup_platform(hass, {}, add_entities, None)
