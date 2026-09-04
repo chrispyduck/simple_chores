@@ -111,7 +111,7 @@ export class SimpleChoresPanel extends LitElement {
 
         ${this._tab === "chores"
           ? this._renderChoresTab(chores, assignees)
-          : this._renderPrivilegesTab(privileges, assignees)}
+          : this._renderPrivilegesTab(privileges, chores, assignees)}
       </div>
 
       ${this._dialog ? this._renderDialog(chores, assignees) : nothing}
@@ -246,6 +246,7 @@ export class SimpleChoresPanel extends LitElement {
 
   private _renderPrivilegesTab(
     privileges: PrivilegeDefinition[],
+    chores: ChoreDefinition[],
     assignees: string[]
   ) {
     return html`
@@ -258,13 +259,20 @@ export class SimpleChoresPanel extends LitElement {
       ${privileges.length === 0
         ? html`<p class="empty">No privileges yet. Create one to get started.</p>`
         : html`<div class="card-grid">
-            ${privileges.map((p) => this._renderPrivilegeCard(p, assignees))}
+            ${privileges.map((p) => this._renderPrivilegeCard(p, chores, assignees))}
           </div>`}
     `;
   }
 
-  private _renderPrivilegeCard(privilege: PrivilegeDefinition, assignees: string[]) {
+  private _renderPrivilegeCard(
+    privilege: PrivilegeDefinition,
+    chores: ChoreDefinition[],
+    assignees: string[]
+  ) {
     void assignees; // reserved for future per-card assignee suggestions
+    const linkedChoreNames = privilege.linkedChores.map(
+      (slug) => chores.find((c) => c.slug === slug)?.name ?? slug
+    );
     return html`
       <div class="card">
         <div class="card-header">
@@ -273,8 +281,8 @@ export class SimpleChoresPanel extends LitElement {
             <div class="name">${privilege.name}</div>
             <div class="meta">
               ${privilege.behavior}
-              ${privilege.linkedChores.length
-                ? html` · linked: ${privilege.linkedChores.join(", ")}`
+              ${linkedChoreNames.length
+                ? html` · linked: ${linkedChoreNames.join(", ")}`
                 : html` · linked: all requested chores`}
             </div>
           </div>
@@ -299,92 +307,103 @@ export class SimpleChoresPanel extends LitElement {
           ${privilege.assignees.map((a) => {
             const isTemp = a.state === "Temporarily Disabled";
             return html`
-              <div class="assignee-row">
-                <span class="assignee-name">${a.assignee}</span>
-                <span class="state-chip ${this._privilegeStateClass(a.state)}">
-                  ${a.state}${isTemp && a.disableUntil
-                    ? html` (${this._formatUntil(a.disableUntil)})`
-                    : nothing}
-                </span>
-                <div class="row-actions">
+              <div class="assignee-row privilege-row">
+                <div class="assignee-main">
+                  <span class="assignee-name">${a.assignee}</span>
+                  <span class="state-chip ${this._privilegeStateClass(a.state)}">
+                    ${a.state}${isTemp && a.disableUntil
+                      ? html` (${this._formatUntil(a.disableUntil)})`
+                      : nothing}
+                  </span>
                   ${privilege.behavior === "manual"
                     ? html`
-                        <button
-                          class="action-chip"
-                          title="Enable"
-                          ?disabled=${a.state === "Enabled"}
-                          @click=${() =>
-                            this._call(SERVICE_DOMAIN, "enable_privilege", {
-                              user: a.assignee,
-                              privilege_slug: privilege.slug,
-                            })}
-                        >
-                          <ha-icon icon="mdi:check-circle-outline"></ha-icon>
-                          <span>Enable</span>
-                        </button>
-                        <button
-                          class="action-chip"
-                          title="Disable"
-                          ?disabled=${a.state === "Disabled"}
-                          @click=${() =>
-                            this._call(SERVICE_DOMAIN, "disable_privilege", {
-                              user: a.assignee,
-                              privilege_slug: privilege.slug,
-                            })}
-                        >
-                          <ha-icon icon="mdi:close-circle-outline"></ha-icon>
-                          <span>Disable</span>
-                        </button>
+                        <div class="row-actions">
+                          <button
+                            class="action-chip"
+                            title="Enable"
+                            ?disabled=${a.state === "Enabled"}
+                            @click=${() =>
+                              this._call(SERVICE_DOMAIN, "enable_privilege", {
+                                user: a.assignee,
+                                privilege_slug: privilege.slug,
+                              })}
+                          >
+                            <ha-icon icon="mdi:check-circle-outline"></ha-icon>
+                            <span>Enable</span>
+                          </button>
+                          <button
+                            class="action-chip"
+                            title="Disable"
+                            ?disabled=${a.state === "Disabled"}
+                            @click=${() =>
+                              this._call(SERVICE_DOMAIN, "disable_privilege", {
+                                user: a.assignee,
+                                privilege_slug: privilege.slug,
+                              })}
+                          >
+                            <ha-icon icon="mdi:close-circle-outline"></ha-icon>
+                            <span>Disable</span>
+                          </button>
+                        </div>
                       `
                     : nothing}
-                  <button
-                    class="action-chip"
-                    title="Shorten the block by 1 hour"
-                    ?disabled=${!isTemp}
-                    @click=${() =>
-                      this._adjustTemporaryDisable(privilege.slug, a.assignee, -60)}
-                  >
-                    <ha-icon icon="mdi:clock-minus-outline"></ha-icon>
-                    <span>Block −1h</span>
-                  </button>
-                  <button
-                    class="action-chip"
-                    title="Shorten the block by 1 day"
-                    ?disabled=${!isTemp}
-                    @click=${() =>
-                      this._adjustTemporaryDisable(privilege.slug, a.assignee, -1440)}
-                  >
-                    <ha-icon icon="mdi:clock-minus"></ha-icon>
-                    <span>Block −1d</span>
-                  </button>
-                  <button
-                    class="action-chip"
-                    title="Block for 1 hour"
-                    @click=${() =>
-                      this._addTemporaryDisable(privilege.slug, a.assignee, isTemp, 60)}
-                  >
-                    <ha-icon icon="mdi:clock-plus-outline"></ha-icon>
-                    <span>Block +1h</span>
-                  </button>
-                  <button
-                    class="action-chip"
-                    title="Block for 1 day"
-                    @click=${() =>
+                </div>
+                <div class="block-steppers">
+                  <span class="block-steppers-label">Temporary block</span>
+                  ${this._renderBlockStepper(
+                    "1h",
+                    isTemp,
+                    () => this._adjustTemporaryDisable(privilege.slug, a.assignee, -60),
+                    () =>
+                      this._addTemporaryDisable(privilege.slug, a.assignee, isTemp, 60)
+                  )}
+                  ${this._renderBlockStepper(
+                    "1d",
+                    isTemp,
+                    () =>
+                      this._adjustTemporaryDisable(privilege.slug, a.assignee, -1440),
+                    () =>
                       this._addTemporaryDisable(
                         privilege.slug,
                         a.assignee,
                         isTemp,
                         1440
-                      )}
-                  >
-                    <ha-icon icon="mdi:clock-plus"></ha-icon>
-                    <span>Block +1d</span>
-                  </button>
+                      )
+                  )}
                 </div>
               </div>
             `;
           })}
         </div>
+      </div>
+    `;
+  }
+
+  /**
+   * A single stepper for adjusting a privilege's temporary block by a fixed
+   * unit (e.g. "1h" or "1d") - a minus button, the unit, and a plus button
+   * inside one bordered pill, matching how Home Assistant renders its own
+   * number/counter steppers.
+   */
+  private _renderBlockStepper(
+    unit: string,
+    canShorten: boolean,
+    onShorten: () => unknown,
+    onExtend: () => unknown
+  ) {
+    return html`
+      <div class="stepper">
+        <button
+          title="Shorten the block by ${unit}"
+          ?disabled=${!canShorten}
+          @click=${onShorten}
+        >
+          <ha-icon icon="mdi:minus"></ha-icon>
+        </button>
+        <span class="stepper-unit">${unit}</span>
+        <button title="Extend the block by ${unit}" @click=${onExtend}>
+          <ha-icon icon="mdi:plus"></ha-icon>
+        </button>
       </div>
     `;
   }
@@ -1162,6 +1181,11 @@ export class SimpleChoresPanel extends LitElement {
     .assignee-row:last-child {
       border-bottom: none;
     }
+    .assignee-row.privilege-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
     .assignee-name {
       flex: 1;
       font-size: 14px;
@@ -1172,6 +1196,67 @@ export class SimpleChoresPanel extends LitElement {
       justify-content: flex-end;
       gap: 6px;
       margin-left: auto;
+    }
+    .assignee-main {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .block-steppers {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .block-steppers-label {
+      font-size: 12px;
+      color: var(--secondary-text-color, #727272);
+      margin-right: 2px;
+    }
+    .stepper {
+      display: inline-flex;
+      align-items: stretch;
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 8px;
+      overflow: hidden;
+      height: 32px;
+    }
+    .stepper button {
+      border: none;
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color, #212121);
+      width: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .stepper button ha-icon {
+      --mdc-icon-size: 16px;
+    }
+    .stepper button:hover:not(:disabled) {
+      background: rgba(0, 0, 0, 0.06);
+    }
+    .stepper button:disabled {
+      color: var(--disabled-text-color, #bdbdbd);
+      cursor: default;
+    }
+    .stepper button:disabled:hover {
+      background: none;
+    }
+    .stepper-unit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 26px;
+      padding: 0 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--secondary-text-color, #727272);
+      border-left: 1px solid var(--divider-color, #e0e0e0);
+      border-right: 1px solid var(--divider-color, #e0e0e0);
     }
 
     .state-chip {
