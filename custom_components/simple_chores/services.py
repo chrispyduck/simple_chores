@@ -14,6 +14,8 @@ from .const import (
     ATTR_ADJUSTMENT,
     ATTR_ASSIGNEES,
     ATTR_BEHAVIOR,
+    ATTR_CATEGORY,
+    ATTR_CATEGORY_SLUG,
     ATTR_CHORE_SLUG,
     ATTR_DESCRIPTION,
     ATTR_DURATION,
@@ -31,25 +33,32 @@ from .const import (
     SERVICE_ADJUST_POINTS,
     SERVICE_ADJUST_TEMPORARY_DISABLE,
     SERVICE_CLEAR_TEMPORARY_DISABLE,
+    SERVICE_CREATE_CATEGORY,
     SERVICE_CREATE_CHORE,
     SERVICE_CREATE_PRIVILEGE,
+    SERVICE_DELETE_CATEGORY,
     SERVICE_DELETE_CHORE,
     SERVICE_DELETE_PRIVILEGE,
     SERVICE_DISABLE_PRIVILEGE,
     SERVICE_ENABLE_PRIVILEGE,
     SERVICE_MARK_COMPLETE,
+    SERVICE_MARK_COMPLETE_BY_CATEGORY,
     SERVICE_MARK_NOT_REQUESTED,
+    SERVICE_MARK_NOT_REQUESTED_BY_CATEGORY,
     SERVICE_MARK_PENDING,
+    SERVICE_MARK_PENDING_BY_CATEGORY,
     SERVICE_REFRESH_SUMMARY,
     SERVICE_RESET_COMPLETED,
     SERVICE_RESET_POINTS,
     SERVICE_START_NEW_DAY,
     SERVICE_TEMPORARILY_DISABLE_PRIVILEGE,
+    SERVICE_UPDATE_CATEGORY,
     SERVICE_UPDATE_CHORE,
     SERVICE_UPDATE_PRIVILEGE,
     sanitize_entity_id,
 )
 from .models import (
+    CategoryConfig,
     ChoreConfig,
     ChoreFrequency,
     ChoreState,
@@ -175,6 +184,7 @@ CREATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_POINTS, default=1): vol.All(
             vol.Coerce(int), vol.Range(min=0)
         ),
+        vol.Optional(ATTR_CATEGORY, default=""): cv.string,
     }
 )
 
@@ -187,6 +197,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON): cv.string,
         vol.Optional(ATTR_POINTS): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Optional(ATTR_CATEGORY): cv.string,
     }
 )
 
@@ -271,6 +282,36 @@ UPDATE_PRIVILEGE_SCHEMA = vol.Schema(
 DELETE_PRIVILEGE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_SLUG): cv.string,
+    }
+)
+
+# Category service schemas
+CREATE_CATEGORY_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_NAME): cv.string,
+        vol.Required(ATTR_SLUG): cv.string,
+        vol.Optional(ATTR_ICON, default="mdi:tag-outline"): cv.string,
+    }
+)
+
+UPDATE_CATEGORY_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SLUG): cv.string,
+        vol.Optional(ATTR_NAME): cv.string,
+        vol.Optional(ATTR_ICON): cv.string,
+    }
+)
+
+DELETE_CATEGORY_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SLUG): cv.string,
+    }
+)
+
+CATEGORY_ACTION_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_USER): cv.string,
+        vol.Required(ATTR_CATEGORY_SLUG): cv.string,
     }
 )
 
@@ -757,6 +798,7 @@ async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             assignees=assignees,
             icon=call.data.get(ATTR_ICON, "mdi:clipboard-list-outline"),
             points=call.data.get(ATTR_POINTS, 1),
+            category=call.data.get(ATTR_CATEGORY, ""),
         )
         await config_loader.async_create_chore(chore)
         LOGGER.info("Created chore '%s'", chore.slug)
@@ -784,6 +826,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     assignees_str = call.data.get(ATTR_ASSIGNEES)
     icon = call.data.get(ATTR_ICON)
     points = call.data.get(ATTR_POINTS)
+    category = call.data.get(ATTR_CATEGORY)
 
     # Parse assignees if provided
     assignees = None
@@ -803,6 +846,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             assignees=assignees,
             icon=icon,
             points=points,
+            category=category,
         )
         LOGGER.info("Updated chore '%s'", slug)
     except Exception as err:
@@ -825,6 +869,278 @@ async def handle_delete_chore(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.info("Deleted chore '%s'", slug)
     except Exception as err:
         msg = f"Failed to delete chore '{slug}': {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
+
+
+def _find_matching_sensors_by_category(
+    sensors: dict, category_slug: str, user: str | None = None
+) -> list:
+    """
+    Find chore sensors whose chore is assigned to the given category.
+
+    Args:
+        sensors: Dictionary of sensors
+        category_slug: Category slug to match
+        user: Optional user to filter by
+
+    Returns:
+        List of matching sensors
+
+    """
+    sanitized_category = sanitize_entity_id(category_slug)
+    sanitized_user = sanitize_entity_id(user) if user else None
+    matching_sensors = []
+
+    for sensor_id, sensor in sensors.items():
+        if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
+            continue
+        if sensor.chore.category != sanitized_category:
+            continue
+        matching_sensors.append(sensor)
+
+    return matching_sensors
+
+
+def _no_category_sensors_message(category_slug: str, user: str | None) -> str:
+    """Build the error message for a by-category action that matched nothing."""
+    if user:
+        return f"No chore sensor found for user '{user}' and category '{category_slug}'"
+    return f"No chore sensors found for category '{category_slug}'"
+
+
+async def _set_chore_sensors_state_by_category(
+    hass: HomeAssistant,
+    matching_sensors: list,
+    new_state: ChoreState,
+) -> set[str]:
+    """
+    Set `new_state` on every sensor in `matching_sensors`.
+
+    Points are awarded/deducted with the same rules as the single-chore
+    mark_complete/mark_pending services: completing a chore that wasn't
+    already complete awards its points, and requesting (pending) a chore
+    that was complete deducts them. Clearing a chore (not_requested) never
+    touches points, matching mark_not_requested.
+
+    Args:
+        hass: Home Assistant instance
+        matching_sensors: Sensors to update
+        new_state: State to set on every sensor
+
+    Returns:
+        The set of assignees whose sensors changed, for refreshing their
+        summary/privilege sensors.
+
+    """
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    affected_users: set[str] = set()
+    state_update_tasks = []
+
+    for sensor in matching_sensors:
+        was_complete = sensor.get_state() == ChoreState.COMPLETE.value
+        sensor.set_state(new_state.value)
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+        affected_users.add(sensor.assignee)
+
+        LOGGER.info(
+            "%s's chore '%s' set to '%s' (by category)",
+            sensor.assignee,
+            sensor.chore.name,
+            new_state.value,
+        )
+
+        chore_points = sensor.chore.points
+        if points_storage and new_state == ChoreState.COMPLETE and not was_complete:
+            await points_storage.add_points(sensor.assignee, chore_points)
+            await points_storage.add_points_earned(sensor.assignee, chore_points)
+        elif points_storage and new_state == ChoreState.PENDING and was_complete:
+            await points_storage.add_points(sensor.assignee, -chore_points)
+            await points_storage.add_points_earned(sensor.assignee, -chore_points)
+
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
+
+    return affected_users
+
+
+async def handle_mark_complete_by_category(
+    hass: HomeAssistant, call: ServiceCall
+) -> None:
+    """Handle the mark_complete_by_category service call."""
+    user = call.data.get(ATTR_USER)
+    category_slug = call.data[ATTR_CATEGORY_SLUG]
+
+    LOGGER.info(
+        "Service 'mark_complete_by_category' called with user='%s', category_slug='%s'",
+        user or "all assignees",
+        category_slug,
+    )
+
+    _validate_integration_loaded(hass)
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    matching_sensors = _find_matching_sensors_by_category(sensors, category_slug, user)
+
+    if not matching_sensors:
+        msg = _no_category_sensors_message(category_slug, user)
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    affected_users = await _set_chore_sensors_state_by_category(
+        hass, matching_sensors, ChoreState.COMPLETE
+    )
+
+    LOGGER.info(
+        "Marked %d chore(s) in category '%s' complete for %d assignee(s)",
+        len(matching_sensors),
+        category_slug,
+        len(affected_users),
+    )
+
+    for affected_user in affected_users:
+        await _update_summary_sensors(hass, affected_user)
+        await _update_privilege_sensors_from_chores(hass, affected_user)
+
+
+async def handle_mark_pending_by_category(
+    hass: HomeAssistant, call: ServiceCall
+) -> None:
+    """Handle the mark_pending_by_category service call."""
+    user = call.data.get(ATTR_USER)
+    category_slug = call.data[ATTR_CATEGORY_SLUG]
+
+    LOGGER.info(
+        "Service 'mark_pending_by_category' called with user='%s', category_slug='%s'",
+        user or "all assignees",
+        category_slug,
+    )
+
+    _validate_integration_loaded(hass)
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    matching_sensors = _find_matching_sensors_by_category(sensors, category_slug, user)
+
+    if not matching_sensors:
+        msg = _no_category_sensors_message(category_slug, user)
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    affected_users = await _set_chore_sensors_state_by_category(
+        hass, matching_sensors, ChoreState.PENDING
+    )
+
+    LOGGER.info(
+        "Marked %d chore(s) in category '%s' pending for %d assignee(s)",
+        len(matching_sensors),
+        category_slug,
+        len(affected_users),
+    )
+
+    for affected_user in affected_users:
+        await _update_summary_sensors(hass, affected_user)
+        await _update_privilege_sensors_from_chores(hass, affected_user)
+
+
+async def handle_mark_not_requested_by_category(
+    hass: HomeAssistant, call: ServiceCall
+) -> None:
+    """Handle the mark_not_requested_by_category service call."""
+    user = call.data.get(ATTR_USER)
+    category_slug = call.data[ATTR_CATEGORY_SLUG]
+
+    LOGGER.info(
+        "Service 'mark_not_requested_by_category' called with user='%s', "
+        "category_slug='%s'",
+        user or "all assignees",
+        category_slug,
+    )
+
+    _validate_integration_loaded(hass)
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    matching_sensors = _find_matching_sensors_by_category(sensors, category_slug, user)
+
+    if not matching_sensors:
+        msg = _no_category_sensors_message(category_slug, user)
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    affected_users = await _set_chore_sensors_state_by_category(
+        hass, matching_sensors, ChoreState.NOT_REQUESTED
+    )
+
+    LOGGER.info(
+        "Marked %d chore(s) in category '%s' not requested for %d assignee(s)",
+        len(matching_sensors),
+        category_slug,
+        len(affected_users),
+    )
+
+    for affected_user in affected_users:
+        await _update_summary_sensors(hass, affected_user)
+
+
+async def handle_create_category(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the create_category service call."""
+    LOGGER.info(
+        "Service 'create_category' called with slug='%s', name='%s'",
+        call.data.get(ATTR_SLUG),
+        call.data.get(ATTR_NAME),
+    )
+
+    _validate_integration_loaded(hass)
+    config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+    try:
+        category = CategoryConfig(
+            name=call.data[ATTR_NAME],
+            slug=call.data[ATTR_SLUG],
+            icon=call.data.get(ATTR_ICON, "mdi:tag-outline"),
+        )
+        await config_loader.async_create_category(category)
+        LOGGER.info("Created category '%s'", category.slug)
+    except Exception as err:
+        msg = f"Failed to create category: {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
+
+
+async def handle_update_category(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the update_category service call."""
+    LOGGER.info(
+        "Service 'update_category' called with slug='%s', updates=%s",
+        call.data.get(ATTR_SLUG),
+        {k: v for k, v in call.data.items() if k != ATTR_SLUG},
+    )
+
+    _validate_integration_loaded(hass)
+    config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+    slug = call.data[ATTR_SLUG]
+    name = call.data.get(ATTR_NAME)
+    icon = call.data.get(ATTR_ICON)
+
+    try:
+        await config_loader.async_update_category(slug=slug, name=name, icon=icon)
+        LOGGER.info("Updated category '%s'", slug)
+    except Exception as err:
+        msg = f"Failed to update category '{slug}': {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
+
+
+async def handle_delete_category(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the delete_category service call."""
+    slug = call.data[ATTR_SLUG]
+
+    LOGGER.info("Service 'delete_category' called with slug='%s'", slug)
+
+    _validate_integration_loaded(hass)
+    config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+    try:
+        await config_loader.async_delete_category(slug)
+        LOGGER.info("Deleted category '%s'", slug)
+    except Exception as err:
+        msg = f"Failed to delete category '{slug}': {err}"
         LOGGER.error(msg)
         raise ServiceValidationError(msg) from err
 
@@ -1498,6 +1814,44 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_RESET_POINTS,
         partial(handle_reset_points, hass),
         schema=RESET_POINTS_SCHEMA,
+    )
+    # Category-scoped chore services
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_MARK_COMPLETE_BY_CATEGORY,
+        partial(handle_mark_complete_by_category, hass),
+        schema=CATEGORY_ACTION_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_MARK_PENDING_BY_CATEGORY,
+        partial(handle_mark_pending_by_category, hass),
+        schema=CATEGORY_ACTION_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_MARK_NOT_REQUESTED_BY_CATEGORY,
+        partial(handle_mark_not_requested_by_category, hass),
+        schema=CATEGORY_ACTION_SCHEMA,
+    )
+    # Category management services
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CREATE_CATEGORY,
+        partial(handle_create_category, hass),
+        schema=CREATE_CATEGORY_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UPDATE_CATEGORY,
+        partial(handle_update_category, hass),
+        schema=UPDATE_CATEGORY_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DELETE_CATEGORY,
+        partial(handle_delete_category, hass),
+        schema=DELETE_CATEGORY_SCHEMA,
     )
     # Privilege services
     hass.services.async_register(

@@ -32,8 +32,8 @@ max-complexity = 25
 [lint.pylint]
 # Raised from the ruff defaults (5/5/12/50) to fit a handful of existing,
 # well-tested functions/methods rather than force a risky decomposition.
-max-args = 7
-max-positional-args = 7
+max-args = 8
+max-positional-args = 8
 max-branches = 20
 max-statements = 69
 

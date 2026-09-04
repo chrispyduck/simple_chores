@@ -61,6 +61,10 @@ class ChoreConfig(BaseModel):
         description="Points awarded when chore is completed",
         ge=0,
     )
+    category: str | None = Field(
+        default=None,
+        description="Slug of the category this chore belongs to (None = uncategorized)",
+    )
 
     @field_validator("slug")
     @classmethod
@@ -84,6 +88,40 @@ class ChoreConfig(BaseModel):
             msg = "At least one assignee is required"
             raise ValueError(msg)
         return v
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str | None) -> str | None:
+        """Sanitize the category slug reference, same as CategoryConfig.slug."""
+        if not v:
+            return None
+        return sanitize_entity_id(v) or None
+
+    model_config = {"frozen": False, "extra": "forbid"}
+
+
+class CategoryConfig(BaseModel):
+    """Configuration for a chore category, mirroring HA's native category registry."""
+
+    name: str = Field(..., description="Display name of the category")
+    slug: str = Field(..., description="Unique identifier for the category")
+    icon: str = Field(
+        default="mdi:tag-outline",
+        description="Material Design Icon for the category",
+    )
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, v: str) -> str:
+        """Validate and sanitize slug format."""
+        if not v:
+            msg = "Slug cannot be empty"
+            raise ValueError(msg)
+        sanitized = sanitize_entity_id(v)
+        if not sanitized:
+            msg = f"Slug '{v}' must contain at least one alphanumeric character"
+            raise ValueError(msg)
+        return sanitized
 
     model_config = {"frozen": False, "extra": "forbid"}
 
@@ -143,6 +181,9 @@ class SimpleChoresConfig(BaseModel):
     privileges: list[PrivilegeConfig] = Field(
         default_factory=list, description="List of privileges"
     )
+    categories: list[CategoryConfig] = Field(
+        default_factory=list, description="List of chore categories"
+    )
 
     @field_validator("chores")
     @classmethod
@@ -168,6 +209,19 @@ class SimpleChoresConfig(BaseModel):
             raise ValueError(msg)
         return v
 
+    @field_validator("categories")
+    @classmethod
+    def validate_unique_category_slugs(
+        cls, v: list[CategoryConfig]
+    ) -> list[CategoryConfig]:
+        """Ensure all category slugs are unique."""
+        slugs = [category.slug for category in v]
+        if len(slugs) != len(set(slugs)):
+            duplicates = {slug for slug in slugs if slugs.count(slug) > 1}
+            msg = f"Duplicate category slugs found: {duplicates}"
+            raise ValueError(msg)
+        return v
+
     @model_validator(mode="after")
     def validate_linked_chores_exist(self) -> SimpleChoresConfig:
         """Validate that all linked_chores in privileges reference existing chores."""
@@ -182,12 +236,36 @@ class SimpleChoresConfig(BaseModel):
                     raise ValueError(msg)
         return self
 
+    @model_validator(mode="after")
+    def validate_chore_categories_exist(self) -> SimpleChoresConfig:
+        """Validate that every chore's category references an existing category."""
+        category_slugs = {category.slug for category in self.categories}
+        for chore in self.chores:
+            if chore.category and chore.category not in category_slugs:
+                msg = (
+                    f"Chore '{chore.slug}' references non-existent "
+                    f"category '{chore.category}'"
+                )
+                raise ValueError(msg)
+        return self
+
     def get_chore_by_slug(self, slug: str) -> ChoreConfig | None:
         """Get a chore by its slug."""
         for chore in self.chores:
             if chore.slug == slug:
                 return chore
         return None
+
+    def get_category_by_slug(self, slug: str) -> CategoryConfig | None:
+        """Get a category by its slug."""
+        for category in self.categories:
+            if category.slug == slug:
+                return category
+        return None
+
+    def get_chores_for_category(self, slug: str) -> list[ChoreConfig]:
+        """Get all chores assigned to a specific category."""
+        return [chore for chore in self.chores if chore.category == slug]
 
     def get_chores_for_assignee(self, assignee: str) -> list[ChoreConfig]:
         """Get all chores assigned to a specific user."""

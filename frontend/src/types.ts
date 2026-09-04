@@ -24,11 +24,13 @@ export interface HomeAssistant {
 export const DOMAIN = "simple_chores";
 
 // Entity id prefixes written by custom_components/simple_chores/sensor.py.
-// Privilege and summary entities are also prefixed with the chore prefix, so
-// they must be excluded explicitly when scanning for plain chore sensors.
+// Privilege, summary and category entities are also prefixed with the chore
+// prefix, so they must be excluded explicitly when scanning for plain chore
+// sensors.
 export const CHORE_ENTITY_PREFIX = "sensor.simple_chore_";
 export const PRIVILEGE_ENTITY_PREFIX = "sensor.simple_chore_privilege_";
 export const SUMMARY_ENTITY_PREFIX = "sensor.simple_chore_meta_";
+export const CATEGORY_ENTITY_PREFIX = "sensor.simple_chore_category_";
 
 export type ChoreFrequency = "daily" | "manual" | "once";
 export type ChoreStateValue = "Pending" | "Complete" | "Not Requested";
@@ -40,6 +42,10 @@ export const PRIVILEGE_BEHAVIORS: PrivilegeBehavior[] = ["automatic", "manual"];
 
 export const DEFAULT_CHORE_ICON = "mdi:clipboard-list-outline";
 export const DEFAULT_PRIVILEGE_ICON = "mdi:star";
+export const DEFAULT_CATEGORY_ICON = "mdi:tag-outline";
+
+/** Sentinel used in the chore filter/draft UI for "no category assigned". */
+export const UNCATEGORIZED = "";
 
 export interface ChoreAssigneeStatus {
   assignee: string;
@@ -54,7 +60,16 @@ export interface ChoreDefinition {
   frequency: ChoreFrequency;
   icon: string;
   points: number;
+  category: string | null;
   assignees: ChoreAssigneeStatus[];
+}
+
+export interface CategoryDefinition {
+  slug: string;
+  name: string;
+  icon: string;
+  entityId: string;
+  choreCount: number;
 }
 
 export interface PrivilegeAssigneeStatus {
@@ -81,7 +96,15 @@ export interface ChoreDraft {
   frequency: ChoreFrequency;
   icon: string;
   points: number;
+  category: string; // "" (UNCATEGORIZED) means no category
   assignees: string[];
+}
+
+/** Editable draft shape backing the create/edit category dialog. */
+export interface CategoryDraft {
+  slug: string;
+  name: string;
+  icon: string;
 }
 
 /** Editable draft shape backing the create/edit privilege dialog. */
@@ -102,6 +125,7 @@ export function emptyChoreDraft(): ChoreDraft {
     frequency: "daily",
     icon: DEFAULT_CHORE_ICON,
     points: 1,
+    category: UNCATEGORIZED,
     assignees: [],
   };
 }
@@ -114,7 +138,24 @@ export function choreToDraft(chore: ChoreDefinition): ChoreDraft {
     frequency: chore.frequency,
     icon: chore.icon,
     points: chore.points,
+    category: chore.category ?? UNCATEGORIZED,
     assignees: chore.assignees.map((a) => a.assignee),
+  };
+}
+
+export function emptyCategoryDraft(): CategoryDraft {
+  return {
+    slug: "",
+    name: "",
+    icon: DEFAULT_CATEGORY_ICON,
+  };
+}
+
+export function categoryToDraft(category: CategoryDefinition): CategoryDraft {
+  return {
+    slug: category.slug,
+    name: category.name,
+    icon: category.icon,
   };
 }
 
@@ -166,6 +207,7 @@ export function parseChores(states: Record<string, HassEntity>): ChoreDefinition
     if (!entityId.startsWith(CHORE_ENTITY_PREFIX)) continue;
     if (entityId.startsWith(PRIVILEGE_ENTITY_PREFIX)) continue;
     if (entityId.startsWith(SUMMARY_ENTITY_PREFIX)) continue;
+    if (entityId.startsWith(CATEGORY_ENTITY_PREFIX)) continue;
 
     const attrs = entity.attributes;
     const slug: string | undefined = attrs.chore_slug;
@@ -180,6 +222,7 @@ export function parseChores(states: Record<string, HassEntity>): ChoreDefinition
         frequency: (attrs.frequency as ChoreFrequency) ?? "daily",
         icon: attrs.icon ?? DEFAULT_CHORE_ICON,
         points: attrs.points ?? 0,
+        category: attrs.category ?? null,
         assignees: [],
       };
       bySlug.set(slug, definition);
@@ -238,6 +281,35 @@ export function parsePrivileges(
   }
 
   return [...bySlug.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Rebuild the list of category definitions from `sensor.simple_chore_category_*`
+ * entities. Unlike chores/privileges, there is exactly one entity per
+ * category (categories aren't per-assignee), so no grouping is needed.
+ */
+export function parseCategories(
+  states: Record<string, HassEntity>
+): CategoryDefinition[] {
+  const categories: CategoryDefinition[] = [];
+
+  for (const [entityId, entity] of Object.entries(states)) {
+    if (!entityId.startsWith(CATEGORY_ENTITY_PREFIX)) continue;
+
+    const attrs = entity.attributes;
+    const slug: string | undefined = attrs.category_slug;
+    if (!slug) continue;
+
+    categories.push({
+      slug,
+      name: attrs.category_name ?? slug,
+      icon: attrs.icon ?? DEFAULT_CATEGORY_ICON,
+      entityId,
+      choreCount: Number(entity.state) || 0,
+    });
+  }
+
+  return categories.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Every assignee name seen across any chore or privilege, for suggestions. */

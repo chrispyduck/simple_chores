@@ -17,6 +17,12 @@
         "mark_not_requested": "mdi:close-circle-outline",
         "create_chore": "mdi:plus-circle",
         "update_chore": "mdi:pencil-circle",
-        "delete_chore": "mdi:delete-circle"
+        "delete_chore": "mdi:delete-circle",
+        "mark_complete_by_category": "mdi:check-circle",
+        "mark_pending_by_category": "mdi:clipboard-list",
+        "mark_not_requested_by_category": "mdi:close-circle-outline",
+        "create_category": "mdi:tag-plus",
+        "update_category": "mdi:tag-edit",
+        "delete_category": "mdi:tag-remove"
     }
 }
