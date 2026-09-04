@@ -148,6 +148,7 @@ export function privilegeToDraft(privilege: PrivilegeDefinition): PrivilegeDraft
 export function sanitizeSlug(value: string): string {
   return value
     .toLowerCase()
+    .replace(/\s+/g, "-")
     .replace(/-/g, "_")
     .replace(/[^a-z0-9_]/g, "");
 }

@@ -310,7 +310,7 @@ export class SimpleChoresPanel extends LitElement {
                   ${privilege.behavior === "manual"
                     ? html`
                         <button
-                          class="icon-button"
+                          class="action-chip"
                           title="Enable"
                           ?disabled=${a.state === "Enabled"}
                           @click=${() =>
@@ -320,9 +320,10 @@ export class SimpleChoresPanel extends LitElement {
                             })}
                         >
                           <ha-icon icon="mdi:check-circle-outline"></ha-icon>
+                          <span>Enable</span>
                         </button>
                         <button
-                          class="icon-button"
+                          class="action-chip"
                           title="Disable"
                           ?disabled=${a.state === "Disabled"}
                           @click=${() =>
@@ -332,19 +333,41 @@ export class SimpleChoresPanel extends LitElement {
                             })}
                         >
                           <ha-icon icon="mdi:close-circle-outline"></ha-icon>
+                          <span>Disable</span>
                         </button>
                       `
                     : nothing}
                   <button
-                    class="icon-button"
+                    class="action-chip"
+                    title="Shorten the block by 1 hour"
+                    ?disabled=${!isTemp}
+                    @click=${() =>
+                      this._adjustTemporaryDisable(privilege.slug, a.assignee, -60)}
+                  >
+                    <ha-icon icon="mdi:clock-minus-outline"></ha-icon>
+                    <span>Block −1h</span>
+                  </button>
+                  <button
+                    class="action-chip"
+                    title="Shorten the block by 1 day"
+                    ?disabled=${!isTemp}
+                    @click=${() =>
+                      this._adjustTemporaryDisable(privilege.slug, a.assignee, -1440)}
+                  >
+                    <ha-icon icon="mdi:clock-minus"></ha-icon>
+                    <span>Block −1d</span>
+                  </button>
+                  <button
+                    class="action-chip"
                     title="Block for 1 hour"
                     @click=${() =>
                       this._addTemporaryDisable(privilege.slug, a.assignee, isTemp, 60)}
                   >
                     <ha-icon icon="mdi:clock-plus-outline"></ha-icon>
+                    <span>Block +1h</span>
                   </button>
                   <button
-                    class="icon-button"
+                    class="action-chip"
                     title="Block for 1 day"
                     @click=${() =>
                       this._addTemporaryDisable(
@@ -355,6 +378,7 @@ export class SimpleChoresPanel extends LitElement {
                       )}
                   >
                     <ha-icon icon="mdi:clock-plus"></ha-icon>
+                    <span>Block +1d</span>
                   </button>
                 </div>
               </div>
@@ -809,6 +833,25 @@ export class SimpleChoresPanel extends LitElement {
         });
   }
 
+  /**
+   * Nudge an in-progress block's end time by `adjustmentMinutes` (negative to
+   * shorten it, positive to extend it), via the existing
+   * `adjust_temporary_disable` service. Only meaningful while the privilege
+   * is already temporarily disabled - callers should disable the triggering
+   * button otherwise, since the service just warns and no-ops.
+   */
+  private _adjustTemporaryDisable(
+    slug: string,
+    user: string,
+    adjustmentMinutes: number
+  ) {
+    return this._call(SERVICE_DOMAIN, "adjust_temporary_disable", {
+      user,
+      privilege_slug: slug,
+      adjustment: adjustmentMinutes,
+    });
+  }
+
   private async _saveChoreDialog() {
     const dialog = this._dialog!;
     const draft = dialog.draft as ChoreDraft;
@@ -1035,6 +1078,30 @@ export class SimpleChoresPanel extends LitElement {
       color: var(--error-color, #db4437);
     }
 
+    .action-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid var(--divider-color, #e0e0e0);
+      background: var(--card-background-color, #fff);
+      color: var(--secondary-text-color, #727272);
+      border-radius: 999px;
+      padding: 4px 10px 4px 8px;
+      font: inherit;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .action-chip ha-icon {
+      --mdc-icon-size: 16px;
+    }
+    .action-chip:hover:not(:disabled) {
+      background: rgba(0, 0, 0, 0.06);
+    }
+    .action-chip:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
     .empty {
       color: var(--secondary-text-color, #727272);
       text-align: center;
@@ -1087,6 +1154,7 @@ export class SimpleChoresPanel extends LitElement {
     .assignee-row {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 8px;
       padding: 8px 0;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
@@ -1100,7 +1168,10 @@ export class SimpleChoresPanel extends LitElement {
     }
     .row-actions {
       display: flex;
-      gap: 2px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-left: auto;
     }
 
     .state-chip {
