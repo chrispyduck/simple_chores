@@ -14,6 +14,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import DOMAIN, LOGGER, sanitize_entity_id
 from .data import PointsStorage
 from .models import (
+    CategoryConfig,
     ChoreConfig,
     ChoreState,
     PrivilegeBehavior,
@@ -63,14 +64,16 @@ async def async_setup_entry(
     hass.data[DOMAIN]["sensors"] = manager.sensors
     hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
     hass.data[DOMAIN]["privilege_sensors"] = manager.privilege_sensors
+    hass.data[DOMAIN]["category_sensors"] = manager.category_sensors
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
-        "Stored %d chore sensors, %d summary sensors, %d privilege sensors "
-        "in hass.data (config entry setup)",
+        "Stored %d chore sensors, %d summary sensors, %d privilege sensors, "
+        "%d category sensors in hass.data (config entry setup)",
         len(manager.sensors),
         len(manager.summary_sensors),
         len(manager.privilege_sensors),
+        len(manager.category_sensors),
     )
 
     # Register callback for config changes
@@ -107,14 +110,16 @@ async def async_setup_platform(
     hass.data[DOMAIN]["sensors"] = manager.sensors
     hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
     hass.data[DOMAIN]["privilege_sensors"] = manager.privilege_sensors
+    hass.data[DOMAIN]["category_sensors"] = manager.category_sensors
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
-        "Stored %d chore sensors, %d summary sensors, %d privilege sensors "
-        "in hass.data (YAML setup)",
+        "Stored %d chore sensors, %d summary sensors, %d privilege sensors, "
+        "%d category sensors in hass.data (YAML setup)",
         len(manager.sensors),
         len(manager.summary_sensors),
         len(manager.privilege_sensors),
+        len(manager.category_sensors),
     )
 
     # Register callback for config changes
@@ -145,6 +150,7 @@ class ChoreSensorManager:
         self.sensors: dict[str, ChoreSensor] = {}
         self.summary_sensors: dict[str, ChoreSummarySensor] = {}  # type: ignore[name-defined]
         self.privilege_sensors: dict[str, PrivilegeSensor] = {}  # type: ignore[name-defined]
+        self.category_sensors: dict[str, CategorySensor] = {}  # type: ignore[name-defined]
         self.points_storage = PointsStorage(hass)
 
     async def async_setup(self) -> None:
@@ -153,6 +159,7 @@ class ChoreSensorManager:
         config = self.config_loader.config
         await self._create_sensors_from_config(config)
         await self._create_privilege_sensors(config)
+        await self._create_category_sensors(config)
         await self._create_summary_sensors(config)
 
     async def async_config_changed(self, config: SimpleChoresConfig) -> None:
@@ -166,6 +173,7 @@ class ChoreSensorManager:
         LOGGER.debug("Config changed, updating sensors")
         await self._update_sensors_from_config(config)
         await self._update_privilege_sensors(config)
+        await self._update_category_sensors(config)
         await self._update_summary_sensors(config)
 
     async def _create_sensors_from_config(self, config: SimpleChoresConfig) -> None:
@@ -434,6 +442,102 @@ class ChoreSensorManager:
             self.async_add_entities(sensors_to_add)
             LOGGER.info("Added %d privilege sensor(s)", len(sensors_to_add))
 
+    async def _create_category_sensors(self, config: SimpleChoresConfig) -> None:
+        """
+        Create category sensors from configuration.
+
+        Args:
+            config: Configuration to create sensors from
+
+        """
+        sensors_to_add = []
+
+        for category in config.categories:
+            sanitized_slug = sanitize_entity_id(category.slug)
+
+            if sanitized_slug not in self.category_sensors:
+                sensor = CategorySensor(self.hass, category, self)
+                self.category_sensors[sanitized_slug] = sensor
+                sensors_to_add.append(sensor)
+                LOGGER.debug("Created category sensor for category %s", category.slug)
+
+        if sensors_to_add:
+            self.async_add_entities(sensors_to_add)
+            LOGGER.info("Added %d category sensor(s)", len(sensors_to_add))
+
+    async def _update_category_sensors(self, config: SimpleChoresConfig) -> None:
+        """
+        Update category sensors based on new configuration.
+
+        A category sensor's count of chores is recomputed live from
+        `self.sensors`, so every existing sensor is force-refreshed here too -
+        not just ones whose own CategoryConfig changed - in case a chore's
+        category assignment changed instead.
+
+        Args:
+            config: New configuration
+
+        """
+        # Build set of expected entity IDs from config
+        expected_slugs = {
+            sanitize_entity_id(category.slug) for category in config.categories
+        }
+
+        # Remove sensors that are no longer in config
+        sensors_to_remove = []
+        for sanitized_slug, sensor in self.category_sensors.items():
+            if sanitized_slug not in expected_slugs:
+                sensors_to_remove.append(sanitized_slug)
+                if sensor.hass is not None and hasattr(sensor, "platform"):
+                    try:
+                        await sensor.async_remove()
+                        LOGGER.debug("Removed category sensor %s", sanitized_slug)
+                    except Exception as err:  # noqa: BLE001 - best-effort cleanup, don't abort the reconciliation loop
+                        LOGGER.warning(
+                            "Failed to remove category sensor %s: %s",
+                            sanitized_slug,
+                            err,
+                        )
+                else:
+                    LOGGER.debug(
+                        "Category sensor %s not yet registered, skipping removal",
+                        sanitized_slug,
+                    )
+
+        for sanitized_slug in sensors_to_remove:
+            del self.category_sensors[sanitized_slug]
+
+        if sensors_to_remove:
+            LOGGER.info("Removed %d category sensor(s)", len(sensors_to_remove))
+
+        # Update existing sensors and create new ones
+        sensors_to_add = []
+        for category in config.categories:
+            sanitized_slug = sanitize_entity_id(category.slug)
+
+            if sanitized_slug in self.category_sensors:
+                self.category_sensors[sanitized_slug].update_category_config(category)
+                LOGGER.debug("Updated category sensor %s", sanitized_slug)
+            else:
+                sensor = CategorySensor(self.hass, category, self)
+                self.category_sensors[sanitized_slug] = sensor
+                sensors_to_add.append(sensor)
+                LOGGER.debug("Created category sensor %s", sanitized_slug)
+
+        if sensors_to_add:
+            self.async_add_entities(sensors_to_add)
+            LOGGER.info("Added %d category sensor(s)", len(sensors_to_add))
+
+        # Refresh every category sensor's chore count, since a chore's own
+        # category assignment (not just the category list itself) may have
+        # changed.
+        if self.category_sensors:
+            update_tasks = [
+                sensor.async_update_ha_state(force_refresh=True)
+                for sensor in self.category_sensors.values()
+            ]
+            await asyncio.gather(*update_tasks)
+
 
 class ChoreSensor(RestoreEntity, SensorEntity):
     """Sensor representing a chore for a specific assignee."""
@@ -541,6 +645,7 @@ class ChoreSensor(RestoreEntity, SensorEntity):
             "all_assignees": self._chore.assignees,
             "icon": self._chore.icon,
             "points": self._chore.points,
+            "category": self._chore.category,
         }
 
     def get_state(self) -> str:
@@ -1126,3 +1231,97 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
     async def async_update_from_chores(self) -> None:
         """Update privilege state from linked chore states (automatic behavior only)."""
         await self._check_and_update_state()
+
+
+class CategorySensor(SensorEntity):
+    """
+    Sensor representing a chore category.
+
+    Unlike ChoreSensor/PrivilegeSensor, this is one entity per category (not
+    per-assignee) - it exists mainly so the admin panel can discover and
+    manage categories the same way it discovers chores and privileges: by
+    scanning `sensor.simple_chore_*` entities, with no dedicated backend API.
+    """
+
+    _attr_has_entity_name = False
+    _attr_should_poll = False
+    _attr_native_unit_of_measurement = "chores"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        category: CategoryConfig,
+        manager: ChoreSensorManager,
+    ) -> None:
+        """
+        Initialize the category sensor.
+
+        Args:
+            hass: Home Assistant instance
+            category: Category configuration
+            manager: Sensor manager to access chore sensors
+
+        """
+        self.hass = hass
+        self._category = category
+        self._manager = manager
+        sanitized_slug = sanitize_entity_id(category.slug)
+        self._attr_unique_id = f"{DOMAIN}_category_{sanitized_slug}"
+        self._attr_name = f"{category.name} - Category"
+
+        # Set entity ID to match requirements: sensor.simple_chore_category_{slug}
+        self.entity_id = f"sensor.simple_chore_category_{sanitized_slug}"
+
+        self._attr_icon = category.icon
+
+        # Group all category sensors under one shared device, since a
+        # category isn't tied to a single assignee the way chores/privileges
+        # are.
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "categories")},
+            name="Chore Categories",
+            manufacturer="Simple Chores",
+            model="Chore Tracker",
+            entry_type=dr.DeviceEntryType.SERVICE,
+        )
+
+    @property
+    def category(self) -> CategoryConfig:
+        """Return the category configuration."""
+        return self._category
+
+    def _chore_slugs_in_category(self) -> set[str]:
+        """Return the distinct chore slugs currently assigned to this category."""
+        return {
+            sensor.chore.slug
+            for sensor in self._manager.sensors.values()
+            if sensor.chore.category == self._category.slug
+        }
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of chores assigned to this category."""
+        return len(self._chore_slugs_in_category())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        return {
+            "category_name": self._category.name,
+            "category_slug": self._category.slug,
+            "icon": self._category.icon,
+            "chores": sorted(self._chore_slugs_in_category()),
+        }
+
+    def update_category_config(self, category: CategoryConfig) -> None:
+        """
+        Update the category configuration.
+
+        Args:
+            category: New category configuration
+
+        """
+        self._category = category
+        self._attr_name = f"{category.name} - Category"
+        self._attr_icon = category.icon
+        self.async_write_ha_state()

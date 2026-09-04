@@ -143,6 +143,13 @@ create_chore:
           min: 0
           max: 1000000000
           mode: box
+    category:
+      name: Category
+      description: Slug of the category this chore belongs to (optional - leave empty for uncategorized)
+      required: false
+      example: "kitchen"
+      selector:
+        text:
 
 update_chore:
   name: Update Chore
@@ -204,6 +211,13 @@ update_chore:
           min: 0
           max: 1000000000
           mode: box
+    category:
+      name: Category
+      description: New category slug, or an empty string to uncategorize (leave unset to keep current)
+      required: false
+      example: "kitchen"
+      selector:
+        text:
 
 delete_chore:
   name: Delete Chore
@@ -270,6 +284,130 @@ reset_points:
       example: false
       selector:
         boolean:
+
+# Category-scoped chore services
+mark_complete_by_category:
+  name: Mark Complete by Category
+  description: Mark every chore in a category as complete. If user is not specified, marks it complete for all assignees.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, marks complete for all assignees)
+      required: false
+      example: "alice"
+      selector:
+        text:
+    category_slug:
+      name: Category Slug
+      description: The slug identifier of the category
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+
+mark_pending_by_category:
+  name: Request by Category
+  description: Mark every chore in a category as pending (requested). If user is not specified, requests it for all assignees.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, requests for all assignees)
+      required: false
+      example: "alice"
+      selector:
+        text:
+    category_slug:
+      name: Category Slug
+      description: The slug identifier of the category
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+
+mark_not_requested_by_category:
+  name: Clear by Category
+  description: Mark every chore in a category as not requested. If user is not specified, clears it for all assignees.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, clears for all assignees)
+      required: false
+      example: "alice"
+      selector:
+        text:
+    category_slug:
+      name: Category Slug
+      description: The slug identifier of the category
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+
+# Category management services
+create_category:
+  name: Create Category
+  description: Create a new chore category in the YAML configuration
+  fields:
+    name:
+      name: Name
+      description: Display name of the category
+      required: true
+      example: "Kitchen"
+      selector:
+        text:
+    slug:
+      name: Slug
+      description: Unique identifier for the category (lowercase, alphanumeric, hyphens, underscores)
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+    icon:
+      name: Icon
+      description: Material Design Icon for the category (e.g., mdi:silverware-fork-knife)
+      required: false
+      default: "mdi:tag-outline"
+      example: "mdi:silverware-fork-knife"
+      selector:
+        text:
+
+update_category:
+  name: Update Category
+  description: Update an existing chore category in the YAML configuration
+  fields:
+    slug:
+      name: Slug
+      description: Unique identifier of the category to update
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+    name:
+      name: Name
+      description: New display name (leave empty to keep current)
+      required: false
+      example: "Kitchen"
+      selector:
+        text:
+    icon:
+      name: Icon
+      description: New Material Design Icon (leave empty to keep current)
+      required: false
+      example: "mdi:silverware-fork-knife"
+      selector:
+        text:
+
+delete_category:
+  name: Delete Category
+  description: Delete a chore category from the YAML configuration. Fails if any chore still references it.
+  fields:
+    slug:
+      name: Slug
+      description: Unique identifier of the category to delete
+      required: true
+      example: "kitchen"
+      selector:
+        text:
 
 # Privilege services
 enable_privilege:

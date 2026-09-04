@@ -6,12 +6,14 @@ import pytest
 
 from custom_components.simple_chores.config_loader import ConfigLoader
 from custom_components.simple_chores.models import (
+    CategoryConfig,
     ChoreConfig,
     ChoreFrequency,
     ChoreState,
     SimpleChoresConfig,
 )
 from custom_components.simple_chores.sensor import (
+    CategorySensor,
     ChoreSensor,
     ChoreSensorManager,
     async_setup_platform,
@@ -514,3 +516,125 @@ class TestChoreSensor:
         sensor = ChoreSensor(hass, sample_chore, "alice")
 
         assert sensor.has_entity_name is False
+
+
+@pytest.fixture
+def mock_manager() -> MagicMock:
+    """Build a ChoreSensorManager double exposing just `.sensors`."""
+    manager = MagicMock()
+    manager.sensors = {}
+    return manager
+
+
+@pytest.fixture
+def sample_category() -> CategoryConfig:
+    """Create a sample category config."""
+    return CategoryConfig(name="Kitchen", slug="kitchen", icon="mdi:chef-hat")
+
+
+class TestCategorySensor:
+    """Tests for CategorySensor."""
+
+    def test_sensor_init(
+        self, hass, sample_category: CategoryConfig, mock_manager: MagicMock
+    ) -> None:
+        """Test sensor initialization."""
+        sensor = CategorySensor(hass, sample_category, mock_manager)
+
+        assert sensor.hass == hass
+        assert sensor.category == sample_category
+        assert sensor.unique_id == "simple_chores_category_kitchen"
+        assert sensor.name == "Kitchen - Category"
+        assert sensor.entity_id == "sensor.simple_chore_category_kitchen"
+        assert sensor.icon == "mdi:chef-hat"
+
+    def test_native_value_counts_chores_in_category(
+        self, hass, sample_category: CategoryConfig, mock_manager: MagicMock
+    ) -> None:
+        """Test that native_value reflects the live count of chores in the category."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+            category="kitchen",
+        )
+        other_chore = ChoreConfig(
+            name="Vacuum",
+            slug="vacuum",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+        mock_manager.sensors = {
+            "alice_dishes": ChoreSensor(hass, chore, "alice"),
+            "bob_dishes": ChoreSensor(hass, chore, "bob"),
+            "alice_vacuum": ChoreSensor(hass, other_chore, "alice"),
+        }
+
+        sensor = CategorySensor(hass, sample_category, mock_manager)
+
+        # "dishes" has two assignee sensors but is one distinct chore; "vacuum"
+        # isn't in this category at all.
+        assert sensor.native_value == 1
+
+    def test_native_value_updates_as_chores_change(
+        self, hass, sample_category: CategoryConfig, mock_manager: MagicMock
+    ) -> None:
+        """Test that the count is recomputed live, not cached at construction."""
+        sensor = CategorySensor(hass, sample_category, mock_manager)
+        assert sensor.native_value == 0
+
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            category="kitchen",
+        )
+        mock_manager.sensors = {"alice_dishes": ChoreSensor(hass, chore, "alice")}
+
+        assert sensor.native_value == 1
+
+    def test_extra_state_attributes(
+        self, hass, sample_category: CategoryConfig, mock_manager: MagicMock
+    ) -> None:
+        """Test extra state attributes list the category's chore slugs."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            category="kitchen",
+        )
+        mock_manager.sensors = {"alice_dishes": ChoreSensor(hass, chore, "alice")}
+
+        sensor = CategorySensor(hass, sample_category, mock_manager)
+        attrs = sensor.extra_state_attributes
+
+        assert attrs["category_name"] == "Kitchen"
+        assert attrs["category_slug"] == "kitchen"
+        assert attrs["icon"] == "mdi:chef-hat"
+        assert attrs["chores"] == ["dishes"]
+
+    def test_update_category_config(
+        self, hass, sample_category: CategoryConfig, mock_manager: MagicMock
+    ) -> None:
+        """Test updating the category configuration."""
+        sensor = CategorySensor(hass, sample_category, mock_manager)
+        sensor.async_write_ha_state = Mock()
+
+        updated = CategoryConfig(name="Kitchen Chores", slug="kitchen", icon="mdi:pot")
+        sensor.update_category_config(updated)
+
+        assert sensor.category == updated
+        assert sensor.name == "Kitchen Chores - Category"
+        assert sensor.icon == "mdi:pot"
+        sensor.async_write_ha_state.assert_called_once()
+
+    def test_sensor_should_not_poll(
+        self, hass, sample_category: CategoryConfig, mock_manager: MagicMock
+    ) -> None:
+        """Test that sensor has polling disabled."""
+        sensor = CategorySensor(hass, sample_category, mock_manager)
+
+        assert sensor.should_poll is False

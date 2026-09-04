@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from custom_components.simple_chores.models import (
+    CategoryConfig,
     ChoreConfig,
     ChoreFrequency,
     ChoreState,
@@ -139,6 +140,175 @@ class TestChoreConfig:
 
         errors = exc_info.value.errors()
         assert any("extra_field" in str(err) for err in errors)
+
+    def test_category_defaults_to_none(self) -> None:
+        """Test that a chore with no category defaults to uncategorized."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+
+        assert chore.category is None
+
+    def test_category_empty_string_normalizes_to_none(self) -> None:
+        """Test that an empty-string category normalizes to None (uncategorized)."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            category="",
+        )
+
+        assert chore.category is None
+
+    def test_category_sanitized_like_a_slug(self) -> None:
+        """Test that the category reference is sanitized the same as a slug."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            category="Kitchen-Chores!",
+        )
+
+        assert chore.category == "kitchen_chores"
+
+
+class TestCategoryConfig:
+    """Tests for CategoryConfig model."""
+
+    def test_valid_category_config(self) -> None:
+        """Test creating a valid category configuration."""
+        category = CategoryConfig(name="Kitchen", slug="kitchen", icon="mdi:chef-hat")
+
+        assert category.name == "Kitchen"
+        assert category.slug == "kitchen"
+        assert category.icon == "mdi:chef-hat"
+
+    def test_category_config_minimal(self) -> None:
+        """Test creating a category with minimal required fields."""
+        category = CategoryConfig(name="Outdoor", slug="outdoor")
+
+        assert category.name == "Outdoor"
+        assert category.slug == "outdoor"
+        assert category.icon == "mdi:tag-outline"  # default value
+
+    def test_category_slug_validation_empty(self) -> None:
+        """Test that empty slug raises validation error."""
+        with pytest.raises(ValidationError) as exc_info:
+            CategoryConfig(name="Test", slug="")
+
+        errors = exc_info.value.errors()
+        assert any("Slug cannot be empty" in str(err) for err in errors)
+
+    def test_category_slug_sanitization(self) -> None:
+        """Test that the category slug is sanitized like a chore slug."""
+        category = CategoryConfig(name="Test", slug="My Category!")
+
+        assert category.slug == "mycategory"
+
+    def test_category_config_forbids_extra_fields(self) -> None:
+        """Test that extra fields are forbidden."""
+        with pytest.raises(ValidationError) as exc_info:
+            CategoryConfig(name="Test", slug="test", extra_field="not allowed")
+
+        errors = exc_info.value.errors()
+        assert any("extra_field" in str(err) for err in errors)
+
+
+class TestSimpleChoresConfigWithCategories:
+    """Tests for SimpleChoresConfig with categories."""
+
+    def test_config_with_categories(self) -> None:
+        """Test creating a configuration with categories."""
+        category = CategoryConfig(name="Kitchen", slug="kitchen")
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            category="kitchen",
+        )
+
+        config = SimpleChoresConfig(chores=[chore], categories=[category])
+        assert len(config.categories) == 1
+        assert config.categories[0].slug == "kitchen"
+        assert config.chores[0].category == "kitchen"
+
+    def test_duplicate_category_slugs_validation(self) -> None:
+        """Test that duplicate category slugs raise validation error."""
+        category1 = CategoryConfig(name="Kitchen 1", slug="kitchen")
+        category2 = CategoryConfig(name="Kitchen 2", slug="kitchen")
+
+        with pytest.raises(ValidationError) as exc_info:
+            SimpleChoresConfig(chores=[], categories=[category1, category2])
+
+        errors = exc_info.value.errors()
+        assert any("Duplicate category slugs" in str(err) for err in errors)
+
+    def test_chore_category_must_reference_existing_category(self) -> None:
+        """Test that a chore's category must reference an existing category."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            category="nonexistent_category",
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            SimpleChoresConfig(chores=[chore], categories=[])
+
+        errors = exc_info.value.errors()
+        assert any("non-existent" in str(err) for err in errors)
+        assert any("category" in str(err) for err in errors)
+
+    def test_get_category_by_slug_found(self) -> None:
+        """Test getting a category by slug when it exists."""
+        category = CategoryConfig(name="Kitchen", slug="kitchen")
+        config = SimpleChoresConfig(chores=[], categories=[category])
+
+        found_category = config.get_category_by_slug("kitchen")
+
+        assert found_category is not None
+        assert found_category.name == "Kitchen"
+
+    def test_get_category_by_slug_not_found(self) -> None:
+        """Test getting a category by slug when it doesn't exist."""
+        config = SimpleChoresConfig(chores=[], categories=[])
+
+        assert config.get_category_by_slug("nonexistent") is None
+
+    def test_get_chores_for_category(self) -> None:
+        """Test getting all chores assigned to a category."""
+        category = CategoryConfig(name="Kitchen", slug="kitchen")
+        chore1 = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            category="kitchen",
+        )
+        chore2 = ChoreConfig(
+            name="Vacuum",
+            slug="vacuum",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["bob"],
+        )
+
+        config = SimpleChoresConfig(chores=[chore1, chore2], categories=[category])
+        kitchen_chores = config.get_chores_for_category("kitchen")
+
+        assert len(kitchen_chores) == 1
+        assert kitchen_chores[0].slug == "dishes"
+
+    def test_default_empty_categories_list(self) -> None:
+        """Test that categories list defaults to empty."""
+        config = SimpleChoresConfig()
+        assert config.categories == []
 
 
 class TestSimpleChoresConfig:

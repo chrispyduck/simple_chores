@@ -7,6 +7,7 @@ from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.simple_chores.const import (
     ATTR_ADJUSTMENT,
+    ATTR_CATEGORY_SLUG,
     ATTR_CHORE_SLUG,
     ATTR_PRIVILEGE_SLUG,
     ATTR_RESET_TOTAL,
@@ -17,8 +18,11 @@ from custom_components.simple_chores.const import (
     SERVICE_CREATE_CHORE,
     SERVICE_DELETE_CHORE,
     SERVICE_MARK_COMPLETE,
+    SERVICE_MARK_COMPLETE_BY_CATEGORY,
     SERVICE_MARK_NOT_REQUESTED,
+    SERVICE_MARK_NOT_REQUESTED_BY_CATEGORY,
     SERVICE_MARK_PENDING,
+    SERVICE_MARK_PENDING_BY_CATEGORY,
     SERVICE_REFRESH_SUMMARY,
     SERVICE_RESET_COMPLETED,
     SERVICE_RESET_POINTS,
@@ -104,7 +108,8 @@ class TestServiceSetup:
 
         # Verify all services are in the correct domain
         services = hass.services.async_services_for_domain(DOMAIN)
-        assert len(services) == 19  # 11 chore services + 8 privilege services
+        # 11 chore services + 6 category services + 8 privilege services
+        assert len(services) == 25
 
 
 class TestMarkCompleteService:
@@ -878,6 +883,268 @@ class TestMarkAllAssignees:
             )
 
         assert "No sensors found for chore 'nonexistent'" in caplog.text
+
+
+class TestMarkByCategoryServices:
+    """Tests for the mark_*_by_category (request/complete/clear) services."""
+
+    def _make_sensor(self, hass, *, slug, category, assignee, state=None):
+        """Create a ChoreSensor for the given category/assignee, defaulting state."""
+        chore = ChoreConfig(
+            name=slug.title(),
+            slug=slug,
+            frequency=ChoreFrequency.DAILY,
+            assignees=[assignee],
+            points=10,
+            category=category,
+        )
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(hass, chore, assignee)
+            sensor.async_update_ha_state = AsyncMock()
+        if state is not None:
+            sensor.set_state(state.value)
+        return sensor
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_by_category_all_assignees(self, hass) -> None:
+        """Test that mark_complete_by_category completes every chore in the category."""
+        sensor_alice = self._make_sensor(
+            hass, slug="dishes", category="kitchen", assignee="alice"
+        )
+        sensor_bob = self._make_sensor(
+            hass, slug="counters", category="kitchen", assignee="bob"
+        )
+        # Different category - must not be touched
+        sensor_other = self._make_sensor(
+            hass, slug="vacuum", category="living_room", assignee="alice"
+        )
+        # Uncategorized - must not be touched
+        sensor_uncategorized = self._make_sensor(
+            hass, slug="trash", category=None, assignee="alice"
+        )
+
+        hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_dishes": sensor_alice,
+                "bob_counters": sensor_bob,
+                "alice_vacuum": sensor_other,
+                "alice_trash": sensor_uncategorized,
+            }
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE_BY_CATEGORY,
+            {ATTR_CATEGORY_SLUG: "kitchen"},
+            blocking=True,
+        )
+
+        assert sensor_alice.get_state() == ChoreState.COMPLETE.value
+        assert sensor_bob.get_state() == ChoreState.COMPLETE.value
+        assert sensor_other.get_state() == ChoreState.NOT_REQUESTED.value
+        assert sensor_uncategorized.get_state() == ChoreState.NOT_REQUESTED.value
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_by_category_scoped_to_user(self, hass) -> None:
+        """Test that mark_complete_by_category respects an optional user filter."""
+        sensor_alice = self._make_sensor(
+            hass, slug="dishes", category="kitchen", assignee="alice"
+        )
+        sensor_bob = self._make_sensor(
+            hass, slug="dishes", category="kitchen", assignee="bob"
+        )
+
+        hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_dishes": sensor_alice,
+                "bob_dishes": sensor_bob,
+            }
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE_BY_CATEGORY,
+            {ATTR_CATEGORY_SLUG: "kitchen", ATTR_USER: "alice"},
+            blocking=True,
+        )
+
+        assert sensor_alice.get_state() == ChoreState.COMPLETE.value
+        assert sensor_bob.get_state() == ChoreState.NOT_REQUESTED.value
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_by_category_awards_points_once(self, hass) -> None:
+        """Test completing a category only awards points for newly-complete chores."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        sensor_pending = self._make_sensor(
+            hass, slug="dishes", category="kitchen", assignee="alice"
+        )
+        sensor_already_complete = self._make_sensor(
+            hass,
+            slug="counters",
+            category="kitchen",
+            assignee="alice",
+            state=ChoreState.COMPLETE,
+        )
+
+        hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_dishes": sensor_pending,
+                "alice_counters": sensor_already_complete,
+            },
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE_BY_CATEGORY,
+            {ATTR_CATEGORY_SLUG: "kitchen"},
+            blocking=True,
+        )
+
+        # Only the newly-completed "dishes" chore's 10 points should be awarded -
+        # "counters" was already complete, so it must not be double-counted.
+        assert points_storage.get_points("alice") == 10
+        assert points_storage.get_points_earned("alice") == 10
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_by_category_no_matching_sensors_raises(
+        self, hass, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test that an unknown/empty category raises a ServiceValidationError."""
+        hass.data[DOMAIN] = {"sensors": {}}
+        await async_setup_services(hass)
+
+        with pytest.raises(ServiceValidationError, match="No chore sensors found"):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_COMPLETE_BY_CATEGORY,
+                {ATTR_CATEGORY_SLUG: "nonexistent"},
+                blocking=True,
+            )
+
+        assert "No chore sensors found for category 'nonexistent'" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_mark_pending_by_category_deducts_points_when_complete(
+        self, hass
+    ) -> None:
+        """Test requesting a category deducts points for a previously-complete chore."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+        await points_storage.add_points("alice", 10)
+        await points_storage.add_points_earned("alice", 10)
+
+        sensor = self._make_sensor(
+            hass,
+            slug="dishes",
+            category="kitchen",
+            assignee="alice",
+            state=ChoreState.COMPLETE,
+        )
+
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": sensor},
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_PENDING_BY_CATEGORY,
+            {ATTR_CATEGORY_SLUG: "kitchen"},
+            blocking=True,
+        )
+
+        assert sensor.get_state() == ChoreState.PENDING.value
+        assert points_storage.get_points("alice") == 0
+        assert points_storage.get_points_earned("alice") == 0
+
+    @pytest.mark.asyncio
+    async def test_mark_not_requested_by_category_clears_without_touching_points(
+        self, hass
+    ) -> None:
+        """Test that clearing a category never awards or deducts points."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+        await points_storage.add_points("alice", 10)
+        await points_storage.add_points_earned("alice", 10)
+
+        sensor = self._make_sensor(
+            hass,
+            slug="dishes",
+            category="kitchen",
+            assignee="alice",
+            state=ChoreState.COMPLETE,
+        )
+
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": sensor},
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_NOT_REQUESTED_BY_CATEGORY,
+            {ATTR_CATEGORY_SLUG: "kitchen"},
+            blocking=True,
+        )
+
+        assert sensor.get_state() == ChoreState.NOT_REQUESTED.value
+        # Clearing (not_requested) never touches points, matching mark_not_requested.
+        assert points_storage.get_points("alice") == 10
+        assert points_storage.get_points_earned("alice") == 10
+
+    @pytest.mark.asyncio
+    async def test_mark_pending_by_category_no_matching_sensors_raises_for_user(
+        self, hass
+    ) -> None:
+        """Test the user-scoped error message when nothing matches."""
+        sensor = self._make_sensor(
+            hass, slug="dishes", category="kitchen", assignee="bob"
+        )
+        hass.data[DOMAIN] = {"sensors": {"bob_dishes": sensor}}
+        await async_setup_services(hass)
+
+        with pytest.raises(
+            ServiceValidationError,
+            match="No chore sensor found for user 'alice' and category 'kitchen'",
+        ):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_PENDING_BY_CATEGORY,
+                {ATTR_CATEGORY_SLUG: "kitchen", ATTR_USER: "alice"},
+                blocking=True,
+            )
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_by_category_integration_not_loaded(self, hass) -> None:
+        """Test mark_complete_by_category when the integration isn't loaded."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        if DOMAIN in hass.data:
+            del hass.data[DOMAIN]
+
+        await async_setup_services(hass)
+
+        with pytest.raises(HomeAssistantError, match="integration not loaded"):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_COMPLETE_BY_CATEGORY,
+                {ATTR_CATEGORY_SLUG: "kitchen"},
+                blocking=True,
+            )
 
 
 class TestResetCompletedService:

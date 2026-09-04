@@ -33,6 +33,16 @@ SERVICE_REFRESH_SUMMARY = "refresh_summary"
 SERVICE_ADJUST_POINTS = "adjust_points"
 SERVICE_RESET_POINTS = "reset_points"
 
+# Category-scoped chore services
+SERVICE_MARK_COMPLETE_BY_CATEGORY = "mark_complete_by_category"
+SERVICE_MARK_PENDING_BY_CATEGORY = "mark_pending_by_category"
+SERVICE_MARK_NOT_REQUESTED_BY_CATEGORY = "mark_not_requested_by_category"
+
+# Category management services
+SERVICE_CREATE_CATEGORY = "create_category"
+SERVICE_UPDATE_CATEGORY = "update_category"
+SERVICE_DELETE_CATEGORY = "delete_category"
+
 # Privilege Services
 SERVICE_ENABLE_PRIVILEGE = "enable_privilege"
 SERVICE_DISABLE_PRIVILEGE = "disable_privilege"
@@ -55,6 +65,8 @@ ATTR_ICON = "icon"
 ATTR_POINTS = "points"
 ATTR_ADJUSTMENT = "adjustment"
 ATTR_RESET_TOTAL = "reset_total"
+ATTR_CATEGORY = "category"
+ATTR_CATEGORY_SLUG = "category_slug"
 
 # Privilege service parameters
 ATTR_PRIVILEGE_SLUG = "privilege_slug"

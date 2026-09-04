@@ -11,7 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 from .const import LOGGER
-from .models import ChoreConfig, PrivilegeConfig, SimpleChoresConfig
+from .models import CategoryConfig, ChoreConfig, PrivilegeConfig, SimpleChoresConfig
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -285,7 +285,9 @@ class ConfigLoader:
         # Add chore to config
         new_chores = [*list(self._config.chores), chore]
         new_config = SimpleChoresConfig(
-            chores=new_chores, privileges=self._config.privileges
+            chores=new_chores,
+            privileges=self._config.privileges,
+            categories=self._config.categories,
         )
 
         # Save and notify
@@ -303,6 +305,7 @@ class ConfigLoader:
         assignees: list[str] | None = None,
         icon: str | None = None,
         points: int | None = None,
+        category: str | None = None,
     ) -> None:
         """
         Update an existing chore and save to YAML.
@@ -315,6 +318,7 @@ class ConfigLoader:
             assignees: New assignees list (None to keep current)
             icon: New icon (None to keep current)
             points: New points value (None to keep current)
+            category: New category slug, or "" to uncategorize (None to keep current)
 
         Raises:
             ConfigLoadError: If chore not found or save fails
@@ -344,6 +348,8 @@ class ConfigLoader:
             updated_data["icon"] = icon
         if points is not None:
             updated_data["points"] = points
+        if category is not None:
+            updated_data["category"] = category
 
         updated_chore = ChoreConfig(**updated_data)
 
@@ -352,7 +358,9 @@ class ConfigLoader:
             updated_chore if c.slug == slug else c for c in self._config.chores
         ]
         new_config = SimpleChoresConfig(
-            chores=new_chores, privileges=self._config.privileges
+            chores=new_chores,
+            privileges=self._config.privileges,
+            categories=self._config.categories,
         )
 
         # Save and notify
@@ -384,7 +392,9 @@ class ConfigLoader:
         # Remove from config
         new_chores = [c for c in self._config.chores if c.slug != slug]
         new_config = SimpleChoresConfig(
-            chores=new_chores, privileges=self._config.privileges
+            chores=new_chores,
+            privileges=self._config.privileges,
+            categories=self._config.categories,
         )
 
         # Save and notify
@@ -416,7 +426,9 @@ class ConfigLoader:
         # Add privilege to config
         new_privileges = [*list(self._config.privileges), privilege]
         new_config = SimpleChoresConfig(
-            chores=self._config.chores, privileges=new_privileges
+            chores=self._config.chores,
+            privileges=new_privileges,
+            categories=self._config.categories,
         )
 
         # Save and notify
@@ -479,7 +491,9 @@ class ConfigLoader:
             updated_privilege if p.slug == slug else p for p in self._config.privileges
         ]
         new_config = SimpleChoresConfig(
-            chores=self._config.chores, privileges=new_privileges
+            chores=self._config.chores,
+            privileges=new_privileges,
+            categories=self._config.categories,
         )
 
         # Save and notify
@@ -511,7 +525,9 @@ class ConfigLoader:
         # Remove from config
         new_privileges = [p for p in self._config.privileges if p.slug != slug]
         new_config = SimpleChoresConfig(
-            chores=self._config.chores, privileges=new_privileges
+            chores=self._config.chores,
+            privileges=new_privileges,
+            categories=self._config.categories,
         )
 
         # Save and notify
@@ -519,3 +535,127 @@ class ConfigLoader:
         await self._notify_callbacks()
 
         LOGGER.info("Deleted privilege '%s'", slug)
+
+    async def async_create_category(self, category: CategoryConfig) -> None:
+        """
+        Create a new category and save to YAML.
+
+        Args:
+            category: Category configuration to create
+
+        Raises:
+            ConfigLoadError: If category already exists or save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        # Check if category with this slug already exists
+        if self._config.get_category_by_slug(category.slug):
+            msg = f"Category with slug '{category.slug}' already exists"
+            raise ConfigLoadError(msg)
+
+        # Add category to config
+        new_categories = [*list(self._config.categories), category]
+        new_config = SimpleChoresConfig(
+            chores=self._config.chores,
+            privileges=self._config.privileges,
+            categories=new_categories,
+        )
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Created category '%s'", category.slug)
+
+    async def async_update_category(
+        self,
+        slug: str,
+        name: str | None = None,
+        icon: str | None = None,
+    ) -> None:
+        """
+        Update an existing category and save to YAML.
+
+        Args:
+            slug: Slug of the category to update
+            name: New name (None to keep current)
+            icon: New icon (None to keep current)
+
+        Raises:
+            ConfigLoadError: If category not found or save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        # Find the category
+        category = self._config.get_category_by_slug(slug)
+        if not category:
+            msg = f"Category with slug '{slug}' not found"
+            raise ConfigLoadError(msg)
+
+        # Create updated category
+        updated_data = category.model_dump()
+        if name is not None:
+            updated_data["name"] = name
+        if icon is not None:
+            updated_data["icon"] = icon
+
+        updated_category = CategoryConfig(**updated_data)
+
+        # Replace in config
+        new_categories = [
+            updated_category if c.slug == slug else c for c in self._config.categories
+        ]
+        new_config = SimpleChoresConfig(
+            chores=self._config.chores,
+            privileges=self._config.privileges,
+            categories=new_categories,
+        )
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Updated category '%s'", slug)
+
+    async def async_delete_category(self, slug: str) -> None:
+        """
+        Delete a category and save to YAML.
+
+        Args:
+            slug: Slug of the category to delete
+
+        Raises:
+            ConfigLoadError: If category not found, still in use by a chore,
+                or save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        # Check if category exists
+        if not self._config.get_category_by_slug(slug):
+            msg = f"Category with slug '{slug}' not found"
+            raise ConfigLoadError(msg)
+
+        # Remove from config. If any chore still references this category,
+        # SimpleChoresConfig's validator rejects the construction below (the
+        # same guard rail as deleting a chore still linked to a privilege).
+        new_categories = [c for c in self._config.categories if c.slug != slug]
+        new_config = SimpleChoresConfig(
+            chores=self._config.chores,
+            privileges=self._config.privileges,
+            categories=new_categories,
+        )
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Deleted category '%s'", slug)
