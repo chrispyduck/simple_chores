@@ -24,7 +24,7 @@ from custom_components.simple_chores.sensor import ChoreSensor, PrivilegeSensor
 
 @pytest.fixture
 def mock_points_storage() -> MagicMock:
-    """A PointsStorage double with every getter defaulting to "nothing stored"."""
+    """Build a PointsStorage double with every getter defaulting to "nothing stored"."""
     storage = MagicMock(spec=PointsStorage)
     storage.get_privilege_state.return_value = None
     storage.get_privilege_disable_until.return_value = None
@@ -34,7 +34,7 @@ def mock_points_storage() -> MagicMock:
 
 @pytest.fixture
 def mock_manager(mock_points_storage: MagicMock) -> MagicMock:
-    """A ChoreSensorManager double exposing just what PrivilegeSensor reads."""
+    """Build a ChoreSensorManager double exposing just what PrivilegeSensor reads."""
     manager = MagicMock()
     manager.points_storage = mock_points_storage
     manager.sensors = {}
@@ -43,6 +43,7 @@ def mock_manager(mock_points_storage: MagicMock) -> MagicMock:
 
 @pytest.fixture
 def manual_privilege() -> PrivilegeConfig:
+    """Build a manually-toggled privilege assigned to alice."""
     return PrivilegeConfig(
         name="Extra Dessert",
         slug="extra_dessert",
@@ -53,6 +54,7 @@ def manual_privilege() -> PrivilegeConfig:
 
 @pytest.fixture
 def automatic_privilege() -> PrivilegeConfig:
+    """Build a privilege automatically linked to alice's "dishes" chore."""
     return PrivilegeConfig(
         name="Screen Time",
         slug="screen_time",

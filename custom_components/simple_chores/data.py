@@ -55,9 +55,7 @@ class PointsStorage:
             self._points_possible = data.get("points_possible", {})
             self._privilege_states = data.get("privilege_states", {})
             self._privilege_disable_until = data.get("privilege_disable_until", {})
-            self._privilege_pre_block_state = data.get(
-                "privilege_pre_block_state", {}
-            )
+            self._privilege_pre_block_state = data.get("privilege_pre_block_state", {})
 
     async def async_save(self) -> None:
         """Save points to storage."""

@@ -833,8 +833,10 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         self._disable_until = self._manager.points_storage.get_privilege_disable_until(
             self._assignee, self._privilege.slug
         )
-        self._pre_block_state = self._manager.points_storage.get_privilege_pre_block_state(
-            self._assignee, self._privilege.slug
+        self._pre_block_state = (
+            self._manager.points_storage.get_privilege_pre_block_state(
+                self._assignee, self._privilege.slug
+            )
         )
 
         # Check if temporary disable has expired
@@ -1073,7 +1075,8 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         """Immediately end a temporary disable, restoring the privilege's real state."""
         if self._attr_native_value != PrivilegeState.TEMPORARILY_DISABLED.value:
             LOGGER.warning(
-                "Cannot clear temporary disable for privilege '%s' - not temporarily disabled",
+                "Cannot clear temporary disable for privilege '%s' - "
+                "not temporarily disabled",
                 self._privilege.slug,
             )
             return

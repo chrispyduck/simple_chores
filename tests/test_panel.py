@@ -1,12 +1,15 @@
 """Tests for simple_chores panel.py (sidebar panel registration)."""
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from custom_components.simple_chores import panel
 from custom_components.simple_chores.const import DOMAIN, PANEL_URL
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
@@ -30,7 +33,7 @@ class _FakePath:
         self._target = target
 
     @property
-    def parent(self) -> "_FakePath":
+    def parent(self) -> _FakePath:
         return self
 
     def __truediv__(self, _other: str) -> Path:
@@ -110,7 +113,7 @@ class TestAsyncRegisterPanel:
         assert kwargs["require_admin"] is True
         assert kwargs["config_panel_domain"] == DOMAIN
 
-        assert hass.data[panel._STATIC_REGISTERED] is True  # noqa: SLF001
+        assert hass.data[panel._STATIC_REGISTERED] is True
 
     @pytest.mark.asyncio
     async def test_does_not_reregister_static_path_twice(
@@ -120,13 +123,11 @@ class TestAsyncRegisterPanel:
         bundle = tmp_path / "simple-chores-panel.js"
         bundle.write_text("export {};")
         monkeypatch.setattr(panel, "Path", lambda _file: _FakePath(bundle))
-        hass.data[panel._STATIC_REGISTERED] = True  # noqa: SLF001
+        hass.data[panel._STATIC_REGISTERED] = True
 
         with (
             patch.object(panel.frontend, "async_remove_panel"),
-            patch.object(
-                panel.panel_custom, "async_register_panel", new=AsyncMock()
-            ),
+            patch.object(panel.panel_custom, "async_register_panel", new=AsyncMock()),
         ):
             await panel.async_register_panel(hass)
 
@@ -140,9 +141,7 @@ class TestAsyncRegisterPanel:
         bundle = tmp_path / "simple-chores-panel.js"
         bundle.write_text("export {};")
         broken_stat_bundle = _RaisingStatPath(bundle)
-        monkeypatch.setattr(
-            panel, "Path", lambda _file: _FakePath(broken_stat_bundle)
-        )
+        monkeypatch.setattr(panel, "Path", lambda _file: _FakePath(broken_stat_bundle))
 
         with (
             patch.object(panel.frontend, "async_remove_panel"),

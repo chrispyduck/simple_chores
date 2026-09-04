@@ -150,8 +150,7 @@ class TestPointsStoragePrivilegePreBlockState:
         await storage.set_privilege_pre_block_state("alice", "extra_dessert", "Enabled")
 
         assert (
-            storage.get_privilege_pre_block_state("alice", "extra_dessert")
-            == "Enabled"
+            storage.get_privilege_pre_block_state("alice", "extra_dessert") == "Enabled"
         )
 
     @pytest.mark.asyncio
@@ -167,10 +166,12 @@ class TestPointsStoragePrivilegePreBlockState:
 
     @pytest.mark.asyncio
     async def test_persists_across_instances(self, hass) -> None:
-        """Test that the pre-block state survives a reload, like other privilege data."""
+        """Test that pre-block state survives a reload, like other privilege data."""
         storage1 = PointsStorage(hass)
         await storage1.async_load()
-        await storage1.set_privilege_pre_block_state("alice", "extra_dessert", "Enabled")
+        await storage1.set_privilege_pre_block_state(
+            "alice", "extra_dessert", "Enabled"
+        )
 
         storage2 = PointsStorage(hass)
         await storage2.async_load()

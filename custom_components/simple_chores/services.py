@@ -1279,7 +1279,7 @@ async def handle_clear_temporary_disable(
 
     LOGGER.info(
         "Service 'clear_temporary_disable' called with user='%s', privilege_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         privilege_slug,
     )
 
@@ -1291,7 +1291,10 @@ async def handle_clear_temporary_disable(
 
     if not matching_sensors:
         if user:
-            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+            msg = (
+                f"No privilege sensor found for user '{user}' "
+                f"and privilege '{privilege_slug}'"
+            )
         else:
             msg = f"No privilege sensors found for privilege '{privilege_slug}'"
         LOGGER.error(msg)
