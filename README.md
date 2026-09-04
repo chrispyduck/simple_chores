@@ -167,7 +167,7 @@ You can copy this to your Home Assistant automations directory or use it as a re
 
 ## Development
 
-This integration is based on the [integration_blueprint template](https://github.com/ludeeus/integration_blueprint).
+This integration is based on the [integration_blueprint template](https://github.com/ludeeus/integration_blueprint), Copyright (c) 2019 - 2025 Joakim Sørensen @ludeeus, also MIT licensed.
 
 ### Setup Development Environment
 

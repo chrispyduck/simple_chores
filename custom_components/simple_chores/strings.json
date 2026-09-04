@@ -3,7 +3,7 @@
         "step": {
             "user": {
                 "title": "Set up Simple Chores",
-                "description": "Simple Chores will use the configuration file located at `{config_file}`.\n\nIf the file doesn't exist yet, create it with your chore definitions. See the [documentation](https://github.com/chrispyduck/simple_chores) for help."
+                "description": "Simple Chores will use the configuration file located at `{config_file}`.\n\nIf the file doesn't exist yet, create it with your chore definitions. See the project's documentation for help."
             }
         },
         "abort": {

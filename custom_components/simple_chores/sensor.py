@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, LOGGER, sanitize_entity_id
@@ -25,7 +23,9 @@ from .models import (
 )
 
 if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
     from .config_loader import ConfigLoader
 
@@ -37,7 +37,7 @@ PARALLEL_UPDATES = 0
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: ConfigEntry,  # noqa: ARG001
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """
@@ -66,7 +66,8 @@ async def async_setup_entry(
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
-        "Stored %d chore sensors, %d summary sensors, %d privilege sensors in hass.data (config entry setup)",
+        "Stored %d chore sensors, %d summary sensors, %d privilege sensors "
+        "in hass.data (config entry setup)",
         len(manager.sensors),
         len(manager.summary_sensors),
         len(manager.privilege_sensors),
@@ -78,9 +79,9 @@ async def async_setup_entry(
 
 async def async_setup_platform(
     hass: HomeAssistant,
-    config: dict,
+    config: dict,  # noqa: ARG001
     async_add_entities: AddEntitiesCallback,
-    discovery_info: dict | None = None,
+    discovery_info: dict | None = None,  # noqa: ARG001
 ) -> None:
     """
     Set up the sensor platform from YAML configuration.
@@ -109,7 +110,8 @@ async def async_setup_platform(
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
-        "Stored %d chore sensors, %d summary sensors, %d privilege sensors in hass.data (YAML setup)",
+        "Stored %d chore sensors, %d summary sensors, %d privilege sensors "
+        "in hass.data (YAML setup)",
         len(manager.sensors),
         len(manager.summary_sensors),
         len(manager.privilege_sensors),
@@ -222,7 +224,7 @@ class ChoreSensorManager:
                     try:
                         await sensor.async_remove()
                         LOGGER.debug("Removed sensor %s", entity_id)
-                    except Exception as err:
+                    except Exception as err:  # noqa: BLE001 - best-effort cleanup, don't abort the reconciliation loop
                         LOGGER.warning("Failed to remove sensor %s: %s", entity_id, err)
                 else:
                     LOGGER.debug(
@@ -304,7 +306,7 @@ class ChoreSensorManager:
                     try:
                         await sensor.async_remove()
                         LOGGER.debug("Removed summary sensor for %s", assignee)
-                    except Exception as err:
+                    except Exception as err:  # noqa: BLE001 - best-effort cleanup, don't abort the reconciliation loop
                         LOGGER.warning(
                             "Failed to remove summary sensor %s: %s", assignee, err
                         )
@@ -330,11 +332,10 @@ class ChoreSensorManager:
 
         # Update all existing summary sensors - batch updates for consistency
         if self.summary_sensors:
-            update_tasks = []
-            for summary_sensor in self.summary_sensors.values():
-                update_tasks.append(
-                    summary_sensor.async_update_ha_state(force_refresh=True)
-                )
+            update_tasks = [
+                summary_sensor.async_update_ha_state(force_refresh=True)
+                for summary_sensor in self.summary_sensors.values()
+            ]
             if update_tasks:
                 await asyncio.gather(*update_tasks)
 
@@ -350,7 +351,9 @@ class ChoreSensorManager:
 
         for privilege in config.privileges:
             for assignee in privilege.assignees:
-                entity_id = f"{sanitize_entity_id(assignee)}_{sanitize_entity_id(privilege.slug)}"
+                sanitized_assignee = sanitize_entity_id(assignee)
+                sanitized_slug = sanitize_entity_id(privilege.slug)
+                entity_id = f"{sanitized_assignee}_{sanitized_slug}"
 
                 if entity_id not in self.privilege_sensors:
                     sensor = PrivilegeSensor(self.hass, privilege, assignee, self)
@@ -391,7 +394,7 @@ class ChoreSensorManager:
                     try:
                         await sensor.async_remove()
                         LOGGER.debug("Removed privilege sensor %s", entity_id)
-                    except Exception as err:
+                    except Exception as err:  # noqa: BLE001 - best-effort cleanup, don't abort the reconciliation loop
                         LOGGER.warning(
                             "Failed to remove privilege sensor %s: %s", entity_id, err
                         )
@@ -411,7 +414,9 @@ class ChoreSensorManager:
         sensors_to_add = []
         for privilege in config.privileges:
             for assignee in privilege.assignees:
-                entity_id = f"{sanitize_entity_id(assignee)}_{sanitize_entity_id(privilege.slug)}"
+                sanitized_assignee = sanitize_entity_id(assignee)
+                sanitized_slug = sanitize_entity_id(privilege.slug)
+                entity_id = f"{sanitized_assignee}_{sanitized_slug}"
 
                 if entity_id in self.privilege_sensors:
                     # Update existing sensor
@@ -636,7 +641,7 @@ class ChoreSummarySensor(SensorEntity):
         }
 
     async def async_added_to_hass(self) -> None:
-        """Called when entity is added to hass - populate cache with initial data."""
+        """Populate the cache with initial data when the entity is added to hass."""
         await super().async_added_to_hass()
         LOGGER.debug(
             "Summary sensor for %s added to Home Assistant, initializing cache",
@@ -663,8 +668,9 @@ class ChoreSummarySensor(SensorEntity):
             if sensor.assignee == self._assignee:
                 full_entity_id = f"sensor.simple_chore_{entity_id}"
                 # Read from _attr_native_value directly to get the most current state.
-                # This ensures we see updates immediately, even before the state machine updates.
-                current_state = sensor._attr_native_value  # noqa: SLF001
+                # This ensures we see updates immediately, even before the state
+                # machine updates.
+                current_state = sensor._attr_native_value
 
                 if current_state == ChoreState.PENDING.value:
                     pending_entities.append(full_entity_id)
@@ -832,10 +838,13 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         )
 
         # Check if temporary disable has expired
-        if self._attr_native_value == PrivilegeState.TEMPORARILY_DISABLED.value:
-            if self._disable_until and datetime.now(UTC) >= self._disable_until:
-                # Expired, transition back based on behavior
-                await self._check_and_update_state()
+        if (
+            self._attr_native_value == PrivilegeState.TEMPORARILY_DISABLED.value
+            and self._disable_until
+            and datetime.now(UTC) >= self._disable_until
+        ):
+            # Expired, transition back based on behavior
+            await self._check_and_update_state()
 
     @property
     def privilege(self) -> PrivilegeConfig:
@@ -893,7 +902,7 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         if not self._privilege.linked_chores:
             # No specific chores linked - check ALL requested chores for this assignee
             has_requested_chores = False
-            for sensor_id, sensor in self._manager.sensors.items():
+            for sensor in self._manager.sensors.values():
                 if sensor.assignee != self._assignee:
                     continue
                 state = sensor.get_state()
@@ -1078,7 +1087,8 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         """Adjust the temporary disable duration."""
         if self._attr_native_value != PrivilegeState.TEMPORARILY_DISABLED.value:
             LOGGER.warning(
-                "Cannot adjust temporary disable for privilege '%s' - not temporarily disabled",
+                "Cannot adjust temporary disable for privilege '%s' - "
+                "not temporarily disabled",
                 self._privilege.slug,
             )
             return
@@ -1089,8 +1099,6 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
                 self._privilege.slug,
             )
             return
-
-        from datetime import timedelta
 
         self._disable_until = self._disable_until + timedelta(
             minutes=adjustment_minutes
@@ -1104,7 +1112,8 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
                 self._assignee, self._privilege.slug, self._disable_until
             )
             LOGGER.info(
-                "Privilege '%s' temporary disable adjusted by %d minutes for %s, new end: %s",
+                "Privilege '%s' temporary disable adjusted by %d minutes "
+                "for %s, new end: %s",
                 self._privilege.name,
                 adjustment_minutes,
                 self._assignee,
@@ -1112,5 +1121,5 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             )
 
     async def async_update_from_chores(self) -> None:
-        """Update privilege state based on linked chore states (for automatic behavior)."""
+        """Update privilege state from linked chore states (automatic behavior only)."""
         await self._check_and_update_state()

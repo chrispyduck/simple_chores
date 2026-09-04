@@ -92,5 +92,4 @@ def sanitize_entity_id(value: str) -> str:
     # Replace hyphens with underscores
     value = value.replace("-", "_")
     # Keep only alphanumeric and underscores
-    value = "".join(c for c in value if c.isalnum() or c == "_")
-    return value
+    return "".join(c for c in value if c.isalnum() or c == "_")

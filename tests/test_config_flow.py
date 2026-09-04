@@ -1,16 +1,18 @@
 """Test the Simple Chores config flow."""
 
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.simple_chores.config_flow import (
     SimpleChoresConfigFlow,
     SimpleChoresOptionsFlow,
 )
-from custom_components.simple_chores.const import DOMAIN
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 
 class TestConfigFlow:
@@ -48,12 +50,7 @@ class TestConfigFlow:
     @pytest.mark.asyncio
     async def test_options_flow(self, hass: HomeAssistant) -> None:
         """Test the options flow."""
-        # Create a config entry
-        entry = MagicMock()
-        entry.domain = DOMAIN
-        entry.entry_id = "test_entry"
-
-        flow = SimpleChoresOptionsFlow(entry)
+        flow = SimpleChoresOptionsFlow()
         flow.hass = hass
 
         result = await flow.async_step_init()
@@ -80,11 +77,7 @@ class TestConfigFlowUI:
     @pytest.mark.asyncio
     async def test_options_shows_config_file_path(self, hass: HomeAssistant) -> None:
         """Test that options flow shows config file path."""
-        entry = MagicMock()
-        entry.domain = DOMAIN
-        entry.entry_id = "test_entry"
-
-        flow = SimpleChoresOptionsFlow(entry)
+        flow = SimpleChoresOptionsFlow()
         flow.hass = hass
 
         result = await flow.async_step_init()

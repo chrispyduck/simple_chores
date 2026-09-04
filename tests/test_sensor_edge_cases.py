@@ -530,7 +530,7 @@ class TestSensorRemovalEdgeCases:
 
         assert len(manager.sensors) == 2
 
-        # Update config to remove all chores - should handle unregistered sensors gracefully
+        # Update config to remove all chores - should handle unregistered sensors OK
         empty_config = SimpleChoresConfig(chores=[])
         await manager.async_config_changed(empty_config)
 

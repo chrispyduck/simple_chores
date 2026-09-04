@@ -1,6 +1,6 @@
 # The contents of this file is based on https://github.com/home-assistant/core/blob/dev/pyproject.toml
 
-target-version = "py313"
+target-version = "py314"
 
 [lint]
 select = [
@@ -13,6 +13,11 @@ ignore = [
     "D212", # multi-line-summary-first-line (incompatible with formatter)
     "COM812", # incompatible with formatter
     "ISC001", # incompatible with formatter
+    "CPY001", # Missing copyright notice - not selected by home-assistant/core either, and this repo has no header convention (LICENSE covers it)
+    "PLR2004", # Magic value used in comparison - ignored by home-assistant/core; almost entirely test assertions, where literal expected values are the point
+    "SLF001", # Private member accessed - ignored by home-assistant/core; normal for tests inspecting internal state
+    "PLC0415", # import should be at top-level - ignored by home-assistant/core; legitimate for deferred/lazy imports
+    "ASYNC240", # Async functions should not use pathlib.Path methods - ignored by home-assistant/core; this project doesn't use trio/anyio, so the suggested alternative doesn't apply
 ]
 
 [lint.flake8-pytest-style]
@@ -24,5 +29,17 @@ keep-runtime-typing = true
 [lint.mccabe]
 max-complexity = 25
 
+[lint.pylint]
+# Raised from the ruff defaults (5/5/12/50) to fit a handful of existing,
+# well-tested functions/methods rather than force a risky decomposition.
+max-args = 7
+max-positional-args = 7
+max-branches = 20
+max-statements = 69
+
 [lint.per-file-ignores]
-"tests/*" = ["S101"]  # Use of assert detected
+"tests/*" = [
+    "S101", # Use of assert detected - the point of a test
+    "ANN", # Missing type annotations - not enforced by home-assistant/core either; low-value on fixture/mock parameters
+    "ARG", # Unused function/method argument - common for pytest fixtures required by signature but unused in the test body
+]

@@ -156,11 +156,10 @@ async def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) 
     else:
         # Update all summary sensors
         LOGGER.debug("Updating all %d summary sensors", len(summary_sensors))
-        update_tasks = []
-        for summary_sensor in summary_sensors.values():
-            update_tasks.append(
-                summary_sensor.async_update_ha_state(force_refresh=True)
-            )
+        update_tasks = [
+            summary_sensor.async_update_ha_state(force_refresh=True)
+            for summary_sensor in summary_sensors.values()
+        ]
         if update_tasks:
             await asyncio.gather(*update_tasks)
 
@@ -283,7 +282,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
 
     LOGGER.info(
         "Service 'mark_complete' called with user='%s', chore_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         chore_slug,
     )
 
@@ -332,7 +331,8 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
             await points_storage.add_points(sensor.assignee, chore_points)
             await points_storage.add_points_earned(sensor.assignee, chore_points)
             LOGGER.debug(
-                "Awarded %d points to '%s' for completing chore '%s' (total: %d→%d, earned: %d→%d)",
+                "Awarded %d points to '%s' for completing chore '%s' "
+                "(total: %d→%d, earned: %d→%d)",
                 chore_points,
                 sensor.assignee,
                 chore_slug,
@@ -370,7 +370,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
 
     LOGGER.info(
         "Service 'mark_pending' called with user='%s', chore_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         chore_slug,
     )
 
@@ -419,7 +419,8 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
             await points_storage.add_points(sensor.assignee, -chore_points)
             await points_storage.add_points_earned(sensor.assignee, -chore_points)
             LOGGER.debug(
-                "Deducted %d points from '%s' for un-completing chore '%s' (total: %d→%d, earned: %d→%d)",
+                "Deducted %d points from '%s' for un-completing chore '%s' "
+                "(total: %d→%d, earned: %d→%d)",
                 chore_points,
                 sensor.assignee,
                 chore_slug,
@@ -457,7 +458,7 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
 
     LOGGER.info(
         "Service 'mark_not_requested' called with user='%s', chore_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         chore_slug,
     )
 
@@ -520,7 +521,7 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
 
     LOGGER.info(
         "Service 'reset_completed' called with user='%s'",
-        user if user else "all users",
+        user or "all users",
     )
 
     _validate_integration_loaded(hass)
@@ -582,7 +583,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
     LOGGER.info(
         "Service 'start_new_day' called with user='%s'",
-        user if user else "all users",
+        user or "all users",
     )
 
     _validate_integration_loaded(hass)
@@ -593,7 +594,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     # Sanitize user if provided for matching
     sanitized_user = sanitize_entity_id(user) if user else None
 
-    # Calculate points missed per assignee BEFORE resetting (points already awarded on complete)
+    # Calculate points missed per assignee BEFORE resetting
+    # (points already awarded on complete)
     assignee_stats: dict[str, dict[str, int]] = {}
     for sensor_id, sensor in sensors.items():
         # If user specified, only calculate for their chores
@@ -621,7 +623,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
                 new_missed = current_missed + stats["missed"]
                 await points_storage.add_points_missed(assignee, stats["missed"])
                 LOGGER.debug(
-                    "Updated cumulative points_missed for %s: added %d (was %d, now %d)",
+                    "Updated cumulative points_missed for %s: "
+                    "added %d (was %d, now %d)",
                     assignee,
                     stats["missed"],
                     current_missed,
@@ -693,12 +696,13 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         try:
             await config_loader.async_delete_chore(slug)
             LOGGER.info("New day: deleted one-time chore '%s'", slug)
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 - one bad delete shouldn't stop the rest
             LOGGER.error("Failed to delete one-time chore '%s': %s", slug, err)
 
     if user:
         LOGGER.info(
-            "Reset %d completed chore(s) for user '%s' (%d manual to not_requested, %d daily to pending, %d once deleted)",
+            "Reset %d completed chore(s) for user '%s' "
+            "(%d manual to not_requested, %d daily to pending, %d once deleted)",
             reset_count,
             user,
             manual_count,
@@ -707,7 +711,8 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         )
     else:
         LOGGER.info(
-            "Reset %d completed chore(s) for all users (%d manual to not_requested, %d daily to pending, %d once deleted)",
+            "Reset %d completed chore(s) for all users "
+            "(%d manual to not_requested, %d daily to pending, %d once deleted)",
             reset_count,
             manual_count,
             daily_count,
@@ -830,7 +835,7 @@ async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None
 
     LOGGER.info(
         "Service 'refresh_summary' called with user='%s'",
-        user if user else "all users",
+        user or "all users",
     )
 
     _validate_integration_loaded(hass)
@@ -925,7 +930,7 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
 
     LOGGER.info(
         "Service 'reset_points' called with user='%s', reset_total=%s",
-        user if user else "all users",
+        user or "all users",
         reset_total,
     )
 
@@ -952,7 +957,8 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
 
     # Reset points for each user
     for assignee in users_to_reset:
-        # Always reset points_earned and points_missed (points_possible is calculated dynamically)
+        # Always reset points_earned and points_missed
+        # (points_possible is calculated dynamically)
         await points_storage.set_points_earned(assignee, 0)
         await points_storage.set_points_missed(assignee, 0)
 
@@ -1060,7 +1066,7 @@ async def handle_enable_privilege(hass: HomeAssistant, call: ServiceCall) -> Non
 
     LOGGER.info(
         "Service 'enable_privilege' called with user='%s', privilege_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         privilege_slug,
     )
 
@@ -1072,7 +1078,10 @@ async def handle_enable_privilege(hass: HomeAssistant, call: ServiceCall) -> Non
 
     if not matching_sensors:
         if user:
-            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+            msg = (
+                f"No privilege sensor found for user '{user}' "
+                f"and privilege '{privilege_slug}'"
+            )
         else:
             msg = f"No privilege sensors found for privilege '{privilege_slug}'"
         LOGGER.error(msg)
@@ -1104,7 +1113,7 @@ async def handle_disable_privilege(hass: HomeAssistant, call: ServiceCall) -> No
 
     LOGGER.info(
         "Service 'disable_privilege' called with user='%s', privilege_slug='%s'",
-        user if user else "all assignees",
+        user or "all assignees",
         privilege_slug,
     )
 
@@ -1116,7 +1125,10 @@ async def handle_disable_privilege(hass: HomeAssistant, call: ServiceCall) -> No
 
     if not matching_sensors:
         if user:
-            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+            msg = (
+                f"No privilege sensor found for user '{user}' "
+                f"and privilege '{privilege_slug}'"
+            )
         else:
             msg = f"No privilege sensors found for privilege '{privilege_slug}'"
         LOGGER.error(msg)
@@ -1150,8 +1162,9 @@ async def handle_temporarily_disable_privilege(
     duration = call.data[ATTR_DURATION]
 
     LOGGER.info(
-        "Service 'temporarily_disable_privilege' called with user='%s', privilege_slug='%s', duration=%d",
-        user if user else "all assignees",
+        "Service 'temporarily_disable_privilege' called with "
+        "user='%s', privilege_slug='%s', duration=%d",
+        user or "all assignees",
         privilege_slug,
         duration,
     )
@@ -1164,7 +1177,10 @@ async def handle_temporarily_disable_privilege(
 
     if not matching_sensors:
         if user:
-            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+            msg = (
+                f"No privilege sensor found for user '{user}' "
+                f"and privilege '{privilege_slug}'"
+            )
         else:
             msg = f"No privilege sensors found for privilege '{privilege_slug}'"
         LOGGER.error(msg)
@@ -1204,8 +1220,9 @@ async def handle_adjust_temporary_disable(
     adjustment = call.data[ATTR_ADJUSTMENT]
 
     LOGGER.info(
-        "Service 'adjust_temporary_disable' called with user='%s', privilege_slug='%s', adjustment=%d",
-        user if user else "all assignees",
+        "Service 'adjust_temporary_disable' called with "
+        "user='%s', privilege_slug='%s', adjustment=%d",
+        user or "all assignees",
         privilege_slug,
         adjustment,
     )
@@ -1218,7 +1235,10 @@ async def handle_adjust_temporary_disable(
 
     if not matching_sensors:
         if user:
-            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+            msg = (
+                f"No privilege sensor found for user '{user}' "
+                f"and privilege '{privilege_slug}'"
+            )
         else:
             msg = f"No privilege sensors found for privilege '{privilege_slug}'"
         LOGGER.error(msg)
@@ -1242,7 +1262,8 @@ async def handle_adjust_temporary_disable(
         )
     else:
         LOGGER.info(
-            "Adjusted temporary disable for privilege '%s' by %d minutes for %d assignee(s)",
+            "Adjusted temporary disable for privilege '%s' by %d minutes "
+            "for %d assignee(s)",
             privilege_slug,
             adjustment,
             len(matching_sensors),
