@@ -17,6 +17,7 @@ from homeassistant.const import Platform
 from .config_loader import ConfigLoader, ConfigLoadError
 from .const import CONFIG_FILE_NAME, DOMAIN, LOGGER
 from .data import SimpleChoresData as SimpleChoresData
+from .panel import async_register_panel, async_unregister_panel
 from .sensor import async_setup_platform
 from .services import async_setup_services
 
@@ -89,6 +90,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     # Register services
     await async_setup_services(hass)
 
+    # Add the admin-only "Chores" panel to the sidebar
+    await async_register_panel(hass)
+
     LOGGER.info("Simple Chores integration loaded successfully")
     return True
 
@@ -134,6 +138,9 @@ async def async_setup_entry(
     # Register services
     await async_setup_services(hass)
 
+    # Add the admin-only "Chores" panel to the sidebar
+    await async_register_panel(hass)
+
     LOGGER.info("Simple Chores integration loaded successfully")
     return True
 
@@ -156,11 +163,15 @@ async def async_unload_entry(
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    # Stop watching config file
-    if unload_ok and DOMAIN in hass.data:
-        config_loader = hass.data[DOMAIN].get("config_loader")
-        if config_loader:
-            await config_loader.async_stop_watching()
+    if unload_ok:
+        # Remove the sidebar panel
+        async_unregister_panel(hass)
+
+        # Stop watching config file
+        if DOMAIN in hass.data:
+            config_loader = hass.data[DOMAIN].get("config_loader")
+            if config_loader:
+                await config_loader.async_stop_watching()
 
     return unload_ok
 

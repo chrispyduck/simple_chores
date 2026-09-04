@@ -16,6 +16,23 @@ from custom_components.simple_chores import (
 from custom_components.simple_chores.config_loader import ConfigLoadError
 
 
+@pytest.fixture(autouse=True)
+def mock_panel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Stub out sidebar panel (dis)registration.
+
+    Panel registration talks to real `homeassistant.components.frontend`/
+    `panel_custom` internals, which these tests' plain `MagicMock` hass
+    doesn't support. It's covered separately in tests/test_panel.py.
+    """
+    monkeypatch.setattr(
+        "custom_components.simple_chores.async_register_panel", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "custom_components.simple_chores.async_unregister_panel", Mock()
+    )
+
+
 @pytest.fixture
 def hass() -> MagicMock:
     """Create a mock Home Assistant instance."""

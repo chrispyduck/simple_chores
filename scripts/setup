@@ -5,3 +5,9 @@ set -e
 cd "$(dirname "$0")/.."
 
 python3 -m pip install --requirement requirements.txt
+
+if command -v npm >/dev/null 2>&1; then
+  (cd frontend && npm install)
+else
+  echo "npm not found; skipping frontend dependency install (needed to build the admin panel, see frontend/README.md)"
+fi

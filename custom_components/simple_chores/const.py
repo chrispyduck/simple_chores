@@ -61,6 +61,16 @@ ATTR_DURATION = "duration"
 ATTR_BEHAVIOR = "behavior"
 ATTR_LINKED_CHORES = "linked_chores"
 
+# --- Admin panel -------------------------------------------------------
+# Path (relative to this package) of the built frontend bundle. The bundle
+# itself is produced by `npm run build` in frontend/ and is committed to the
+# repo, the same way HACS-distributed integrations ship their compiled JS.
+PANEL_FILENAME = "frontend/dist/simple-chores-panel.js"
+PANEL_URL = f"/api/panel_custom/{DOMAIN}"
+PANEL_NAME = "simple-chores-panel"
+PANEL_TITLE = "Chores"
+PANEL_ICON = "mdi:clipboard-check-outline"
+
 
 def sanitize_entity_id(value: str) -> str:
     """
