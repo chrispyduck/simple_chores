@@ -18,7 +18,8 @@
                 "github.vscode-pull-request-github",
                 "ms-python.python",
                 "ms-python.vscode-pylance",
-                "ryanluker.vscode-coverage-gutters"
+                "ryanluker.vscode-coverage-gutters",
+                "anthropic.claude-code"
             ],
             "settings": {
                 "files.eol": "\n",
@@ -32,7 +33,8 @@
                 "python.defaultInterpreterPath": "/usr/local/bin/python",
                 "[python]": {
                     "editor.defaultFormatter": "charliermarsh.ruff"
-                }
+                },
+                "claudeCode.allowDangerouslySkipPermissions": true
             }
         }
     },
@@ -40,6 +42,16 @@
     "features": {
         "ghcr.io/devcontainers-extra/features/apt-packages:1": {
             "packages": "ffmpeg,libturbojpeg0,libpcap-dev"
-        }
+        },
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "lts"
+        },
+        "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+    },
+    "mounts": [
+        "source=/home/chris/.claude,target=/home/vscode/.claude,type=bind"
+    ],
+    "containerEnv": {
+        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
     }
 }

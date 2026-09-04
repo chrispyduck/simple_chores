@@ -144,6 +144,19 @@ privileges:
 
 The summary sensor for each assignee includes a `privileges` attribute containing all privileges with their current state and metadata.
 
+## Admin Panel
+
+Administrators get a "Chores" entry in the Home Assistant sidebar for full
+management of chores and privileges - creating, editing, and deleting both,
+marking chores complete/pending, enabling/disabling or temporarily blocking
+privileges, and running `reset_completed`/`start_new_day` - without needing
+to call services by hand or edit the YAML file directly. The panel is
+registered with `require_admin=True`, so it's only visible to, and only
+reachable by, Home Assistant administrators; everyone else sees no change.
+
+The panel's source lives in [frontend/](frontend/); see
+[frontend/README.md](frontend/README.md) for how to build it.
+
 ## Automation Examples
 
 An example automation for daily chore reset is provided in `automations/start_new_day.yaml`. This automation calls the `start_new_day` service at 2:00 AM each day to:

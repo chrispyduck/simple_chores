@@ -806,6 +806,7 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         # Initialize state - will be restored/computed in async_added_to_hass
         self._attr_native_value = PrivilegeState.DISABLED.value
         self._disable_until: datetime | None = None
+        self._pre_block_state: str | None = None
 
     async def async_added_to_hass(self) -> None:
         """Restore previous state when entity is added to hass."""
@@ -827,9 +828,15 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
                 stored_state,
             )
 
-        # Restore temporary disable end time
+        # Restore temporary disable end time and the state to restore once it
+        # ends (manual privileges only - see _check_and_update_state)
         self._disable_until = self._manager.points_storage.get_privilege_disable_until(
             self._assignee, self._privilege.slug
+        )
+        self._pre_block_state = (
+            self._manager.points_storage.get_privilege_pre_block_state(
+                self._assignee, self._privilege.slug
+            )
         )
 
         # Check if temporary disable has expired
@@ -929,11 +936,16 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         return True
 
     async def _check_and_update_state(self) -> None:
-        """Check linked chores and update state for automatic behavior."""
-        if self._privilege.behavior != PrivilegeBehavior.AUTOMATIC:
-            return
+        """
+        Re-evaluate the privilege's state.
 
-        # Check if temporarily disabled and not expired
+        For automatic privileges this recomputes the state from linked
+        chores. Either behavior can also be temporarily disabled; once that
+        expires, automatic privileges fall through to the chore-based
+        evaluation below, while manual privileges - which have no such
+        evaluation - are restored to whatever state they were in right
+        before the temporary disable started (see async_temporarily_disable).
+        """
         if self._attr_native_value == PrivilegeState.TEMPORARILY_DISABLED.value:
             if self._disable_until and datetime.now(UTC) < self._disable_until:
                 # Still temporarily disabled
@@ -943,6 +955,27 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             await self._manager.points_storage.set_privilege_disable_until(
                 self._assignee, self._privilege.slug, None
             )
+
+            if self._privilege.behavior != PrivilegeBehavior.AUTOMATIC:
+                restored_state = self._pre_block_state or PrivilegeState.DISABLED.value
+                self._pre_block_state = None
+                await self._manager.points_storage.set_privilege_pre_block_state(
+                    self._assignee, self._privilege.slug, None
+                )
+                if self._attr_native_value != restored_state:
+                    self._attr_native_value = restored_state
+                    await self._manager.points_storage.set_privilege_state(
+                        self._assignee, self._privilege.slug, restored_state
+                    )
+                    LOGGER.info(
+                        "Privilege '%s' temporary disable for %s ended, restored to %s",
+                        self._privilege.name,
+                        self._assignee,
+                        restored_state,
+                    )
+                return
+        elif self._privilege.behavior != PrivilegeBehavior.AUTOMATIC:
+            return
 
         # Determine new state based on linked chores
         if self._are_linked_chores_complete():
@@ -964,9 +997,13 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
 
     async def async_enable(self) -> None:
         """Enable the privilege (manual action)."""
-        # Clear any temporary disable
+        # Clear any temporary disable - a manual override supersedes it
         self._disable_until = None
         await self._manager.points_storage.set_privilege_disable_until(
+            self._assignee, self._privilege.slug, None
+        )
+        self._pre_block_state = None
+        await self._manager.points_storage.set_privilege_pre_block_state(
             self._assignee, self._privilege.slug, None
         )
 
@@ -982,9 +1019,13 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
 
     async def async_disable(self) -> None:
         """Disable the privilege (manual action)."""
-        # Clear any temporary disable
+        # Clear any temporary disable - a manual override supersedes it
         self._disable_until = None
         await self._manager.points_storage.set_privilege_disable_until(
+            self._assignee, self._privilege.slug, None
+        )
+        self._pre_block_state = None
+        await self._manager.points_storage.set_privilege_pre_block_state(
             self._assignee, self._privilege.slug, None
         )
 
@@ -1000,6 +1041,16 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
 
     async def async_temporarily_disable(self, duration_minutes: int) -> None:
         """Temporarily disable the privilege for a duration."""
+        if self._attr_native_value != PrivilegeState.TEMPORARILY_DISABLED.value:
+            # First time entering a block (as opposed to extending one
+            # already in progress) - remember what to restore once it ends,
+            # since manual privileges have no automatic re-evaluation to
+            # fall back on (see _check_and_update_state).
+            self._pre_block_state = self._attr_native_value
+            await self._manager.points_storage.set_privilege_pre_block_state(
+                self._assignee, self._privilege.slug, self._pre_block_state
+            )
+
         self._disable_until = datetime.now(UTC) + __import__("datetime").timedelta(
             minutes=duration_minutes
         )
@@ -1019,6 +1070,21 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             self._assignee,
             self._disable_until.isoformat(),
         )
+
+    async def async_clear_temporary_disable(self) -> None:
+        """Immediately end a temporary disable, restoring the privilege's real state."""
+        if self._attr_native_value != PrivilegeState.TEMPORARILY_DISABLED.value:
+            LOGGER.warning(
+                "Cannot clear temporary disable for privilege '%s' - "
+                "not temporarily disabled",
+                self._privilege.slug,
+            )
+            return
+
+        from datetime import timedelta
+
+        self._disable_until = datetime.now(UTC) - timedelta(seconds=1)
+        await self._check_and_update_state()
 
     async def async_adjust_temporary_disable(self, adjustment_minutes: int) -> None:
         """Adjust the temporary disable duration."""

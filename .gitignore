@@ -4,6 +4,10 @@ __pycache__
 *.egg-info
 */build/*
 */dist/*
+# The panel bundle is a build artifact but is committed so the integration
+# works without a Node toolchain when installed (e.g. via HACS).
+!custom_components/simple_chores/frontend/dist/*
+frontend/node_modules
 
 
 # misc

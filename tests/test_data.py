@@ -128,3 +128,66 @@ class TestPointsStorage:
 
         # Should return 0 for nonexistent assignee
         assert storage.get_points("nonexistent") == 0
+
+
+class TestPointsStoragePrivilegePreBlockState:
+    """Tests for PointsStorage's privilege pre-block-state tracking."""
+
+    @pytest.mark.asyncio
+    async def test_defaults_to_none(self, hass) -> None:
+        """Test that an assignee/privilege with nothing stored returns None."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        assert storage.get_privilege_pre_block_state("alice", "extra_dessert") is None
+
+    @pytest.mark.asyncio
+    async def test_set_and_get(self, hass) -> None:
+        """Test storing and retrieving a pre-block state."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        await storage.set_privilege_pre_block_state("alice", "extra_dessert", "Enabled")
+
+        assert (
+            storage.get_privilege_pre_block_state("alice", "extra_dessert") == "Enabled"
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_none_clears_it(self, hass) -> None:
+        """Test that setting None clears a previously stored value."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        await storage.set_privilege_pre_block_state("alice", "extra_dessert", "Enabled")
+        await storage.set_privilege_pre_block_state("alice", "extra_dessert", None)
+
+        assert storage.get_privilege_pre_block_state("alice", "extra_dessert") is None
+
+    @pytest.mark.asyncio
+    async def test_persists_across_instances(self, hass) -> None:
+        """Test that pre-block state survives a reload, like other privilege data."""
+        storage1 = PointsStorage(hass)
+        await storage1.async_load()
+        await storage1.set_privilege_pre_block_state(
+            "alice", "extra_dessert", "Enabled"
+        )
+
+        storage2 = PointsStorage(hass)
+        await storage2.async_load()
+
+        assert (
+            storage2.get_privilege_pre_block_state("alice", "extra_dessert")
+            == "Enabled"
+        )
+
+    @pytest.mark.asyncio
+    async def test_clear_privilege_data_removes_it(self, hass) -> None:
+        """Test that clear_privilege_data also clears the pre-block state."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+        await storage.set_privilege_pre_block_state("alice", "extra_dessert", "Enabled")
+
+        await storage.clear_privilege_data("alice", "extra_dessert")
+
+        assert storage.get_privilege_pre_block_state("alice", "extra_dessert") is None
