@@ -39,6 +39,11 @@ class PointsStorage:
         self._privilege_states: dict[str, dict[str, str]] = {}
         # Temporary disable end times: {assignee: {privilege_slug: ISO timestamp}}
         self._privilege_disable_until: dict[str, dict[str, str]] = {}
+        # Pre-block state: {assignee: {privilege_slug: state_value}}. The
+        # state a manual-behavior privilege was in immediately before a
+        # temporary disable started, so ending the block can restore it
+        # instead of always falling back to Disabled.
+        self._privilege_pre_block_state: dict[str, dict[str, str]] = {}
 
     async def async_load(self) -> None:
         """Load points from storage."""
@@ -50,6 +55,9 @@ class PointsStorage:
             self._points_possible = data.get("points_possible", {})
             self._privilege_states = data.get("privilege_states", {})
             self._privilege_disable_until = data.get("privilege_disable_until", {})
+            self._privilege_pre_block_state = data.get(
+                "privilege_pre_block_state", {}
+            )
 
     async def async_save(self) -> None:
         """Save points to storage."""
@@ -61,6 +69,7 @@ class PointsStorage:
                 "points_possible": self._points_possible,
                 "privilege_states": self._privilege_states,
                 "privilege_disable_until": self._privilege_disable_until,
+                "privilege_pre_block_state": self._privilege_pre_block_state,
             }
         )
 
@@ -167,10 +176,31 @@ class PointsStorage:
             self._privilege_disable_until[assignee][privilege_slug] = until.isoformat()
         await self.async_save()
 
+    def get_privilege_pre_block_state(
+        self, assignee: str, privilege_slug: str
+    ) -> str | None:
+        """Get the state a privilege was in before its current temporary disable."""
+        user_states = self._privilege_pre_block_state.get(assignee, {})
+        return user_states.get(privilege_slug)
+
+    async def set_privilege_pre_block_state(
+        self, assignee: str, privilege_slug: str, state: str | None
+    ) -> None:
+        """Set (or clear, if `state` is None) the pre-block state for a privilege."""
+        if assignee not in self._privilege_pre_block_state:
+            self._privilege_pre_block_state[assignee] = {}
+        if state is None:
+            self._privilege_pre_block_state[assignee].pop(privilege_slug, None)
+        else:
+            self._privilege_pre_block_state[assignee][privilege_slug] = state
+        await self.async_save()
+
     async def clear_privilege_data(self, assignee: str, privilege_slug: str) -> None:
         """Clear all stored data for a privilege."""
         if assignee in self._privilege_states:
             self._privilege_states[assignee].pop(privilege_slug, None)
         if assignee in self._privilege_disable_until:
             self._privilege_disable_until[assignee].pop(privilege_slug, None)
+        if assignee in self._privilege_pre_block_state:
+            self._privilege_pre_block_state[assignee].pop(privilege_slug, None)
         await self.async_save()

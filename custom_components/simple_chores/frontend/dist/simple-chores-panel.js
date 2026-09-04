@@ -952,6 +952,15 @@ let f = class extends U {
           1440
         )
       )}
+                  <button
+                    class="action-chip"
+                    title="Clear the block now"
+                    ?disabled=${!o}
+                    @click=${() => this._clearTemporaryDisable(i.slug, r.assignee)}
+                  >
+                    <ha-icon icon="mdi:backspace-outline"></ha-icon>
+                    <span>Clear</span>
+                  </button>
                 </div>
               </div>
             `;
@@ -1306,6 +1315,17 @@ let f = class extends U {
       user: e,
       privilege_slug: i,
       adjustment: t
+    });
+  }
+  /**
+   * End a temporary block immediately, via `clear_temporary_disable`. The
+   * privilege is restored to what it was right before the block (or
+   * recomputed from linked chores, for automatic-behavior privileges).
+   */
+  _clearTemporaryDisable(i, e) {
+    return this._call(g, "clear_temporary_disable", {
+      user: e,
+      privilege_slug: i
     });
   }
   async _saveChoreDialog() {

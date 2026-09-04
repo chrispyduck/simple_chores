@@ -30,6 +30,7 @@ from .const import (
     LOGGER,
     SERVICE_ADJUST_POINTS,
     SERVICE_ADJUST_TEMPORARY_DISABLE,
+    SERVICE_CLEAR_TEMPORARY_DISABLE,
     SERVICE_CREATE_CHORE,
     SERVICE_CREATE_PRIVILEGE,
     SERVICE_DELETE_CHORE,
@@ -1248,6 +1249,56 @@ async def handle_adjust_temporary_disable(
         )
 
 
+async def handle_clear_temporary_disable(
+    hass: HomeAssistant, call: ServiceCall
+) -> None:
+    """Handle the clear_temporary_disable service call."""
+    user = call.data.get(ATTR_USER)
+    privilege_slug = call.data[ATTR_PRIVILEGE_SLUG]
+
+    LOGGER.info(
+        "Service 'clear_temporary_disable' called with user='%s', privilege_slug='%s'",
+        user if user else "all assignees",
+        privilege_slug,
+    )
+
+    _validate_integration_loaded(hass)
+    privilege_sensors = hass.data[DOMAIN].get("privilege_sensors", {})
+    matching_sensors = _find_matching_privilege_sensors(
+        privilege_sensors, privilege_slug, user
+    )
+
+    if not matching_sensors:
+        if user:
+            msg = f"No privilege sensor found for user '{user}' and privilege '{privilege_slug}'"
+        else:
+            msg = f"No privilege sensors found for privilege '{privilege_slug}'"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    # Clear the temporary disable for all matching privilege sensors
+    state_update_tasks = []
+    for sensor in matching_sensors:
+        await sensor.async_clear_temporary_disable()
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
+
+    if user:
+        LOGGER.info(
+            "Cleared temporary disable for privilege '%s' for user '%s'",
+            privilege_slug,
+            user,
+        )
+    else:
+        LOGGER.info(
+            "Cleared temporary disable for privilege '%s' for %d assignee(s)",
+            privilege_slug,
+            len(matching_sensors),
+        )
+
+
 async def handle_create_privilege(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the create_privilege service call."""
     LOGGER.info(
@@ -1448,6 +1499,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_ADJUST_TEMPORARY_DISABLE,
         partial(handle_adjust_temporary_disable, hass),
         schema=ADJUST_TEMPORARY_DISABLE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CLEAR_TEMPORARY_DISABLE,
+        partial(handle_clear_temporary_disable, hass),
+        schema=PRIVILEGE_SERVICE_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN,

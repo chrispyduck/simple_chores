@@ -18,10 +18,12 @@ def make_summary_update_mock(summary_sensor):
 from custom_components.simple_chores.const import (
     ATTR_ADJUSTMENT,
     ATTR_CHORE_SLUG,
+    ATTR_PRIVILEGE_SLUG,
     ATTR_RESET_TOTAL,
     ATTR_USER,
     DOMAIN,
     SERVICE_ADJUST_POINTS,
+    SERVICE_CLEAR_TEMPORARY_DISABLE,
     SERVICE_CREATE_CHORE,
     SERVICE_DELETE_CHORE,
     SERVICE_MARK_COMPLETE,
@@ -37,9 +39,16 @@ from custom_components.simple_chores.models import (
     ChoreConfig,
     ChoreFrequency,
     ChoreState,
+    PrivilegeBehavior,
+    PrivilegeConfig,
+    PrivilegeState,
     SimpleChoresConfig,
 )
-from custom_components.simple_chores.sensor import ChoreSensor, ChoreSummarySensor
+from custom_components.simple_chores.sensor import (
+    ChoreSensor,
+    ChoreSummarySensor,
+    PrivilegeSensor,
+)
 from custom_components.simple_chores.services import async_setup_services
 
 
@@ -96,7 +105,7 @@ class TestServiceSetup:
 
         # Verify all services are in the correct domain
         services = hass.services.async_services_for_domain(DOMAIN)
-        assert len(services) == 18  # 11 chore services + 7 privilege services
+        assert len(services) == 19  # 11 chore services + 8 privilege services
 
 
 class TestMarkCompleteService:
@@ -2945,3 +2954,64 @@ class TestResetPointsService:
         assert attrs_after["total_points"] == 100  # Should not change
         assert attrs_after["points_earned"] == 0  # Should be reset
         assert attrs_after["points_missed"] == 0  # Should be reset
+
+
+class TestClearTemporaryDisableService:
+    """Tests for the clear_temporary_disable service."""
+
+    @pytest.fixture
+    def privilege_sensor(self, hass) -> PrivilegeSensor:
+        """Create a manual privilege sensor for alice, wired up like a real entity."""
+        privilege = PrivilegeConfig(
+            name="Extra Dessert",
+            slug="extra_dessert",
+            behavior=PrivilegeBehavior.MANUAL,
+            assignees=["alice"],
+        )
+        manager = Mock()
+        manager.points_storage = Mock()
+        manager.points_storage.get_privilege_state = Mock(return_value=None)
+        manager.points_storage.get_privilege_disable_until = Mock(return_value=None)
+        manager.points_storage.get_privilege_pre_block_state = Mock(return_value=None)
+        manager.points_storage.set_privilege_state = AsyncMock()
+        manager.points_storage.set_privilege_disable_until = AsyncMock()
+        manager.points_storage.set_privilege_pre_block_state = AsyncMock()
+        sensor = PrivilegeSensor(hass, privilege, "alice", manager)
+        sensor.async_update_ha_state = AsyncMock()
+        return sensor
+
+    @pytest.mark.asyncio
+    async def test_clear_restores_privilege_that_was_enabled(
+        self, hass, privilege_sensor: PrivilegeSensor
+    ) -> None:
+        """Clearing a block on a previously-enabled privilege re-enables it."""
+        await privilege_sensor.async_enable()
+        await privilege_sensor.async_temporarily_disable(60)
+        hass.data[DOMAIN]["privilege_sensors"] = {
+            "alice_extra_dessert": privilege_sensor
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_CLEAR_TEMPORARY_DISABLE,
+            {ATTR_USER: "alice", ATTR_PRIVILEGE_SLUG: "extra_dessert"},
+            blocking=True,
+        )
+
+        assert privilege_sensor.get_state() == PrivilegeState.ENABLED.value
+        privilege_sensor.async_update_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_clear_raises_when_no_matching_sensor(self, hass) -> None:
+        """Clearing a privilege with no matching sensor raises a validation error."""
+        hass.data[DOMAIN]["privilege_sensors"] = {}
+        await async_setup_services(hass)
+
+        with pytest.raises(ServiceValidationError):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_CLEAR_TEMPORARY_DISABLE,
+                {ATTR_USER: "alice", ATTR_PRIVILEGE_SLUG: "nonexistent"},
+                blocking=True,
+            )

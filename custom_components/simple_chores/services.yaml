@@ -370,6 +370,25 @@ adjust_temporary_disable:
           mode: box
           unit_of_measurement: minutes
 
+clear_temporary_disable:
+  name: Clear Temporary Disable
+  description: Immediately end a temporary disable, restoring the privilege to what it was before the block (or to its automatically-computed state, for automatic-behavior privileges).
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, clears for all assignees)
+      required: false
+      example: "alice"
+      selector:
+        text:
+    privilege_slug:
+      name: Privilege Slug
+      description: The slug identifier of the privilege
+      required: true
+      example: "screen_time"
+      selector:
+        text:
+
 create_privilege:
   name: Create Privilege
   description: Create a new privilege in the YAML configuration

@@ -370,6 +370,16 @@ export class SimpleChoresPanel extends LitElement {
                         1440
                       )
                   )}
+                  <button
+                    class="action-chip"
+                    title="Clear the block now"
+                    ?disabled=${!isTemp}
+                    @click=${() =>
+                      this._clearTemporaryDisable(privilege.slug, a.assignee)}
+                  >
+                    <ha-icon icon="mdi:backspace-outline"></ha-icon>
+                    <span>Clear</span>
+                  </button>
                 </div>
               </div>
             `;
@@ -868,6 +878,18 @@ export class SimpleChoresPanel extends LitElement {
       user,
       privilege_slug: slug,
       adjustment: adjustmentMinutes,
+    });
+  }
+
+  /**
+   * End a temporary block immediately, via `clear_temporary_disable`. The
+   * privilege is restored to what it was right before the block (or
+   * recomputed from linked chores, for automatic-behavior privileges).
+   */
+  private _clearTemporaryDisable(slug: string, user: string) {
+    return this._call(SERVICE_DOMAIN, "clear_temporary_disable", {
+      user,
+      privilege_slug: slug,
     });
   }
 
