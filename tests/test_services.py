@@ -1259,9 +1259,7 @@ class TestFinalizeByCategoryService:
         assert sensor_bob.get_state() == ChoreState.COMPLETE.value
 
     @pytest.mark.asyncio
-    async def test_finalize_counts_pending_manual_chores_as_missed(
-        self, hass
-    ) -> None:
+    async def test_finalize_counts_pending_manual_chores_as_missed(self, hass) -> None:
         """Test pending manual chores in the category add to points_missed."""
         from custom_components.simple_chores.data import PointsStorage
 
@@ -1369,8 +1367,7 @@ class TestFinalizeByCategoryService:
         with pytest.raises(
             ServiceValidationError,
             match=(
-                "No manual chore sensor found for user 'alice' and "
-                "category 'kitchen'"
+                "No manual chore sensor found for user 'alice' and category 'kitchen'"
             ),
         ):
             await hass.services.async_call(
