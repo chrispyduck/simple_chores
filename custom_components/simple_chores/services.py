@@ -41,6 +41,7 @@ from .const import (
     SERVICE_DELETE_PRIVILEGE,
     SERVICE_DISABLE_PRIVILEGE,
     SERVICE_ENABLE_PRIVILEGE,
+    SERVICE_FINALIZE_BY_CATEGORY,
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_COMPLETE_BY_CATEGORY,
     SERVICE_MARK_NOT_REQUESTED,
@@ -874,7 +875,11 @@ async def handle_delete_chore(hass: HomeAssistant, call: ServiceCall) -> None:
 
 
 def _find_matching_sensors_by_category(
-    sensors: dict, category_slug: str, user: str | None = None
+    sensors: dict,
+    category_slug: str,
+    user: str | None = None,
+    *,
+    frequency: ChoreFrequency | None = None,
 ) -> list:
     """
     Find chore sensors whose chore is assigned to the given category.
@@ -883,6 +888,8 @@ def _find_matching_sensors_by_category(
         sensors: Dictionary of sensors
         category_slug: Category slug to match
         user: Optional user to filter by
+        frequency: Optional chore frequency to filter by (e.g. only `manual`
+            chores)
 
     Returns:
         List of matching sensors
@@ -896,6 +903,8 @@ def _find_matching_sensors_by_category(
         if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
             continue
         if sensor.chore.category != sanitized_category:
+            continue
+        if frequency is not None and sensor.chore.frequency != frequency:
             continue
         matching_sensors.append(sensor)
 
@@ -1076,6 +1085,91 @@ async def handle_mark_not_requested_by_category(
 
     for affected_user in affected_users:
         await _update_summary_sensors(hass, affected_user)
+
+
+async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) -> None:
+    """
+    Handle the finalize_by_category service call.
+
+    Like start_new_day, but scoped to a single category and restricted to
+    chores with a `manual` frequency:
+    - manual chores that are complete are reset to NOT_REQUESTED
+    - manual chores that are still pending count towards cumulative
+      points_missed, same as start_new_day does before it resets
+
+    Daily and once chores in the category are left untouched - use
+    start_new_day (or the other by-category actions) for those.
+    """
+    user = call.data.get(ATTR_USER)
+    category_slug = call.data[ATTR_CATEGORY_SLUG]
+
+    LOGGER.info(
+        "Service 'finalize_by_category' called with user='%s', category_slug='%s'",
+        user or "all assignees",
+        category_slug,
+    )
+
+    _validate_integration_loaded(hass)
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    matching_sensors = _find_matching_sensors_by_category(
+        sensors, category_slug, user, frequency=ChoreFrequency.MANUAL
+    )
+
+    if not matching_sensors:
+        if user:
+            msg = (
+                f"No manual chore sensor found for user '{user}' and "
+                f"category '{category_slug}'"
+            )
+        else:
+            msg = f"No manual chore sensors found for category '{category_slug}'"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    affected_users: set[str] = set()
+    sensors_to_reset = []
+
+    for sensor in matching_sensors:
+        current_state = sensor.get_state()
+
+        if current_state == ChoreState.PENDING.value:
+            affected_users.add(sensor.assignee)
+            if points_storage and sensor.chore.points:
+                await points_storage.add_points_missed(
+                    sensor.assignee, sensor.chore.points
+                )
+        elif current_state == ChoreState.COMPLETE.value:
+            affected_users.add(sensor.assignee)
+            sensors_to_reset.append(sensor)
+
+    update_tasks = []
+    for sensor in sensors_to_reset:
+        sensor.set_state(ChoreState.NOT_REQUESTED.value)
+        update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+        # Audit log: chore reset by finalize_by_category
+        LOGGER.info(
+            "Finalize by category: %s's chore '%s' unmarked",
+            sensor.assignee,
+            sensor.chore.name,
+        )
+
+    if update_tasks:
+        await asyncio.gather(*update_tasks)
+
+    LOGGER.info(
+        "Finalized category '%s': %d manual chore(s) reset for %d assignee(s)",
+        category_slug,
+        len(sensors_to_reset),
+        len(affected_users),
+    )
+
+    # Update summary/privilege sensors for everyone touched, whether their
+    # chore was reset or only counted towards points_missed.
+    for affected_user in affected_users:
+        await _update_summary_sensors(hass, affected_user)
+        await _update_privilege_sensors_from_chores(hass, affected_user)
 
 
 async def handle_create_category(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -1832,6 +1926,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN,
         SERVICE_MARK_NOT_REQUESTED_BY_CATEGORY,
         partial(handle_mark_not_requested_by_category, hass),
+        schema=CATEGORY_ACTION_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_FINALIZE_BY_CATEGORY,
+        partial(handle_finalize_by_category, hass),
         schema=CATEGORY_ACTION_SCHEMA,
     )
     # Category management services

@@ -343,6 +343,25 @@ mark_not_requested_by_category:
       selector:
         text:
 
+finalize_by_category:
+  name: Finalize by Category
+  description: Like Start New Day, but scoped to a category and only for manual chores. Manual chores that are complete are reset to Not Requested; manual chores still pending count towards missed points. Daily and once chores in the category are left untouched.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, finalizes for all assignees)
+      required: false
+      example: "alice"
+      selector:
+        text:
+    category_slug:
+      name: Category Slug
+      description: The slug identifier of the category
+      required: true
+      example: "kitchen"
+      selector:
+        text:
+
 # Category management services
 create_category:
   name: Create Category

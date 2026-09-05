@@ -31,6 +31,7 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
   * `simple_chores.mark_not_requested` - Marks a chore as not requested. Takes a chore slug and optional user as parameters. If user is not specified, marks not requested for all assignees.
   * `simple_chores.reset_completed` - Resets all completed chores to not requested. Takes an optional user parameter to reset only that user's chores.
   * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending, once chores are deleted entirely. Calculates daily points statistics before resetting. Takes an optional user parameter.
+  * `simple_chores.finalize_by_category` - Like `start_new_day`, but scoped to a single category and only for `manual` chores: completed manual chores in the category reset to not requested, and pending ones count towards missed points. Daily and once chores in the category are left untouched. Takes a category slug and optional user parameter.
   * `simple_chores.create_chore` - Dynamically create a new chore at runtime with specified properties including points.
   * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon.
   * `simple_chores.delete_chore` - Remove a chore from the system.

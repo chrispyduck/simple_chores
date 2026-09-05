@@ -46,12 +46,18 @@
         "ghcr.io/devcontainers/features/node:2": {
             "version": "lts"
         },
-        "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+        "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {}
     },
     "mounts": [
-        "source=/home/chris/.claude,target=/home/vscode/.claude,type=bind"
+        "source=/home/chris/.claude,target=/home/vscode/.claude,type=bind",
+        "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind",
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind",
+        "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent.sock,type=bind",
+        "source=/opt/1Password/op-ssh-sign,target=/opt/1Password/op-ssh-sign,type=bind"
     ],
     "containerEnv": {
-        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
+        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+        "SSH_AUTH_SOCK": "/ssh-agent.sock"
     }
 }
