@@ -37,6 +37,7 @@ SERVICE_RESET_POINTS = "reset_points"
 SERVICE_MARK_COMPLETE_BY_CATEGORY = "mark_complete_by_category"
 SERVICE_MARK_PENDING_BY_CATEGORY = "mark_pending_by_category"
 SERVICE_MARK_NOT_REQUESTED_BY_CATEGORY = "mark_not_requested_by_category"
+SERVICE_FINALIZE_BY_CATEGORY = "finalize_by_category"
 
 # Category management services
 SERVICE_CREATE_CATEGORY = "create_category"

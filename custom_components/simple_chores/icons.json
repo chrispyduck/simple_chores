@@ -21,6 +21,7 @@
         "mark_complete_by_category": "mdi:check-circle",
         "mark_pending_by_category": "mdi:clipboard-list",
         "mark_not_requested_by_category": "mdi:close-circle-outline",
+        "finalize_by_category": "mdi:flag-checkered",
         "create_category": "mdi:tag-plus",
         "update_category": "mdi:tag-edit",
         "delete_category": "mdi:tag-remove"
