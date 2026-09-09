@@ -25,6 +25,7 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
     * `points_missed`: Cumulative total of all missed opportunities (updated by start_new_day)
     * `points_possible`: Current sum of points from pending + complete chores (calculated in real-time)
 * **Points System**: Each chore can have a point value (default: 1). When a chore is marked complete, the assignee earns those points. Points can be set when creating/updating chores. The `start_new_day` service adds pending chore points to the cumulative `points_missed` total before resetting states. The summary sensor calculates `points_possible` in real-time based on current chore states.
+* **Auto-finalize**: A chore left in the `Complete` state is automatically reset to `Not Requested` after a delay (the same reset `reset_completed` performs; 60 minutes by default), so completed chores don't keep piling up on dashboards throughout the day. Points were already awarded at completion time, so nothing about them changes. Marking the chore pending, not requested, or otherwise resetting it before the delay is up cancels the pending auto-finalize. Both whether this runs at all (`auto_finalize_enabled`) and its delay (`auto_finalize_delay_minutes`) are configurable - via the admin panel's Settings tab, or the `simple_chores.update_settings` service - and persist in `simple_chores.yaml` under a `settings:` section.
 * The following actions are defined for interacting with chores:
   * `simple_chores.mark_complete` - Marks a chore as complete and awards points to the assignee. Takes a chore slug and optional user as parameters. If user is not specified, marks complete for all assignees.
   * `simple_chores.mark_pending` - Marks a chore as pending. Takes a chore slug and optional user as parameters. If user is not specified, marks pending for all assignees.
@@ -33,11 +34,12 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
   * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending, once chores are deleted entirely. Calculates daily points statistics before resetting. Takes an optional user parameter.
   * `simple_chores.finalize_by_category` - Like `start_new_day`, but scoped to a single category and only for `manual` chores: completed manual chores in the category reset to not requested, and pending ones count towards missed points. Daily and once chores in the category are left untouched. Takes a category slug and optional user parameter.
   * `simple_chores.create_chore` - Dynamically create a new chore at runtime with specified properties including points.
-  * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon.
+  * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon. Pass `new_slug` to rename it; any privilege linking to it by slug is updated to match.
   * `simple_chores.delete_chore` - Remove a chore from the system.
   * `simple_chores.refresh_summary` - Force refresh of summary sensor attributes for one or all assignees.
   * `simple_chores.adjust_points` - Manually adjusts an assignee's earned points by a specified amount (positive or negative). Useful for bonuses, penalties, or corrections.
   * `simple_chores.reset_points` - Reset points tracking for one or all assignees. Always resets daily stats (points_missed, points_possible). Optionally resets total_points with `reset_total: true`.
+  * `simple_chores.update_settings` - Update integration-wide settings: `auto_finalize_enabled` and `auto_finalize_delay_minutes` (see Auto-finalize below).
 
 ## Installation
 

@@ -218,6 +218,13 @@ update_chore:
       example: "kitchen"
       selector:
         text:
+    new_slug:
+      name: New slug
+      description: Rename the chore to this slug (leave empty to keep the current slug)
+      required: false
+      example: "take_out_the_trash"
+      selector:
+        text:
 
 delete_chore:
   name: Delete Chore
@@ -413,6 +420,13 @@ update_category:
       description: New Material Design Icon (leave empty to keep current)
       required: false
       example: "mdi:silverware-fork-knife"
+      selector:
+        text:
+    new_slug:
+      name: New slug
+      description: Rename the category to this slug (leave empty to keep the current slug)
+      required: false
+      example: "cleaning"
       selector:
         text:
 
@@ -647,6 +661,13 @@ update_privilege:
       example: "alice,bob"
       selector:
         text:
+    new_slug:
+      name: New slug
+      description: Rename the privilege to this slug (leave empty to keep the current slug)
+      required: false
+      example: "tv_time"
+      selector:
+        text:
 
 delete_privilege:
   name: Delete Privilege
@@ -659,3 +680,25 @@ delete_privilege:
       example: "screen_time"
       selector:
         text:
+
+update_settings:
+  name: Update Settings
+  description: Update integration-wide settings in the YAML configuration
+  fields:
+    auto_finalize_enabled:
+      name: Auto-finalize enabled
+      description: Whether a completed chore automatically resets to Not Requested after auto_finalize_delay_minutes (leave unset to keep current)
+      required: false
+      example: true
+      selector:
+        boolean:
+    auto_finalize_delay_minutes:
+      name: Auto-finalize delay (minutes)
+      description: Minutes a chore stays Complete before auto-finalizing (leave unset to keep current)
+      required: false
+      example: 60
+      selector:
+        number:
+          min: 1
+          max: 1440
+          mode: box

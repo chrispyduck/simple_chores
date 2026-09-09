@@ -694,3 +694,221 @@ class TestConfigLoaderUpdateChore:
 
         with pytest.raises(ConfigLoadError, match="not found"):
             await loader.async_update_chore(slug="nonexistent", name="New Name")
+
+
+class TestConfigLoaderRenameSlug:
+    """Tests for renaming chores/privileges/categories via `new_slug`."""
+
+    @pytest.mark.asyncio
+    async def test_rename_chore_updates_slug_and_persists(
+        self,
+        hass,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Renaming a chore changes its slug and survives a reload."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        await loader.async_update_chore(slug="dishes", new_slug="wash-dishes")
+
+        assert loader.config.get_chore_by_slug("dishes") is None
+        renamed = loader.config.get_chore_by_slug("wash_dishes")
+        assert renamed is not None
+        assert renamed.name == "Dishes"
+
+        saved_data = yaml.safe_load(temp_config_file.read_text())
+        assert {c["slug"] for c in saved_data["chores"]} == {"wash_dishes", "vacuum"}
+
+    @pytest.mark.asyncio
+    async def test_rename_chore_cascades_to_privilege_linked_chores(
+        self,
+        hass,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Renaming a chore updates any privilege that links to it by slug."""
+        data = {
+            **valid_config_data,
+            "privileges": [
+                {
+                    "name": "Screen Time",
+                    "slug": "screen_time",
+                    "linked_chores": ["dishes"],
+                    "assignees": ["alice"],
+                }
+            ],
+        }
+        temp_config_file.write_text(yaml.dump(data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        await loader.async_update_chore(slug="dishes", new_slug="wash_dishes")
+
+        privilege = loader.config.get_privilege_by_slug("screen_time")
+        assert privilege is not None
+        assert privilege.linked_chores == ["wash_dishes"]
+
+    @pytest.mark.asyncio
+    async def test_rename_chore_to_existing_slug_raises(
+        self,
+        hass,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Renaming a chore to a slug already in use is rejected."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        with pytest.raises(ConfigLoadError, match="already in use"):
+            await loader.async_update_chore(slug="dishes", new_slug="vacuum")
+
+        # Unchanged
+        assert loader.config.get_chore_by_slug("dishes") is not None
+
+    @pytest.mark.asyncio
+    async def test_rename_category_cascades_to_chores(
+        self,
+        hass,
+        temp_config_file: Path,
+    ) -> None:
+        """Renaming a category updates every chore that references it."""
+        data = {
+            "chores": [
+                {
+                    "name": "Dishes",
+                    "slug": "dishes",
+                    "frequency": "daily",
+                    "assignees": ["alice"],
+                    "category": "kitchen",
+                }
+            ],
+            "categories": [{"name": "Kitchen", "slug": "kitchen"}],
+        }
+        temp_config_file.write_text(yaml.dump(data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        await loader.async_update_category(slug="kitchen", new_slug="cleaning")
+
+        assert loader.config.get_category_by_slug("kitchen") is None
+        assert loader.config.get_category_by_slug("cleaning") is not None
+        chore = loader.config.get_chore_by_slug("dishes")
+        assert chore is not None
+        assert chore.category == "cleaning"
+
+    @pytest.mark.asyncio
+    async def test_rename_privilege_slug(
+        self,
+        hass,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Renaming a privilege changes its slug."""
+        data = {
+            **valid_config_data,
+            "privileges": [
+                {
+                    "name": "Screen Time",
+                    "slug": "screen_time",
+                    "assignees": ["alice"],
+                }
+            ],
+        }
+        temp_config_file.write_text(yaml.dump(data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        await loader.async_update_privilege(slug="screen_time", new_slug="tv_time")
+
+        assert loader.config.get_privilege_by_slug("screen_time") is None
+        assert loader.config.get_privilege_by_slug("tv_time") is not None
+
+    @pytest.mark.asyncio
+    async def test_rename_to_same_slug_is_a_noop_rename(
+        self,
+        hass,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """A new_slug that sanitizes to the current slug isn't treated as a conflict."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        # "Dishes" sanitizes to "dishes" - the chore's own current slug.
+        await loader.async_update_chore(slug="dishes", new_slug="Dishes")
+
+        assert loader.config.get_chore_by_slug("dishes") is not None
+
+
+class TestConfigLoaderSettings:
+    """Tests for async_update_settings and get_settings."""
+
+    @pytest.mark.asyncio
+    async def test_get_settings_defaults(
+        self, hass, temp_config_file: Path, valid_config_data: dict[str, Any]
+    ) -> None:
+        """A config file with no settings section gets sensible defaults."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        settings = loader.get_settings()
+        assert settings.auto_finalize_enabled is True
+        assert settings.auto_finalize_delay_minutes == 60
+
+    @pytest.mark.asyncio
+    async def test_update_settings_persists(
+        self, hass, temp_config_file: Path, valid_config_data: dict[str, Any]
+    ) -> None:
+        """Updated settings are reflected immediately and saved to YAML."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        await loader.async_update_settings(
+            auto_finalize_enabled=False, auto_finalize_delay_minutes=15
+        )
+
+        settings = loader.get_settings()
+        assert settings.auto_finalize_enabled is False
+        assert settings.auto_finalize_delay_minutes == 15
+
+        saved_data = yaml.safe_load(temp_config_file.read_text())
+        assert saved_data["settings"]["auto_finalize_enabled"] is False
+        assert saved_data["settings"]["auto_finalize_delay_minutes"] == 15
+
+    @pytest.mark.asyncio
+    async def test_update_settings_partial_keeps_other_field(
+        self, hass, temp_config_file: Path, valid_config_data: dict[str, Any]
+    ) -> None:
+        """Updating only one settings field leaves the other untouched."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        await loader.async_update_settings(auto_finalize_delay_minutes=5)
+        assert loader.get_settings().auto_finalize_delay_minutes == 5
+        assert loader.get_settings().auto_finalize_enabled is True
+
+    @pytest.mark.asyncio
+    async def test_unrelated_update_does_not_reset_settings(
+        self, hass, temp_config_file: Path, valid_config_data: dict[str, Any]
+    ) -> None:
+        """
+        Updating a chore must not silently reset settings to defaults.
+
+        Every SimpleChoresConfig(...) reconstruction in config_loader.py must
+        carry the existing settings forward explicitly.
+        """
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        await loader.async_update_settings(auto_finalize_delay_minutes=5)
+        await loader.async_update_chore(slug="dishes", name="Do The Dishes")
+
+        assert loader.get_settings().auto_finalize_delay_minutes == 5

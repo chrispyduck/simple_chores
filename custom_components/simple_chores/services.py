@@ -8,11 +8,15 @@ from typing import TYPE_CHECKING
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
+from homeassistant.core import HassJob
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers.event import async_call_later
 
 from .const import (
     ATTR_ADJUSTMENT,
     ATTR_ASSIGNEES,
+    ATTR_AUTO_FINALIZE_DELAY_MINUTES,
+    ATTR_AUTO_FINALIZE_ENABLED,
     ATTR_BEHAVIOR,
     ATTR_CATEGORY,
     ATTR_CATEGORY_SLUG,
@@ -23,6 +27,7 @@ from .const import (
     ATTR_ICON,
     ATTR_LINKED_CHORES,
     ATTR_NAME,
+    ATTR_NEW_SLUG,
     ATTR_POINTS,
     ATTR_PRIVILEGE_SLUG,
     ATTR_RESET_TOTAL,
@@ -56,6 +61,7 @@ from .const import (
     SERVICE_UPDATE_CATEGORY,
     SERVICE_UPDATE_CHORE,
     SERVICE_UPDATE_PRIVILEGE,
+    SERVICE_UPDATE_SETTINGS,
     sanitize_entity_id,
 )
 from .models import (
@@ -65,12 +71,16 @@ from .models import (
     ChoreState,
     PrivilegeBehavior,
     PrivilegeConfig,
+    SettingsConfig,
 )
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from homeassistant.core import HomeAssistant, ServiceCall
 
     from .config_loader import ConfigLoader
+    from .sensor import ChoreSensor
 
 
 SERVICE_SCHEMA = vol.Schema(
@@ -174,6 +184,70 @@ async def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) 
             await asyncio.gather(*update_tasks)
 
 
+def _auto_finalize_unsubs(hass: HomeAssistant) -> dict:
+    """Return the {entity_id: cancel_callback} map of pending auto-finalize timers."""
+    return hass.data[DOMAIN].setdefault("auto_finalize_unsubs", {})
+
+
+def _cancel_auto_finalize(hass: HomeAssistant, sensor: ChoreSensor) -> None:
+    """Cancel any pending auto-finalize timer for `sensor`, if one is scheduled."""
+    unsub = _auto_finalize_unsubs(hass).pop(sensor.entity_id, None)
+    if unsub:
+        unsub()
+
+
+def _cancel_all_auto_finalize(hass: HomeAssistant) -> None:
+    """Cancel every pending auto-finalize timer (used when the setting is disabled)."""
+    unsubs = _auto_finalize_unsubs(hass)
+    for unsub in unsubs.values():
+        unsub()
+    unsubs.clear()
+
+
+def _schedule_auto_finalize(hass: HomeAssistant, sensor: ChoreSensor) -> None:
+    """
+    Schedule `sensor` to auto-finalize per the current settings.
+
+    If it's still Complete once the configured delay elapses, resets it to
+    Not Requested - same as reset_completed does for one sensor. Restarts
+    the clock if one was already pending for it. No-ops if auto-finalize is
+    disabled in settings (see SettingsConfig).
+    """
+    config_loader: ConfigLoader | None = hass.data[DOMAIN].get("config_loader")
+    settings = config_loader.get_settings() if config_loader else SettingsConfig()
+    _cancel_auto_finalize(hass, sensor)
+    if not settings.auto_finalize_enabled:
+        return
+    delay_seconds = settings.auto_finalize_delay_minutes * 60
+
+    async def _finalize(_now: datetime) -> None:
+        _auto_finalize_unsubs(hass).pop(sensor.entity_id, None)
+        if sensor.get_state() != ChoreState.COMPLETE.value:
+            # Already changed by something else (manual reset, start_new_day,
+            # deletion, ...) - nothing left to finalize.
+            return
+
+        sensor.set_state(ChoreState.NOT_REQUESTED.value)
+        await sensor.async_update_ha_state(force_refresh=True)
+        LOGGER.info(
+            "Auto-finalized %s's completed chore '%s' after %d minute(s)",
+            sensor.assignee,
+            sensor.chore.name,
+            settings.auto_finalize_delay_minutes,
+        )
+        await _update_summary_sensors(hass, sensor.assignee)
+        await _update_privilege_sensors_from_chores(hass, sensor.assignee)
+
+    # cancel_on_shutdown so Home Assistant (and the test harness) can drop
+    # this job on shutdown instead of treating it as a leaked timer - if HA
+    # restarts before it fires, the chore just stays Complete until it's
+    # touched again, which is no worse than losing an in-memory timer.
+    job = HassJob(_finalize, "simple_chores auto-finalize", cancel_on_shutdown=True)
+    _auto_finalize_unsubs(hass)[sensor.entity_id] = async_call_later(
+        hass, delay_seconds, job
+    )
+
+
 CREATE_CHORE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_NAME): cv.string,
@@ -199,6 +273,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ICON): cv.string,
         vol.Optional(ATTR_POINTS): vol.All(vol.Coerce(int), vol.Range(min=0)),
         vol.Optional(ATTR_CATEGORY): cv.string,
+        vol.Optional(ATTR_NEW_SLUG): cv.string,
     }
 )
 
@@ -277,6 +352,7 @@ UPDATE_PRIVILEGE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_BEHAVIOR): vol.In(["automatic", "manual"]),
         vol.Optional(ATTR_LINKED_CHORES): cv.string,
         vol.Optional(ATTR_ASSIGNEES): cv.string,
+        vol.Optional(ATTR_NEW_SLUG): cv.string,
     }
 )
 
@@ -300,12 +376,22 @@ UPDATE_CATEGORY_SCHEMA = vol.Schema(
         vol.Required(ATTR_SLUG): cv.string,
         vol.Optional(ATTR_NAME): cv.string,
         vol.Optional(ATTR_ICON): cv.string,
+        vol.Optional(ATTR_NEW_SLUG): cv.string,
     }
 )
 
 DELETE_CATEGORY_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_SLUG): cv.string,
+    }
+)
+
+UPDATE_SETTINGS_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_AUTO_FINALIZE_ENABLED): cv.boolean,
+        vol.Optional(ATTR_AUTO_FINALIZE_DELAY_MINUTES): vol.All(
+            vol.Coerce(int), vol.Range(min=1)
+        ),
     }
 )
 
@@ -364,6 +450,11 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
             sensor.assignee,
             sensor.chore.name,
         )
+
+        # Newly completed (not just re-marking an already-complete chore) -
+        # auto-finalize it in an hour so it doesn't linger on the display.
+        if not was_complete:
+            _schedule_auto_finalize(hass, sensor)
 
         # Award points for newly completed chore
         if not was_complete and points_storage:
@@ -453,6 +544,10 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
             sensor.chore.name,
         )
 
+        # No longer complete - cancel any pending auto-finalize for it.
+        if was_complete:
+            _cancel_auto_finalize(hass, sensor)
+
         # Deduct points for un-completing a chore
         if was_complete and points_storage:
             chore_points = sensor.chore.points
@@ -528,6 +623,7 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
         sensor.set_state(ChoreState.NOT_REQUESTED.value)
         state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
         affected_users.add(sensor.assignee)
+        _cancel_auto_finalize(hass, sensor)
 
         # Audit log: chore marked not requested
         LOGGER.info(
@@ -589,6 +685,7 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
             state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
             affected_users.add(sensor.assignee)
             reset_count += 1
+            _cancel_auto_finalize(hass, sensor)
 
             # Audit log: chore reset
             LOGGER.info(
@@ -612,6 +709,45 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
             await _update_summary_sensors(hass, affected_user)
 
 
+async def _apply_start_new_day_points_missed(
+    hass: HomeAssistant, sensors: dict, sanitized_user: str | None
+) -> None:
+    """
+    Add each assignee's pending chore points to their cumulative points_missed.
+
+    Must run before start_new_day resets any sensor's state, since it counts
+    chores that are still PENDING (points are already awarded on complete,
+    so completed chores need no adjustment here).
+    """
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    if not points_storage:
+        return
+
+    assignee_stats: dict[str, dict[str, int]] = {}
+    for sensor_id, sensor in sensors.items():
+        if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
+            continue
+
+        assignee = sensor.assignee
+        if assignee not in assignee_stats:
+            assignee_stats[assignee] = {"missed": 0}
+
+        if sensor.get_state() == ChoreState.PENDING.value:
+            assignee_stats[assignee]["missed"] += sensor.chore.points
+
+    for assignee, stats in assignee_stats.items():
+        if stats["missed"] > 0:
+            current_missed = points_storage.get_points_missed(assignee)
+            await points_storage.add_points_missed(assignee, stats["missed"])
+            LOGGER.debug(
+                "Updated cumulative points_missed for %s: added %d (was %d, now %d)",
+                assignee,
+                stats["missed"],
+                current_missed,
+                current_missed + stats["missed"],
+            )
+
+
 async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     """
     Handle the start_new_day service call.
@@ -630,48 +766,13 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
     _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
-    points_storage = hass.data[DOMAIN].get("points_storage")
     config_loader: ConfigLoader | None = hass.data[DOMAIN].get("config_loader")
 
     # Sanitize user if provided for matching
     sanitized_user = sanitize_entity_id(user) if user else None
 
-    # Calculate points missed per assignee BEFORE resetting
-    # (points already awarded on complete)
-    assignee_stats: dict[str, dict[str, int]] = {}
-    for sensor_id, sensor in sensors.items():
-        # If user specified, only calculate for their chores
-        if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
-            continue
-
-        assignee = sensor.assignee
-        if assignee not in assignee_stats:
-            assignee_stats[assignee] = {"missed": 0}
-
-        # Read current state using public accessor
-        current_state = sensor.get_state()
-        chore_points = sensor.chore.points
-
-        # Count pending chores as missed (will be added to cumulative total)
-        if current_state == ChoreState.PENDING.value:
-            assignee_stats[assignee]["missed"] += chore_points
-
-    # Update cumulative points_missed
-    if points_storage:
-        for assignee, stats in assignee_stats.items():
-            # Update cumulative points_missed
-            if stats["missed"] > 0:
-                current_missed = points_storage.get_points_missed(assignee)
-                new_missed = current_missed + stats["missed"]
-                await points_storage.add_points_missed(assignee, stats["missed"])
-                LOGGER.debug(
-                    "Updated cumulative points_missed for %s: "
-                    "added %d (was %d, now %d)",
-                    assignee,
-                    stats["missed"],
-                    current_missed,
-                    new_missed,
-                )
+    # Calculate points missed per assignee BEFORE resetting any sensor state.
+    await _apply_start_new_day_points_missed(hass, sensors, sanitized_user)
 
     reset_count = 0
     manual_count = 0
@@ -694,6 +795,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         if sensor.get_state() == ChoreState.COMPLETE.value:
             chore_frequency = sensor.chore.frequency
             affected_users.add(sensor.assignee)
+            _cancel_auto_finalize(hass, sensor)
 
             if chore_frequency == ChoreFrequency.ONCE:
                 # Mark once chore for deletion
@@ -828,6 +930,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     icon = call.data.get(ATTR_ICON)
     points = call.data.get(ATTR_POINTS)
     category = call.data.get(ATTR_CATEGORY)
+    new_slug = call.data.get(ATTR_NEW_SLUG)
 
     # Parse assignees if provided
     assignees = None
@@ -848,6 +951,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             icon=icon,
             points=points,
             category=category,
+            new_slug=new_slug,
         )
         LOGGER.info("Updated chore '%s'", slug)
     except Exception as err:
@@ -958,6 +1062,11 @@ async def _set_chore_sensors_state_by_category(
             sensor.chore.name,
             new_state.value,
         )
+
+        if new_state == ChoreState.COMPLETE and not was_complete:
+            _schedule_auto_finalize(hass, sensor)
+        elif was_complete and new_state != ChoreState.COMPLETE:
+            _cancel_auto_finalize(hass, sensor)
 
         chore_points = sensor.chore.points
         if points_storage and new_state == ChoreState.COMPLETE and not was_complete:
@@ -1147,6 +1256,7 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
     for sensor in sensors_to_reset:
         sensor.set_state(ChoreState.NOT_REQUESTED.value)
         update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+        _cancel_auto_finalize(hass, sensor)
 
         # Audit log: chore reset by finalize_by_category
         LOGGER.info(
@@ -1211,9 +1321,12 @@ async def handle_update_category(hass: HomeAssistant, call: ServiceCall) -> None
     slug = call.data[ATTR_SLUG]
     name = call.data.get(ATTR_NAME)
     icon = call.data.get(ATTR_ICON)
+    new_slug = call.data.get(ATTR_NEW_SLUG)
 
     try:
-        await config_loader.async_update_category(slug=slug, name=name, icon=icon)
+        await config_loader.async_update_category(
+            slug=slug, name=name, icon=icon, new_slug=new_slug
+        )
         LOGGER.info("Updated category '%s'", slug)
     except Exception as err:
         msg = f"Failed to update category '{slug}': {err}"
@@ -1237,6 +1350,34 @@ async def handle_delete_category(hass: HomeAssistant, call: ServiceCall) -> None
         msg = f"Failed to delete category '{slug}': {err}"
         LOGGER.error(msg)
         raise ServiceValidationError(msg) from err
+
+
+async def handle_update_settings(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the update_settings service call."""
+    LOGGER.info("Service 'update_settings' called with updates=%s", dict(call.data))
+
+    _validate_integration_loaded(hass)
+    config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+
+    auto_finalize_enabled = call.data.get(ATTR_AUTO_FINALIZE_ENABLED)
+    auto_finalize_delay_minutes = call.data.get(ATTR_AUTO_FINALIZE_DELAY_MINUTES)
+
+    try:
+        await config_loader.async_update_settings(
+            auto_finalize_enabled=auto_finalize_enabled,
+            auto_finalize_delay_minutes=auto_finalize_delay_minutes,
+        )
+    except Exception as err:
+        msg = f"Failed to update settings: {err}"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg) from err
+
+    # Turning auto-finalize off shouldn't leave chores completed under the
+    # old setting scheduled to finalize anyway.
+    if auto_finalize_enabled is False:  # distinguish from "not provided" (None)
+        _cancel_all_auto_finalize(hass)
+
+    LOGGER.info("Updated settings")
 
 
 async def handle_refresh_summary(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -1792,6 +1933,7 @@ async def handle_update_privilege(hass: HomeAssistant, call: ServiceCall) -> Non
     behavior = call.data.get(ATTR_BEHAVIOR)
     linked_chores_str = call.data.get(ATTR_LINKED_CHORES)
     assignees_str = call.data.get(ATTR_ASSIGNEES)
+    new_slug = call.data.get(ATTR_NEW_SLUG)
 
     # Parse linked chores if provided
     linked_chores = None
@@ -1815,6 +1957,7 @@ async def handle_update_privilege(hass: HomeAssistant, call: ServiceCall) -> Non
             behavior=behavior,
             linked_chores=linked_chores,
             assignees=assignees,
+            new_slug=new_slug,
         )
         LOGGER.info("Updated privilege '%s'", slug)
     except Exception as err:
@@ -1952,6 +2095,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_DELETE_CATEGORY,
         partial(handle_delete_category, hass),
         schema=DELETE_CATEGORY_SCHEMA,
+    )
+    # Settings service
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UPDATE_SETTINGS,
+        partial(handle_update_settings, hass),
+        schema=UPDATE_SETTINGS_SCHEMA,
     )
     # Privilege services
     hass.services.async_register(
