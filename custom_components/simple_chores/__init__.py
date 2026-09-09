@@ -19,7 +19,7 @@ from .const import CONFIG_FILE_NAME, DOMAIN, LOGGER
 from .data import SimpleChoresData as SimpleChoresData
 from .panel import async_register_panel, async_unregister_panel
 from .sensor import async_setup_platform
-from .services import async_setup_services
+from .services import async_catch_up_auto_finalize, async_setup_services
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -96,6 +96,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:  # noqa: ARG00
     # Register services
     await async_setup_services(hass)
 
+    # Reconcile chores that were left Complete when HA last stopped: finalize
+    # any whose auto-finalize delay has already elapsed, and reschedule the
+    # rest for whatever time remains.
+    await async_catch_up_auto_finalize(hass)
+
     # Add the admin-only "Chores" panel to the sidebar
     await async_register_panel(hass)
 
@@ -143,6 +148,11 @@ async def async_setup_entry(
 
     # Register services
     await async_setup_services(hass)
+
+    # Reconcile chores that were left Complete when HA last stopped: finalize
+    # any whose auto-finalize delay has already elapsed, and reschedule the
+    # rest for whatever time remains.
+    await async_catch_up_auto_finalize(hass)
 
     # Add the admin-only "Chores" panel to the sidebar
     await async_register_panel(hass)

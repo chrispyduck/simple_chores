@@ -26,10 +26,12 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
     * `points_possible`: Current sum of points from pending + complete chores (calculated in real-time)
 * **Points System**: Each chore can have a point value (default: 1). When a chore is marked complete, the assignee earns those points. Points can be set when creating/updating chores. The `start_new_day` service adds pending chore points to the cumulative `points_missed` total before resetting states. The summary sensor calculates `points_possible` in real-time based on current chore states.
 * **Auto-finalize**: A chore left in the `Complete` state is automatically reset to `Not Requested` after a delay (the same reset `reset_completed` performs; 60 minutes by default), so completed chores don't keep piling up on dashboards throughout the day. Points were already awarded at completion time, so nothing about them changes. Marking the chore pending, not requested, or otherwise resetting it before the delay is up cancels the pending auto-finalize. Both whether this runs at all (`auto_finalize_enabled`) and its delay (`auto_finalize_delay_minutes`) are configurable - via the admin panel's Settings tab, or the `simple_chores.update_settings` service - and persist in `simple_chores.yaml` under a `settings:` section.
+  * Each chore's completion time is persisted, so auto-finalize survives a Home Assistant restart: on startup, any chore whose delay already elapsed while HA was down is finalized immediately, and any still within its delay gets a fresh timer for whatever time is left. A chore that was already `Complete` before this feature existed (no tracked completion time) is left alone until it's next completed.
 * The following actions are defined for interacting with chores:
   * `simple_chores.mark_complete` - Marks a chore as complete and awards points to the assignee. Takes a chore slug and optional user as parameters. If user is not specified, marks complete for all assignees.
   * `simple_chores.mark_pending` - Marks a chore as pending. Takes a chore slug and optional user as parameters. If user is not specified, marks pending for all assignees.
   * `simple_chores.mark_not_requested` - Marks a chore as not requested. Takes a chore slug and optional user as parameters. If user is not specified, marks not requested for all assignees.
+  * `simple_chores.finalize_one` - Immediately finalizes one completed chore (the same reset auto-finalize performs, on demand instead of waiting out the delay). Takes a chore slug and optional user; chores that aren't currently complete are left alone.
   * `simple_chores.reset_completed` - Resets all completed chores to not requested. Takes an optional user parameter to reset only that user's chores.
   * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending, once chores are deleted entirely. Calculates daily points statistics before resetting. Takes an optional user parameter.
   * `simple_chores.finalize_by_category` - Like `start_new_day`, but scoped to a single category and only for `manual` chores: completed manual chores in the category reset to not requested, and pending ones count towards missed points. Daily and once chores in the category are left untouched. Takes a category slug and optional user parameter.
@@ -150,12 +152,15 @@ The summary sensor for each assignee includes a `privileges` attribute containin
 ## Admin Panel
 
 Administrators get a "Chores" entry in the Home Assistant sidebar for full
-management of chores and privileges - creating, editing, and deleting both,
-marking chores complete/pending, enabling/disabling or temporarily blocking
-privileges, and running `reset_completed`/`start_new_day` - without needing
-to call services by hand or edit the YAML file directly. The panel is
-registered with `require_admin=True`, so it's only visible to, and only
-reachable by, Home Assistant administrators; everyone else sees no change.
+management of chores, privileges, and categories - creating, editing,
+renaming, and deleting any of them, marking chores complete/pending,
+enabling/disabling or temporarily blocking privileges, running
+`reset_completed`/`start_new_day`/`finalize_by_category`, finalizing one
+completed chore on demand, and tuning the Settings tab's auto-finalize
+behavior - without needing to call services by hand or edit the YAML file
+directly. The panel is registered with `require_admin=True`, so it's only
+visible to, and only reachable by, Home Assistant administrators; everyone
+else sees no change.
 
 The panel's source lives in [frontend/](frontend/); see
 [frontend/README.md](frontend/README.md) for how to build it.
