@@ -417,8 +417,7 @@ class ConfigLoader:
                 p.model_copy(
                     update={
                         "linked_chores": [
-                            renamed_slug if lc == slug else lc
-                            for lc in p.linked_chores
+                            renamed_slug if lc == slug else lc for lc in p.linked_chores
                         ]
                     }
                 )
@@ -588,9 +587,7 @@ class ConfigLoader:
         await self._notify_callbacks()
 
         if renamed_slug is not None:
-            LOGGER.info(
-                "Updated privilege '%s' (renamed to '%s')", slug, renamed_slug
-            )
+            LOGGER.info("Updated privilege '%s' (renamed to '%s')", slug, renamed_slug)
         else:
             LOGGER.info("Updated privilege '%s'", slug)
 

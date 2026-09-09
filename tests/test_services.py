@@ -3581,9 +3581,7 @@ class TestAutoFinalizeCompletedChore:
         )
         assert mock_sensor.get_state() == ChoreState.COMPLETE.value
 
-        async_fire_time_changed(
-            hass, dt_util.utcnow() + timedelta(hours=1, seconds=1)
-        )
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=1, seconds=1))
         await hass.async_block_till_done()
 
         assert mock_sensor.get_state() == ChoreState.NOT_REQUESTED.value
@@ -3615,9 +3613,7 @@ class TestAutoFinalizeCompletedChore:
         )
         assert mock_sensor.get_state() == ChoreState.PENDING.value
 
-        async_fire_time_changed(
-            hass, dt_util.utcnow() + timedelta(hours=1, seconds=1)
-        )
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=1, seconds=1))
         await hass.async_block_till_done()
 
         # Still pending - the cancelled timer must not have touched it.
@@ -3645,9 +3641,7 @@ class TestAutoFinalizeCompletedChore:
         )
         points_after_complete = points_storage.get_points("alice")
 
-        async_fire_time_changed(
-            hass, dt_util.utcnow() + timedelta(hours=1, seconds=1)
-        )
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=1, seconds=1))
         await hass.async_block_till_done()
 
         assert mock_sensor.get_state() == ChoreState.NOT_REQUESTED.value
