@@ -1,6 +1,7 @@
 """Tests for simple_chores data structures."""
 
 from dataclasses import is_dataclass
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -191,3 +192,55 @@ class TestPointsStoragePrivilegePreBlockState:
         await storage.clear_privilege_data("alice", "extra_dessert")
 
         assert storage.get_privilege_pre_block_state("alice", "extra_dessert") is None
+
+
+class TestPointsStorageChoreCompletedAt:
+    """Tests for PointsStorage's chore completed-at tracking (auto-finalize)."""
+
+    @pytest.mark.asyncio
+    async def test_defaults_to_none(self, hass) -> None:
+        """An entity with nothing stored has no tracked completion time."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        entity_id = "sensor.simple_chore_alice_dishes"
+        assert storage.get_chore_completed_at(entity_id) is None
+
+    @pytest.mark.asyncio
+    async def test_set_and_get(self, hass) -> None:
+        """Test storing and retrieving a completion time."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        entity_id = "sensor.simple_chore_alice_dishes"
+        when = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        await storage.set_chore_completed_at(entity_id, when)
+
+        assert storage.get_chore_completed_at(entity_id) == when
+
+    @pytest.mark.asyncio
+    async def test_set_none_clears_it(self, hass) -> None:
+        """Test that setting None clears a previously stored completion time."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        entity_id = "sensor.simple_chore_alice_dishes"
+        await storage.set_chore_completed_at(entity_id, datetime.now(UTC))
+        await storage.set_chore_completed_at(entity_id, None)
+
+        assert storage.get_chore_completed_at(entity_id) is None
+
+    @pytest.mark.asyncio
+    async def test_persists_across_instances(self, hass) -> None:
+        """Test that a completion time survives a reload, like other stored data."""
+        entity_id = "sensor.simple_chore_alice_dishes"
+        when = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+        storage1 = PointsStorage(hass)
+        await storage1.async_load()
+        await storage1.set_chore_completed_at(entity_id, when)
+
+        storage2 = PointsStorage(hass)
+        await storage2.async_load()
+
+        assert storage2.get_chore_completed_at(entity_id) == when

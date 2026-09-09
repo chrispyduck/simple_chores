@@ -57,6 +57,25 @@ mark_not_requested:
       selector:
         text:
 
+finalize_one:
+  name: Finalize One
+  description: Immediately finalize a completed chore (reset it to not requested) - the same reset auto-finalize performs after its delay, triggered on demand. Chores that aren't currently complete are left alone. If user is not specified, finalizes it for every assignee who currently has it complete.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, finalizes for every assignee who has it complete)
+      required: false
+      example: "alice"
+      selector:
+        text:
+    chore_slug:
+      name: Chore Slug
+      description: The slug identifier of the chore
+      required: true
+      example: "dishes"
+      selector:
+        text:
+
 reset_completed:
   name: Reset Completed
   description: Reset completed chores to not requested status. If no user is specified, resets for all users.

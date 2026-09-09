@@ -37,21 +37,24 @@ if TYPE_CHECKING:
 PARALLEL_UPDATES = 0
 
 
-def _cancel_auto_finalize_timer(hass: HomeAssistant, entity_id: str) -> None:
+async def _cancel_auto_finalize_timer(
+    hass: HomeAssistant, entity_id: str, points_storage: PointsStorage
+) -> None:
     """
-    Cancel a chore sensor's pending auto-finalize timer, if any.
+    Cancel a chore sensor's pending auto-finalize timer and tracked completion time.
 
-    services.py schedules these (see `_schedule_auto_finalize` there) when a
-    chore is marked complete, keyed by entity_id in
-    hass.data[DOMAIN]["auto_finalize_unsubs"]. A sensor being removed here
-    (chore deleted, or unassigned from it) should never fire that timer.
+    services.py schedules the timer (see `_schedule_auto_finalize_at` there)
+    when a chore is marked complete, keyed by entity_id in
+    hass.data[DOMAIN]["auto_finalize_unsubs"], and persists when it happened
+    via `points_storage.set_chore_completed_at`. A sensor being removed here
+    (chore deleted, or unassigned from it) should never fire that timer, nor
+    have a stale completion time picked up by a later catch-up pass.
     """
     unsubs = hass.data.get(DOMAIN, {}).get("auto_finalize_unsubs")
-    if not unsubs:
-        return
-    unsub = unsubs.pop(entity_id, None)
+    unsub = unsubs.pop(entity_id, None) if unsubs else None
     if unsub:
         unsub()
+    await points_storage.set_chore_completed_at(entity_id, None)
 
 
 async def async_setup_entry(
@@ -263,7 +266,9 @@ class ChoreSensorManager:
         for entity_id, sensor in self.sensors.items():
             if entity_id not in expected_entities:
                 sensors_to_remove.append(entity_id)
-                _cancel_auto_finalize_timer(self.hass, entity_id)
+                await _cancel_auto_finalize_timer(
+                    self.hass, entity_id, self.points_storage
+                )
                 # Remove the entity - only if it's properly initialized
                 if sensor.hass is not None and hasattr(sensor, "platform"):
                     try:

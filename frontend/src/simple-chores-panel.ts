@@ -360,6 +360,14 @@ export class SimpleChoresPanel extends LitElement {
                     >
                       <ha-icon icon="mdi:close-circle-outline"></ha-icon>
                     </button>
+                    <button
+                      class="icon-button"
+                      title="Finalize now (instead of waiting for auto-finalize)"
+                      ?disabled=${a.state !== "Complete"}
+                      @click=${() => this._finalizeOne(chore.slug, a.assignee)}
+                    >
+                      <ha-icon icon="mdi:flag-checkered"></ha-icon>
+                    </button>
                   </div>
                 </div>
               `
@@ -1212,6 +1220,14 @@ export class SimpleChoresPanel extends LitElement {
     service: "mark_complete" | "mark_pending" | "mark_not_requested"
   ) {
     return this._call(SERVICE_DOMAIN, service, { chore_slug: slug, user });
+  }
+
+  /**
+   * Immediately finalize one completed chore for one assignee - the same
+   * reset auto-finalize performs after its delay, triggered on demand.
+   */
+  private _finalizeOne(slug: string, user: string) {
+    return this._call(SERVICE_DOMAIN, "finalize_one", { chore_slug: slug, user });
   }
 
   private _resetCompleted() {

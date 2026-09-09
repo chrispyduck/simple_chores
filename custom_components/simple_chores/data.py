@@ -44,6 +44,12 @@ class PointsStorage:
         # temporary disable started, so ending the block can restore it
         # instead of always falling back to Disabled.
         self._privilege_pre_block_state: dict[str, dict[str, str]] = {}
+        # When each chore sensor most recently became Complete, keyed by its
+        # entity_id: {entity_id: ISO timestamp}. Durable record backing
+        # auto-finalize, so a HA restart (or a missed timer while HA was
+        # down) can still finalize a chore at the right time instead of
+        # losing track of it - see services.py's auto-finalize helpers.
+        self._chore_completed_at: dict[str, str] = {}
 
     async def async_load(self) -> None:
         """Load points from storage."""
@@ -56,6 +62,7 @@ class PointsStorage:
             self._privilege_states = data.get("privilege_states", {})
             self._privilege_disable_until = data.get("privilege_disable_until", {})
             self._privilege_pre_block_state = data.get("privilege_pre_block_state", {})
+            self._chore_completed_at = data.get("chore_completed_at", {})
 
     async def async_save(self) -> None:
         """Save points to storage."""
@@ -68,6 +75,7 @@ class PointsStorage:
                 "privilege_states": self._privilege_states,
                 "privilege_disable_until": self._privilege_disable_until,
                 "privilege_pre_block_state": self._privilege_pre_block_state,
+                "chore_completed_at": self._chore_completed_at,
             }
         )
 
@@ -191,6 +199,25 @@ class PointsStorage:
             self._privilege_pre_block_state[assignee].pop(privilege_slug, None)
         else:
             self._privilege_pre_block_state[assignee][privilege_slug] = state
+        await self.async_save()
+
+    # Chore auto-finalize tracking
+
+    def get_chore_completed_at(self, entity_id: str) -> datetime | None:
+        """Get when a chore sensor most recently became Complete, if tracked."""
+        timestamp = self._chore_completed_at.get(entity_id)
+        if timestamp:
+            return datetime.fromisoformat(timestamp)
+        return None
+
+    async def set_chore_completed_at(
+        self, entity_id: str, when: datetime | None
+    ) -> None:
+        """Set (or clear, if `when` is None) a chore sensor's completion time."""
+        if when is None:
+            self._chore_completed_at.pop(entity_id, None)
+        else:
+            self._chore_completed_at[entity_id] = when.isoformat()
         await self.async_save()
 
     async def clear_privilege_data(self, assignee: str, privilege_slug: str) -> None:

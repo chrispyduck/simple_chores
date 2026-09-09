@@ -23,6 +23,7 @@ from custom_components.simple_chores.const import (
     SERVICE_CREATE_CHORE,
     SERVICE_DELETE_CHORE,
     SERVICE_FINALIZE_BY_CATEGORY,
+    SERVICE_FINALIZE_ONE,
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_COMPLETE_BY_CATEGORY,
     SERVICE_MARK_NOT_REQUESTED,
@@ -50,7 +51,10 @@ from custom_components.simple_chores.sensor import (
     ChoreSummarySensor,
     PrivilegeSensor,
 )
-from custom_components.simple_chores.services import async_setup_services
+from custom_components.simple_chores.services import (
+    async_catch_up_auto_finalize,
+    async_setup_services,
+)
 
 
 def make_summary_update_mock(summary_sensor):
@@ -99,6 +103,7 @@ class TestServiceSetup:
         assert hass.services.has_service(DOMAIN, SERVICE_MARK_COMPLETE)
         assert hass.services.has_service(DOMAIN, SERVICE_MARK_PENDING)
         assert hass.services.has_service(DOMAIN, SERVICE_MARK_NOT_REQUESTED)
+        assert hass.services.has_service(DOMAIN, SERVICE_FINALIZE_ONE)
         assert hass.services.has_service(DOMAIN, SERVICE_RESET_COMPLETED)
         assert hass.services.has_service(DOMAIN, SERVICE_START_NEW_DAY)
         assert hass.services.has_service(DOMAIN, SERVICE_CREATE_CHORE)
@@ -116,9 +121,9 @@ class TestServiceSetup:
 
         # Verify all services are in the correct domain
         services = hass.services.async_services_for_domain(DOMAIN)
-        # 11 chore services + 7 category services + 1 settings service
-        # + 8 privilege services
-        assert len(services) == 27
+        # 12 chore services (incl. finalize_one) + 7 category services
+        # + 1 settings service + 8 privilege services
+        assert len(services) == 28
 
 
 class TestMarkCompleteService:
@@ -3557,12 +3562,13 @@ class TestClearTemporaryDisableService:
 
 class TestAutoFinalizeCompletedChore:
     """
-    Tests for the "completed chores auto-finalize after an hour" behavior.
+    Tests for the "completed chores auto-finalize after a delay" behavior.
 
     Marking a chore complete schedules a timer (see
-    `services._schedule_auto_finalize`) that resets it to Not Requested -
-    same as reset_completed - if it's still Complete once the delay elapses,
-    so completed chores don't linger on the pending/complete display.
+    `services._record_completion_and_schedule`) that resets it to Not
+    Requested - same as reset_completed - if it's still Complete once the
+    delay elapses, so completed chores don't linger on the
+    pending/complete display.
     """
 
     @pytest.mark.asyncio
@@ -3741,3 +3747,420 @@ class TestUpdateSettingsService:
         await hass.async_block_till_done()
 
         assert mock_sensor.get_state() == ChoreState.NOT_REQUESTED.value
+
+
+class TestAutoFinalizeCompletionTracking:
+    """Tests for the persisted completed-at tracking behind auto-finalize."""
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_records_completion_time(
+        self, hass, mock_sensor: ChoreSensor
+    ) -> None:
+        """Marking a chore complete persists a completed-at timestamp for it."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": mock_sensor},
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        assert points_storage.get_chore_completed_at(mock_sensor.entity_id) is not None
+
+    @pytest.mark.asyncio
+    async def test_manual_reset_clears_completion_time(
+        self, hass, mock_sensor: ChoreSensor
+    ) -> None:
+        """Resetting a chore away from Complete forgets its completion time too."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": mock_sensor},
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_NOT_REQUESTED,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        assert points_storage.get_chore_completed_at(mock_sensor.entity_id) is None
+
+
+class TestAutoFinalizeCatchUp:
+    """
+    Tests for async_catch_up_auto_finalize.
+
+    This reconciles currently-Complete chores against their persisted
+    completed-at timestamp - run at startup (see __init__.py) so
+    auto-finalize survives a restart, and whenever settings change.
+    """
+
+    @pytest.mark.asyncio
+    async def test_overdue_chore_is_finalized_immediately(
+        self, hass, mock_sensor: ChoreSensor, tmp_path
+    ) -> None:
+        """A chore whose delay already elapsed is finalized without waiting."""
+        from custom_components.simple_chores.config_loader import ConfigLoader
+        from custom_components.simple_chores.data import PointsStorage
+
+        config_path = tmp_path / "simple_chores.yaml"
+        config_path.write_text("chores: []\n")
+        config_loader = ConfigLoader(hass, config_path)
+        await config_loader.async_load()
+
+        points_storage = PointsStorage(hass)
+        mock_sensor.set_state(ChoreState.COMPLETE.value)
+        await points_storage.set_chore_completed_at(
+            mock_sensor.entity_id, dt_util.utcnow() - timedelta(hours=2)
+        )
+
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": mock_sensor},
+            "points_storage": points_storage,
+            "config_loader": config_loader,
+        }
+
+        await async_catch_up_auto_finalize(hass)
+
+        assert mock_sensor.get_state() == ChoreState.NOT_REQUESTED.value
+        assert points_storage.get_chore_completed_at(mock_sensor.entity_id) is None
+
+    @pytest.mark.asyncio
+    async def test_chore_still_within_delay_is_rescheduled_not_finalized(
+        self, hass, mock_sensor: ChoreSensor, tmp_path
+    ) -> None:
+        """A chore that still has time left is rescheduled, not finalized right away."""
+        from custom_components.simple_chores.config_loader import ConfigLoader
+        from custom_components.simple_chores.data import PointsStorage
+
+        config_path = tmp_path / "simple_chores.yaml"
+        config_path.write_text("chores: []\n")
+        config_loader = ConfigLoader(hass, config_path)
+        await config_loader.async_load()
+
+        points_storage = PointsStorage(hass)
+        mock_sensor.set_state(ChoreState.COMPLETE.value)
+        completed_at = dt_util.utcnow() - timedelta(minutes=10)
+        await points_storage.set_chore_completed_at(mock_sensor.entity_id, completed_at)
+
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": mock_sensor},
+            "points_storage": points_storage,
+            "config_loader": config_loader,
+        }
+
+        await async_catch_up_auto_finalize(hass)
+
+        # Not finalized yet - only 10 of the 60 default minutes have passed.
+        assert mock_sensor.get_state() == ChoreState.COMPLETE.value
+
+        # But a timer was rescheduled for the remaining ~50 minutes.
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=51))
+        await hass.async_block_till_done()
+
+        assert mock_sensor.get_state() == ChoreState.NOT_REQUESTED.value
+
+    @pytest.mark.asyncio
+    async def test_complete_chore_with_no_tracked_time_is_left_alone(
+        self, hass, mock_sensor: ChoreSensor
+    ) -> None:
+        """A Complete chore with no completed-at recorded is left untouched."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        mock_sensor.set_state(ChoreState.COMPLETE.value)
+
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": mock_sensor},
+            "points_storage": points_storage,
+        }
+
+        await async_catch_up_auto_finalize(hass)
+
+        assert mock_sensor.get_state() == ChoreState.COMPLETE.value
+
+    @pytest.mark.asyncio
+    async def test_disabled_setting_skips_catch_up_entirely(
+        self, hass, mock_sensor: ChoreSensor, tmp_path
+    ) -> None:
+        """When auto-finalize is disabled, catch-up does nothing, even if overdue."""
+        from custom_components.simple_chores.config_loader import ConfigLoader
+        from custom_components.simple_chores.data import PointsStorage
+
+        config_path = tmp_path / "simple_chores.yaml"
+        config_path.write_text("chores: []\n")
+        config_loader = ConfigLoader(hass, config_path)
+        await config_loader.async_load()
+        await config_loader.async_update_settings(auto_finalize_enabled=False)
+
+        points_storage = PointsStorage(hass)
+        mock_sensor.set_state(ChoreState.COMPLETE.value)
+        await points_storage.set_chore_completed_at(
+            mock_sensor.entity_id, dt_util.utcnow() - timedelta(hours=2)
+        )
+
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": mock_sensor},
+            "points_storage": points_storage,
+            "config_loader": config_loader,
+        }
+
+        await async_catch_up_auto_finalize(hass)
+
+        assert mock_sensor.get_state() == ChoreState.COMPLETE.value
+        # Tracking is left alone too, in case it's re-enabled later.
+        assert points_storage.get_chore_completed_at(mock_sensor.entity_id) is not None
+
+
+class TestUpdateSettingsTriggersCatchUp:
+    """Tests for update_settings reconciling pending auto-finalize timers."""
+
+    @pytest.mark.asyncio
+    async def test_shortening_delay_finalizes_already_overdue_chore(
+        self, hass, mock_sensor: ChoreSensor, tmp_path
+    ) -> None:
+        """
+        Shortening the delay below an existing completion's age finalizes it now.
+
+        `datetime.now()` doesn't move for `async_fire_time_changed` (it only
+        fakes the event loop's scheduling clock), so "10 minutes ago" is
+        simulated by backdating the tracked completed-at directly rather
+        than waiting/faking real time.
+        """
+        from custom_components.simple_chores.config_loader import ConfigLoader
+        from custom_components.simple_chores.data import PointsStorage
+
+        config_path = tmp_path / "simple_chores.yaml"
+        config_path.write_text("chores: []\n")
+        config_loader = ConfigLoader(hass, config_path)
+        await config_loader.async_load()
+
+        points_storage = PointsStorage(hass)
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": mock_sensor},
+            "config_loader": config_loader,
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        assert mock_sensor.get_state() == ChoreState.COMPLETE.value
+
+        # Pretend it was completed 10 minutes ago, then shorten the delay to
+        # 5 minutes - the chore is now overdue under the new setting.
+        await points_storage.set_chore_completed_at(
+            mock_sensor.entity_id, dt_util.utcnow() - timedelta(minutes=10)
+        )
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_UPDATE_SETTINGS,
+            {ATTR_AUTO_FINALIZE_DELAY_MINUTES: 5},
+            blocking=True,
+        )
+
+        assert mock_sensor.get_state() == ChoreState.NOT_REQUESTED.value
+
+    @pytest.mark.asyncio
+    async def test_disabling_then_reenabling_reschedules_from_tracked_time(
+        self, hass, mock_sensor: ChoreSensor, tmp_path
+    ) -> None:
+        """Re-enabling auto-finalize picks back up from the original completion time."""
+        from custom_components.simple_chores.config_loader import ConfigLoader
+        from custom_components.simple_chores.data import PointsStorage
+
+        config_path = tmp_path / "simple_chores.yaml"
+        config_path.write_text("chores: []\n")
+        config_loader = ConfigLoader(hass, config_path)
+        await config_loader.async_load()
+        await config_loader.async_update_settings(auto_finalize_delay_minutes=5)
+
+        points_storage = PointsStorage(hass)
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": mock_sensor},
+            "config_loader": config_loader,
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_UPDATE_SETTINGS,
+            {ATTR_AUTO_FINALIZE_ENABLED: False},
+            blocking=True,
+        )
+        assert mock_sensor.get_state() == ChoreState.COMPLETE.value
+
+        # Pretend 10 minutes have passed since completion (well past the
+        # 5-minute delay) while it was disabled.
+        await points_storage.set_chore_completed_at(
+            mock_sensor.entity_id, dt_util.utcnow() - timedelta(minutes=10)
+        )
+
+        # Re-enabling catches up against that completion time immediately.
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_UPDATE_SETTINGS,
+            {ATTR_AUTO_FINALIZE_ENABLED: True},
+            blocking=True,
+        )
+
+        assert mock_sensor.get_state() == ChoreState.NOT_REQUESTED.value
+
+
+class TestFinalizeOneService:
+    """Tests for the finalize_one service."""
+
+    @pytest.mark.asyncio
+    async def test_finalize_one_resets_completed_chore(
+        self, hass, mock_sensor: ChoreSensor
+    ) -> None:
+        """finalize_one immediately resets a completed chore to not requested."""
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        assert mock_sensor.get_state() == ChoreState.COMPLETE.value
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_FINALIZE_ONE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        assert mock_sensor.get_state() == ChoreState.NOT_REQUESTED.value
+
+    @pytest.mark.asyncio
+    async def test_finalize_one_leaves_non_complete_chore_alone(
+        self, hass, mock_sensor: ChoreSensor
+    ) -> None:
+        """Calling finalize_one on a chore that isn't complete is a no-op."""
+        mock_sensor.set_state(ChoreState.PENDING.value)
+        hass.data[DOMAIN] = {"sensors": {"alice_dishes": mock_sensor}}
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_FINALIZE_ONE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        assert mock_sensor.get_state() == ChoreState.PENDING.value
+
+    @pytest.mark.asyncio
+    async def test_finalize_one_raises_when_no_sensor_found(self, hass) -> None:
+        """finalize_one raises if no sensor matches the chore/user at all."""
+        hass.data[DOMAIN] = {"sensors": {}}
+        await async_setup_services(hass)
+
+        with pytest.raises(ServiceValidationError, match="No sensor found"):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_FINALIZE_ONE,
+                {ATTR_USER: "bob", ATTR_CHORE_SLUG: "vacuum"},
+                blocking=True,
+            )
+
+    @pytest.mark.asyncio
+    async def test_finalize_one_without_user_only_finalizes_completed_assignees(
+        self, hass
+    ) -> None:
+        """Without a user, finalize_one finalizes completed assignees, leaves others."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+        )
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            alice_sensor = ChoreSensor(hass, chore, "alice")
+            alice_sensor.async_update_ha_state = AsyncMock()
+            bob_sensor = ChoreSensor(hass, chore, "bob")
+            bob_sensor.async_update_ha_state = AsyncMock()
+
+        alice_sensor.set_state(ChoreState.COMPLETE.value)
+        bob_sensor.set_state(ChoreState.PENDING.value)
+
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": alice_sensor, "bob_dishes": bob_sensor}
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_FINALIZE_ONE,
+            {ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        assert alice_sensor.get_state() == ChoreState.NOT_REQUESTED.value
+        assert bob_sensor.get_state() == ChoreState.PENDING.value
+
+    @pytest.mark.asyncio
+    async def test_finalize_one_clears_tracked_completion(
+        self, hass, mock_sensor: ChoreSensor
+    ) -> None:
+        """finalize_one clears any tracked completion time, like the timer would."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        points_storage = PointsStorage(hass)
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": mock_sensor},
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        assert points_storage.get_chore_completed_at(mock_sensor.entity_id) is not None
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_FINALIZE_ONE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        assert points_storage.get_chore_completed_at(mock_sensor.entity_id) is None

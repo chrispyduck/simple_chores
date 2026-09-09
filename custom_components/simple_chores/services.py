@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -47,6 +48,7 @@ from .const import (
     SERVICE_DISABLE_PRIVILEGE,
     SERVICE_ENABLE_PRIVILEGE,
     SERVICE_FINALIZE_BY_CATEGORY,
+    SERVICE_FINALIZE_ONE,
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_COMPLETE_BY_CATEGORY,
     SERVICE_MARK_NOT_REQUESTED,
@@ -75,8 +77,6 @@ from .models import (
 )
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from homeassistant.core import HomeAssistant, ServiceCall
 
     from .config_loader import ConfigLoader
@@ -189,63 +189,164 @@ def _auto_finalize_unsubs(hass: HomeAssistant) -> dict:
     return hass.data[DOMAIN].setdefault("auto_finalize_unsubs", {})
 
 
-def _cancel_auto_finalize(hass: HomeAssistant, sensor: ChoreSensor) -> None:
-    """Cancel any pending auto-finalize timer for `sensor`, if one is scheduled."""
+def _cancel_auto_finalize_timer(hass: HomeAssistant, sensor: ChoreSensor) -> None:
+    """Cancel `sensor`'s pending in-memory auto-finalize timer, if one is scheduled."""
     unsub = _auto_finalize_unsubs(hass).pop(sensor.entity_id, None)
     if unsub:
         unsub()
 
 
-def _cancel_all_auto_finalize(hass: HomeAssistant) -> None:
-    """Cancel every pending auto-finalize timer (used when the setting is disabled)."""
+def _cancel_all_auto_finalize_timers(hass: HomeAssistant) -> None:
+    """Cancel every pending in-memory auto-finalize timer."""
     unsubs = _auto_finalize_unsubs(hass)
     for unsub in unsubs.values():
         unsub()
     unsubs.clear()
 
 
-def _schedule_auto_finalize(hass: HomeAssistant, sensor: ChoreSensor) -> None:
+async def _clear_completion_tracking(hass: HomeAssistant, sensor: ChoreSensor) -> None:
     """
-    Schedule `sensor` to auto-finalize per the current settings.
+    Cancel any pending timer and forget `sensor`'s tracked completion time.
 
-    If it's still Complete once the configured delay elapses, resets it to
-    Not Requested - same as reset_completed does for one sensor. Restarts
-    the clock if one was already pending for it. No-ops if auto-finalize is
-    disabled in settings (see SettingsConfig).
+    Called whenever a chore leaves the Complete state some other way (a
+    manual reset, start_new_day, category actions, deletion, ...) so a
+    stale timer or a stale completed-at timestamp can't finalize a chore
+    that's already moved on.
     """
+    _cancel_auto_finalize_timer(hass, sensor)
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    if points_storage:
+        await points_storage.set_chore_completed_at(sensor.entity_id, None)
+
+
+async def _finalize_sensor(hass: HomeAssistant, sensor: ChoreSensor) -> None:
+    """
+    Reset a Complete chore sensor to Not Requested, forgetting its tracked completion.
+
+    This is the actual "finalize" action, shared by the scheduled
+    auto-finalize timer, the startup/settings-change catch-up pass, and the
+    finalize_one service. Points are never touched here - they were already
+    awarded when the chore was completed.
+    """
+    await _clear_completion_tracking(hass, sensor)
+    sensor.set_state(ChoreState.NOT_REQUESTED.value)
+    await sensor.async_update_ha_state(force_refresh=True)
+    LOGGER.info(
+        "Finalized %s's completed chore '%s'",
+        sensor.assignee,
+        sensor.chore.name,
+    )
+    await _update_summary_sensors(hass, sensor.assignee)
+    await _update_privilege_sensors_from_chores(hass, sensor.assignee)
+
+
+def _get_settings(hass: HomeAssistant) -> SettingsConfig:
+    """Read current integration-wide settings, defaulting if unavailable."""
     config_loader: ConfigLoader | None = hass.data[DOMAIN].get("config_loader")
-    settings = config_loader.get_settings() if config_loader else SettingsConfig()
-    _cancel_auto_finalize(hass, sensor)
+    return config_loader.get_settings() if config_loader else SettingsConfig()
+
+
+def _schedule_auto_finalize_at(
+    hass: HomeAssistant, sensor: ChoreSensor, completed_at: datetime
+) -> None:
+    """
+    (Re)schedule `sensor`'s auto-finalize timer to fire relative to `completed_at`.
+
+    Takes the completion time explicitly (rather than always "now") so the
+    same scheduling logic can both start a fresh timer on completion and
+    catch a timer up to where it should already be after a restart or a
+    missed timer - see async_catch_up_auto_finalize. No-ops if auto-finalize
+    is disabled in settings.
+    """
+    settings = _get_settings(hass)
+    _cancel_auto_finalize_timer(hass, sensor)
     if not settings.auto_finalize_enabled:
         return
-    delay_seconds = settings.auto_finalize_delay_minutes * 60
+
+    fire_at = completed_at + timedelta(minutes=settings.auto_finalize_delay_minutes)
+    delay_seconds = max((fire_at - datetime.now(UTC)).total_seconds(), 0)
 
     async def _finalize(_now: datetime) -> None:
         _auto_finalize_unsubs(hass).pop(sensor.entity_id, None)
         if sensor.get_state() != ChoreState.COMPLETE.value:
-            # Already changed by something else (manual reset, start_new_day,
-            # deletion, ...) - nothing left to finalize.
+            # Already changed by something else - nothing left to finalize.
             return
-
-        sensor.set_state(ChoreState.NOT_REQUESTED.value)
-        await sensor.async_update_ha_state(force_refresh=True)
-        LOGGER.info(
-            "Auto-finalized %s's completed chore '%s' after %d minute(s)",
-            sensor.assignee,
-            sensor.chore.name,
-            settings.auto_finalize_delay_minutes,
-        )
-        await _update_summary_sensors(hass, sensor.assignee)
-        await _update_privilege_sensors_from_chores(hass, sensor.assignee)
+        await _finalize_sensor(hass, sensor)
 
     # cancel_on_shutdown so Home Assistant (and the test harness) can drop
-    # this job on shutdown instead of treating it as a leaked timer - if HA
-    # restarts before it fires, the chore just stays Complete until it's
-    # touched again, which is no worse than losing an in-memory timer.
+    # this job on shutdown instead of treating it as a leaked timer. Losing
+    # the in-memory timer on restart is fine - the completed-at timestamp
+    # this was scheduled from is persisted, so async_catch_up_auto_finalize
+    # reschedules (or immediately finalizes) it once HA comes back up.
     job = HassJob(_finalize, "simple_chores auto-finalize", cancel_on_shutdown=True)
     _auto_finalize_unsubs(hass)[sensor.entity_id] = async_call_later(
         hass, delay_seconds, job
     )
+
+
+async def _record_completion_and_schedule(
+    hass: HomeAssistant, sensor: ChoreSensor
+) -> None:
+    """
+    Record that `sensor` just became Complete, and schedule its auto-finalize.
+
+    The completion timestamp is persisted (see PointsStorage.set_chore_completed_at)
+    before scheduling, so it survives a restart even if the in-memory timer
+    doesn't - see async_catch_up_auto_finalize.
+    """
+    now = datetime.now(UTC)
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    if points_storage:
+        await points_storage.set_chore_completed_at(sensor.entity_id, now)
+    _schedule_auto_finalize_at(hass, sensor, now)
+
+
+async def async_catch_up_auto_finalize(hass: HomeAssistant) -> None:
+    """
+    Reconcile every currently-Complete chore against its tracked completion time.
+
+    Called once at integration startup, and again whenever auto-finalize is
+    turned back on via update_settings. A chore whose delay has already
+    elapsed - because HA was restarted or simply down while its timer
+    should have fired - is finalized immediately. One that still has time
+    left gets a fresh timer for the remaining duration. A Complete chore
+    with no tracked completion time (e.g. it was already Complete before
+    this feature existed) is left alone - there's no way to know when it
+    was completed, so nothing is scheduled for it until it's re-completed.
+    """
+    settings = _get_settings(hass)
+    if not settings.auto_finalize_enabled:
+        return
+
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    if not points_storage:
+        return
+
+    finalized_now = 0
+    rescheduled = 0
+    for sensor in sensors.values():
+        if sensor.get_state() != ChoreState.COMPLETE.value:
+            continue
+        completed_at = points_storage.get_chore_completed_at(sensor.entity_id)
+        if completed_at is None:
+            continue
+
+        fire_at = completed_at + timedelta(minutes=settings.auto_finalize_delay_minutes)
+        if fire_at <= datetime.now(UTC):
+            await _finalize_sensor(hass, sensor)
+            finalized_now += 1
+        else:
+            _schedule_auto_finalize_at(hass, sensor, completed_at)
+            rescheduled += 1
+
+    if finalized_now or rescheduled:
+        LOGGER.info(
+            "Auto-finalize catch-up: finalized %d overdue chore(s), "
+            "rescheduled %d for later",
+            finalized_now,
+            rescheduled,
+        )
 
 
 CREATE_CHORE_SCHEMA = vol.Schema(
@@ -452,9 +553,10 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
         )
 
         # Newly completed (not just re-marking an already-complete chore) -
-        # auto-finalize it in an hour so it doesn't linger on the display.
+        # track it and schedule its auto-finalize so it doesn't linger on
+        # the display.
         if not was_complete:
-            _schedule_auto_finalize(hass, sensor)
+            await _record_completion_and_schedule(hass, sensor)
 
         # Award points for newly completed chore
         if not was_complete and points_storage:
@@ -546,7 +648,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
 
         # No longer complete - cancel any pending auto-finalize for it.
         if was_complete:
-            _cancel_auto_finalize(hass, sensor)
+            await _clear_completion_tracking(hass, sensor)
 
         # Deduct points for un-completing a chore
         if was_complete and points_storage:
@@ -623,7 +725,7 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
         sensor.set_state(ChoreState.NOT_REQUESTED.value)
         state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
         affected_users.add(sensor.assignee)
-        _cancel_auto_finalize(hass, sensor)
+        await _clear_completion_tracking(hass, sensor)
 
         # Audit log: chore marked not requested
         LOGGER.info(
@@ -651,6 +753,65 @@ async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> N
     if affected_users:
         for affected_user in affected_users:
             await _update_summary_sensors(hass, affected_user)
+
+
+async def handle_finalize_one(hass: HomeAssistant, call: ServiceCall) -> None:
+    """
+    Handle the finalize_one service call.
+
+    Immediately finalizes one chore (optionally scoped to one assignee) that
+    is currently Complete - the same reset the auto-finalize timer performs,
+    triggered on demand instead of waiting out the delay. Lets the admin
+    panel offer a "Finalize" action per completed chore. Sensors that
+    aren't currently Complete are silently left alone, same as
+    reset_completed tolerates chores with nothing to reset.
+    """
+    user = call.data.get(ATTR_USER)
+    chore_slug = call.data[ATTR_CHORE_SLUG]
+
+    LOGGER.info(
+        "Service 'finalize_one' called with user='%s', chore_slug='%s'",
+        user or "all assignees",
+        chore_slug,
+    )
+
+    _validate_integration_loaded(hass)
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
+
+    if not matching_sensors:
+        if user:
+            msg = (
+                f"No sensor found for user '{user}' and chore '{chore_slug}'. "
+                f"Available sensors: {list(sensors.keys())}"
+            )
+        else:
+            msg = f"No sensors found for chore '{chore_slug}'"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    completed_sensors = [
+        sensor
+        for sensor in matching_sensors
+        if sensor.get_state() == ChoreState.COMPLETE.value
+    ]
+    if not completed_sensors:
+        LOGGER.info(
+            "finalize_one: chore '%s' (user=%s) has nothing Complete to finalize",
+            chore_slug,
+            user or "all assignees",
+        )
+        return
+
+    for sensor in completed_sensors:
+        await _finalize_sensor(hass, sensor)
+
+    LOGGER.info(
+        "Finalized %d completed sensor(s) for chore '%s' (user=%s)",
+        len(completed_sensors),
+        chore_slug,
+        user or "all assignees",
+    )
 
 
 async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -685,7 +846,7 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
             state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
             affected_users.add(sensor.assignee)
             reset_count += 1
-            _cancel_auto_finalize(hass, sensor)
+            await _clear_completion_tracking(hass, sensor)
 
             # Audit log: chore reset
             LOGGER.info(
@@ -795,7 +956,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         if sensor.get_state() == ChoreState.COMPLETE.value:
             chore_frequency = sensor.chore.frequency
             affected_users.add(sensor.assignee)
-            _cancel_auto_finalize(hass, sensor)
+            await _clear_completion_tracking(hass, sensor)
 
             if chore_frequency == ChoreFrequency.ONCE:
                 # Mark once chore for deletion
@@ -1064,9 +1225,9 @@ async def _set_chore_sensors_state_by_category(
         )
 
         if new_state == ChoreState.COMPLETE and not was_complete:
-            _schedule_auto_finalize(hass, sensor)
+            await _record_completion_and_schedule(hass, sensor)
         elif was_complete and new_state != ChoreState.COMPLETE:
-            _cancel_auto_finalize(hass, sensor)
+            await _clear_completion_tracking(hass, sensor)
 
         chore_points = sensor.chore.points
         if points_storage and new_state == ChoreState.COMPLETE and not was_complete:
@@ -1256,7 +1417,7 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
     for sensor in sensors_to_reset:
         sensor.set_state(ChoreState.NOT_REQUESTED.value)
         update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
-        _cancel_auto_finalize(hass, sensor)
+        await _clear_completion_tracking(hass, sensor)
 
         # Audit log: chore reset by finalize_by_category
         LOGGER.info(
@@ -1372,10 +1533,14 @@ async def handle_update_settings(hass: HomeAssistant, call: ServiceCall) -> None
         LOGGER.error(msg)
         raise ServiceValidationError(msg) from err
 
-    # Turning auto-finalize off shouldn't leave chores completed under the
-    # old setting scheduled to finalize anyway.
-    if auto_finalize_enabled is False:  # distinguish from "not provided" (None)
-        _cancel_all_auto_finalize(hass)
+    # Reconcile every pending/tracked completion against the new settings:
+    # disabling cancels timers outright (their tracked completed_at is left
+    # alone in case it's re-enabled later); anything else re-derives each
+    # timer from the (possibly changed) delay, same as a fresh startup catch-up.
+    if config_loader.get_settings().auto_finalize_enabled:
+        await async_catch_up_auto_finalize(hass)
+    else:
+        _cancel_all_auto_finalize_timers(hass)
 
     LOGGER.info("Updated settings")
 
@@ -2002,6 +2167,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN,
         SERVICE_MARK_NOT_REQUESTED,
         partial(handle_mark_not_requested, hass),
+        schema=SERVICE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_FINALIZE_ONE,
+        partial(handle_finalize_one, hass),
         schema=SERVICE_SCHEMA,
     )
     hass.services.async_register(

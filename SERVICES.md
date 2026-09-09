@@ -11,31 +11,35 @@ Service actions have been implemented to allow external automation and scripts t
 1. `simple_chores.mark_complete` - Mark a chore as complete for a specific user or all assignees (awards points immediately)
 2. `simple_chores.mark_pending` - Mark a chore as pending for a specific user or all assignees (deducts points if chore was previously complete)
 3. `simple_chores.mark_not_requested` - Mark a chore as not requested for a specific user or all assignees
-4. `simple_chores.reset_completed` - Reset all completed chores to not requested (optionally for a specific user)
-5. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, daily chores to pending, once chores are deleted entirely (calculates missed points for pending chores)
-6. `simple_chores.create_chore` - Dynamically create a new chore at runtime
-7. `simple_chores.update_chore` - Update an existing chore's properties (including points)
-8. `simple_chores.delete_chore` - Delete a chore
-9. `simple_chores.refresh_summary` - Force refresh of summary sensor attributes
-10. `simple_chores.adjust_points` - Manually adjust an assignee's earned points by a specified amount (positive or negative)
-11. `simple_chores.reset_points` - Reset points tracking (daily stats and/or total points)
+4. `simple_chores.finalize_one` - Immediately finalize one completed chore (the same reset auto-finalize performs, on demand); chores that aren't currently complete are left alone
+5. `simple_chores.reset_completed` - Reset all completed chores to not requested (optionally for a specific user)
+6. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, daily chores to pending, once chores are deleted entirely (calculates missed points for pending chores)
+7. `simple_chores.create_chore` - Dynamically create a new chore at runtime
+8. `simple_chores.update_chore` - Update an existing chore's properties (including points)
+9. `simple_chores.delete_chore` - Delete a chore
+10. `simple_chores.refresh_summary` - Force refresh of summary sensor attributes
+11. `simple_chores.adjust_points` - Manually adjust an assignee's earned points by a specified amount (positive or negative)
+12. `simple_chores.reset_points` - Reset points tracking (daily stats and/or total points)
 
 ### Privilege Services
 
-12. `simple_chores.enable_privilege` - Enable a privilege for a user or all assignees
-13. `simple_chores.disable_privilege` - Disable a privilege for a user or all assignees
-14. `simple_chores.temporarily_disable_privilege` - Temporarily disable a privilege for a specified duration
-15. `simple_chores.adjust_temporary_disable` - Adjust the duration of a temporary disable
-16. `simple_chores.create_privilege` - Dynamically create a new privilege at runtime
-17. `simple_chores.update_privilege` - Update an existing privilege's properties
-18. `simple_chores.delete_privilege` - Delete a privilege
+13. `simple_chores.enable_privilege` - Enable a privilege for a user or all assignees
+14. `simple_chores.disable_privilege` - Disable a privilege for a user or all assignees
+15. `simple_chores.temporarily_disable_privilege` - Temporarily disable a privilege for a specified duration
+16. `simple_chores.adjust_temporary_disable` - Adjust the duration of a temporary disable
+17. `simple_chores.create_privilege` - Dynamically create a new privilege at runtime
+18. `simple_chores.update_privilege` - Update an existing privilege's properties
+19. `simple_chores.delete_privilege` - Delete a privilege
 
 ## Service Parameters
 
-### mark_complete, mark_pending, mark_not_requested
+### mark_complete, mark_pending, mark_not_requested, finalize_one
 
 - `user` (optional, string): The assignee/user for the chore. If not provided, applies to all assignees of the chore.
 - `chore_slug` (required, string): The slug identifier for the chore
+
+`finalize_one` only acts on sensors that are currently Complete; it's a no-op
+(not an error) for any that aren't.
 
 ### reset_completed, start_new_day
 
