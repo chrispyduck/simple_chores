@@ -136,8 +136,9 @@ class TestChoreSensorManager:
         assert "alice" in manager.summary_sensors
         assert "bob" in manager.summary_sensors
 
-        # Should add entities twice (once for chore sensors, once for summary sensors)
-        assert async_add_entities.call_count == 2
+        # Should add entities 3 times: chore sensors, summary sensors, and the
+        # singleton settings sensor
+        assert async_add_entities.call_count == 3
 
     @pytest.mark.asyncio
     async def test_async_setup_multiple_assignees(
@@ -226,12 +227,15 @@ class TestChoreSensorManager:
         assert "alice" in manager.summary_sensors
         assert "bob" in manager.summary_sensors
 
-        # async_add_entities called 4 times:
+        # async_add_entities called 5 times:
         # 1. Initial chore sensors (1)
         # 2. Initial summary sensors (1)
-        # 3. New chore sensor (1)
-        # 4. New summary sensor (1)
-        assert async_add_entities.call_count == 4
+        # 3. Initial settings sensor (1)
+        # 4. New chore sensor (1)
+        # 5. New summary sensor (1)
+        # (the settings sensor is only added once - config changes update it
+        # in place rather than re-adding it)
+        assert async_add_entities.call_count == 5
 
     @pytest.mark.asyncio
     @patch.object(ChoreSensor, "async_write_ha_state", Mock())

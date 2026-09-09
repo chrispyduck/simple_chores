@@ -11,14 +11,17 @@ import {
   DEFAULT_CATEGORY_ICON,
   DEFAULT_CHORE_ICON,
   DEFAULT_PRIVILEGE_ICON,
+  HaUserInfo,
   HomeAssistant,
   PrivilegeBehavior,
   PrivilegeDefinition,
   PrivilegeDraft,
   PRIVILEGE_BEHAVIORS,
+  SettingsDefinition,
   UNCATEGORIZED,
   categoryToDraft,
   choreToDraft,
+  displayName,
   emptyCategoryDraft,
   emptyChoreDraft,
   emptyPrivilegeDraft,
@@ -26,8 +29,10 @@ import {
   parseCategories,
   parseChores,
   parsePrivileges,
+  parseSettings,
   privilegeToDraft,
   sanitizeSlug,
+  userDisplayNameMap,
 } from "./types";
 
 const SERVICE_DOMAIN = "simple_chores";
@@ -37,12 +42,18 @@ const SERVICE_DOMAIN = "simple_chores";
 // "no filter, show every chore" in the filter dropdown.
 const UNCATEGORIZED_FILTER = "__uncategorized__";
 
-type Tab = "chores" | "privileges" | "categories";
+type Tab = "chores" | "privileges" | "categories" | "settings";
 
 interface DialogState {
   kind: "chore" | "privilege" | "category";
   original?: string; // slug being edited; undefined when creating
   draft: ChoreDraft | PrivilegeDraft | CategoryDraft;
+}
+
+/** Local editable copy of SettingsDefinition, backing the Settings tab. */
+interface SettingsDraft {
+  autoFinalizeEnabled: boolean;
+  autoFinalizeDelayMinutes: number;
 }
 
 /**
@@ -69,6 +80,9 @@ export class SimpleChoresPanel extends LitElement {
   @state() private _error: string | null = null;
   @state() private _bulkUser = "";
   @state() private _categoryFilter = "";
+  @state() private _userDisplayNames: Record<string, string> = {};
+  @state() private _settingsDraft: SettingsDraft | null = null;
+  private _loadedUserDisplayNames = false;
 
   protected updated(changed: PropertyValues): void {
     if (changed.has("hass") && !this.hass?.user?.is_admin) {
@@ -77,6 +91,31 @@ export class SimpleChoresPanel extends LitElement {
       this._error =
         "You must be an administrator to manage chores and privileges.";
     }
+    if (this.hass && !this._loadedUserDisplayNames) {
+      this._loadedUserDisplayNames = true;
+      this._loadUserDisplayNames();
+    }
+  }
+
+  /**
+   * Fetch every HA user's display name, keyed by their lowercased login
+   * username, so assignees (stored as usernames - see README) can be shown
+   * as people's actual names. Best-effort: falls back to raw usernames
+   * everywhere if this fails, rather than blocking the panel on it.
+   */
+  private async _loadUserDisplayNames(): Promise<void> {
+    try {
+      const users = await this.hass.callWS<HaUserInfo[]>({
+        type: "config/auth/list",
+      });
+      this._userDisplayNames = userDisplayNameMap(users);
+    } catch (err) {
+      console.warn("simple-chores-panel: failed to load user display names", err);
+    }
+  }
+
+  private _displayName(assignee: string): string {
+    return displayName(assignee, this._userDisplayNames);
   }
 
   render() {
@@ -85,6 +124,7 @@ export class SimpleChoresPanel extends LitElement {
     const chores = parseChores(this.hass.states);
     const privileges = parsePrivileges(this.hass.states);
     const categories = parseCategories(this.hass.states);
+    const settings = parseSettings(this.hass.states);
     const assignees = knownAssignees(chores, privileges);
 
     return html`
@@ -127,13 +167,21 @@ export class SimpleChoresPanel extends LitElement {
           >
             Categories
           </button>
+          <button
+            class="tab ${this._tab === "settings" ? "active" : ""}"
+            @click=${() => (this._tab = "settings")}
+          >
+            Settings
+          </button>
         </div>
 
         ${this._tab === "chores"
           ? this._renderChoresTab(chores, categories, assignees)
           : this._tab === "privileges"
             ? this._renderPrivilegesTab(privileges, chores, assignees)
-            : this._renderCategoriesTab(categories, assignees)}
+            : this._tab === "categories"
+              ? this._renderCategoriesTab(categories, assignees)
+              : this._renderSettingsTab(settings)}
       </div>
 
       ${this._dialog ? this._renderDialog(chores, categories, assignees) : nothing}
@@ -148,10 +196,23 @@ export class SimpleChoresPanel extends LitElement {
     assignees: string[]
   ) {
     const filtered = chores.filter((chore) => {
-      if (!this._categoryFilter) return true;
-      if (this._categoryFilter === UNCATEGORIZED_FILTER) return !chore.category;
-      return chore.category === this._categoryFilter;
+      if (this._categoryFilter) {
+        if (this._categoryFilter === UNCATEGORIZED_FILTER) {
+          if (chore.category) return false;
+        } else if (chore.category !== this._categoryFilter) {
+          return false;
+        }
+      }
+      if (this._bulkUser && !chore.assignees.some((a) => a.assignee === this._bulkUser)) {
+        return false;
+      }
+      return true;
     });
+
+    // Only offer "Finalize by category" once a specific category is picked -
+    // it needs one to scope to, unlike Reset completed / Start new day.
+    const canFinalizeByCategory =
+      this._categoryFilter && this._categoryFilter !== UNCATEGORIZED_FILTER;
 
     return html`
       <div class="actions-row">
@@ -159,6 +220,17 @@ export class SimpleChoresPanel extends LitElement {
           <ha-icon icon="mdi:plus"></ha-icon> New chore
         </button>
         ${this._renderCategoryFilterPicker(categories)}
+        ${canFinalizeByCategory
+          ? html`
+              <button
+                title="Reset completed manual chores in this category to not requested, and count pending ones as missed"
+                @click=${() =>
+                  this._categoryAction(this._categoryFilter, "finalize_by_category")}
+              >
+                Finalize by category
+              </button>
+            `
+          : nothing}
         <div class="spacer"></div>
         ${this._renderBulkUserPicker(assignees)}
         <button @click=${() => this._resetCompleted()}>Reset completed</button>
@@ -169,7 +241,7 @@ export class SimpleChoresPanel extends LitElement {
         ? html`<p class="empty">
             ${chores.length === 0
               ? "No chores yet. Create one to get started."
-              : "No chores in this category."}
+              : "No chores match the current filters."}
           </p>`
         : html`<div class="card-grid">
             ${filtered.map((chore) => this._renderChoreCard(chore, categories))}
@@ -199,14 +271,14 @@ export class SimpleChoresPanel extends LitElement {
     return html`
       <select
         class="user-picker"
-        title="Limit Reset completed / Start new day to one assignee"
+        title="Filter the chores shown below, and limit Reset completed / Start new day, to one assignee"
         .value=${this._bulkUser}
         @change=${(e: Event) =>
           (this._bulkUser = (e.target as HTMLSelectElement).value)}
       >
         <option value="">All assignees</option>
         ${assignees.map(
-          (a) => html`<option value=${a}>${a}</option>`
+          (a) => html`<option value=${a}>${this._displayName(a)}</option>`
         )}
       </select>
     `;
@@ -247,49 +319,51 @@ export class SimpleChoresPanel extends LitElement {
           </div>
         </div>
         <div class="assignee-list">
-          ${chore.assignees.map(
-            (a) => html`
-              <div class="assignee-row">
-                <span class="assignee-name">${a.assignee}</span>
-                <span class="state-chip ${this._choreStateClass(a.state)}"
-                  >${a.state}</span
-                >
-                <div class="row-actions">
-                  <button
-                    class="icon-button"
-                    title="Request"
-                    ?disabled=${a.state === "Pending"}
-                    @click=${() =>
-                      this._markChore(chore.slug, a.assignee, "mark_pending")}
+          ${chore.assignees
+            .filter((a) => !this._bulkUser || a.assignee === this._bulkUser)
+            .map(
+              (a) => html`
+                <div class="assignee-row">
+                  <span class="assignee-name">${this._displayName(a.assignee)}</span>
+                  <span class="state-chip ${this._choreStateClass(a.state)}"
+                    >${a.state}</span
                   >
-                    <ha-icon icon="mdi:plus-circle-outline"></ha-icon>
-                  </button>
-                  <button
-                    class="icon-button"
-                    title="Complete"
-                    ?disabled=${a.state === "Complete"}
-                    @click=${() =>
-                      this._markChore(chore.slug, a.assignee, "mark_complete")}
-                  >
-                    <ha-icon icon="mdi:check-circle-outline"></ha-icon>
-                  </button>
-                  <button
-                    class="icon-button"
-                    title="Clear"
-                    ?disabled=${a.state === "Not Requested"}
-                    @click=${() =>
-                      this._markChore(
-                        chore.slug,
-                        a.assignee,
-                        "mark_not_requested"
-                      )}
-                  >
-                    <ha-icon icon="mdi:close-circle-outline"></ha-icon>
-                  </button>
+                  <div class="row-actions">
+                    <button
+                      class="icon-button"
+                      title="Request"
+                      ?disabled=${a.state === "Pending"}
+                      @click=${() =>
+                        this._markChore(chore.slug, a.assignee, "mark_pending")}
+                    >
+                      <ha-icon icon="mdi:plus-circle-outline"></ha-icon>
+                    </button>
+                    <button
+                      class="icon-button"
+                      title="Complete"
+                      ?disabled=${a.state === "Complete"}
+                      @click=${() =>
+                        this._markChore(chore.slug, a.assignee, "mark_complete")}
+                    >
+                      <ha-icon icon="mdi:check-circle-outline"></ha-icon>
+                    </button>
+                    <button
+                      class="icon-button"
+                      title="Clear"
+                      ?disabled=${a.state === "Not Requested"}
+                      @click=${() =>
+                        this._markChore(
+                          chore.slug,
+                          a.assignee,
+                          "mark_not_requested"
+                        )}
+                    >
+                      <ha-icon icon="mdi:close-circle-outline"></ha-icon>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            `
-          )}
+              `
+            )}
         </div>
       </div>
     `;
@@ -368,7 +442,7 @@ export class SimpleChoresPanel extends LitElement {
             return html`
               <div class="assignee-row privilege-row">
                 <div class="assignee-main">
-                  <span class="assignee-name">${a.assignee}</span>
+                  <span class="assignee-name">${this._displayName(a.assignee)}</span>
                   <span class="state-chip ${this._privilegeStateClass(a.state)}">
                     ${a.state}${isTemp && a.disableUntil
                       ? html` (${this._formatUntil(a.disableUntil)})`
@@ -479,8 +553,11 @@ export class SimpleChoresPanel extends LitElement {
 
   private _privilegeStateClass(state: string): string {
     if (state === "Enabled") return "state-good";
-    if (state === "Temporarily Disabled") return "state-warn";
-    return "state-bad";
+    // Temporarily Disabled (an admin actively blocked it) is the more
+    // severe state, so it gets red; plain Disabled (requirements not met
+    // yet, or a manual privilege simply switched off) gets orange/yellow.
+    if (state === "Temporarily Disabled") return "state-bad";
+    return "state-warn";
   }
 
   private _formatUntil(iso: string): string {
@@ -573,9 +650,94 @@ export class SimpleChoresPanel extends LitElement {
             <ha-icon icon="mdi:close-circle-outline"></ha-icon>
             <span>Clear</span>
           </button>
+          <button
+            class="action-chip"
+            title="Reset completed manual chores in this category to not requested, and count pending ones as missed"
+            @click=${() => this._categoryAction(category.slug, "finalize_by_category")}
+          >
+            <ha-icon icon="mdi:flag-checkered"></ha-icon>
+            <span>Finalize</span>
+          </button>
         </div>
       </div>
     `;
+  }
+
+  // --- Settings tab ------------------------------------------------------
+
+  private _renderSettingsTab(settings: SettingsDefinition) {
+    // Lazily seed the editable draft from the live sensor the first time
+    // this tab is rendered (or after a save clears it back to null), so
+    // in-progress edits aren't clobbered by unrelated hass state updates.
+    if (!this._settingsDraft) {
+      this._settingsDraft = {
+        autoFinalizeEnabled: settings.autoFinalizeEnabled,
+        autoFinalizeDelayMinutes: settings.autoFinalizeDelayMinutes,
+      };
+    }
+    const draft = this._settingsDraft;
+
+    return html`
+      <div class="settings-section">
+        <h3>Auto-finalize</h3>
+        <p class="hint">
+          A chore left Complete is automatically reset to Not Requested after
+          the delay below, so completed chores don't keep piling up on the
+          Chores tab and dashboards throughout the day. Points were already
+          awarded when the chore was completed, so this never changes them.
+        </p>
+
+        <label class="checkbox-item settings-toggle">
+          <input
+            type="checkbox"
+            .checked=${draft.autoFinalizeEnabled}
+            @change=${(e: Event) => {
+              draft.autoFinalizeEnabled = (e.target as HTMLInputElement).checked;
+              this.requestUpdate();
+            }}
+          />
+          Enable auto-finalize
+        </label>
+
+        <label>
+          Delay (minutes)
+          <input
+            type="number"
+            min="1"
+            ?disabled=${!draft.autoFinalizeEnabled}
+            .value=${String(draft.autoFinalizeDelayMinutes)}
+            @input=${(e: Event) => {
+              draft.autoFinalizeDelayMinutes =
+                Number((e.target as HTMLInputElement).value) || 1;
+              this.requestUpdate();
+            }}
+          />
+        </label>
+
+        <div class="actions-row">
+          <button
+            class="primary"
+            ?disabled=${this._busy}
+            @click=${() => this._saveSettings()}
+          >
+            Save
+          </button>
+          <button @click=${() => (this._settingsDraft = null)}>Reset</button>
+        </div>
+      </div>
+    `;
+  }
+
+  private async _saveSettings() {
+    const draft = this._settingsDraft;
+    if (!draft) return;
+
+    const ok = await this._call(SERVICE_DOMAIN, "update_settings", {
+      auto_finalize_enabled: draft.autoFinalizeEnabled,
+      auto_finalize_delay_minutes: draft.autoFinalizeDelayMinutes,
+    });
+
+    if (ok) this._settingsDraft = null;
   }
 
   // --- Dialog ------------------------------------------------------------
@@ -634,9 +796,9 @@ export class SimpleChoresPanel extends LitElement {
   private _renderChoreForm(categories: CategoryDefinition[], assignees: string[]) {
     const draft = this._dialog!.draft as ChoreDraft;
     const editing = Boolean(this._dialog!.original);
-    const previewSlug = editing
-      ? draft.slug
-      : sanitizeSlug(draft.slug || draft.name);
+    const previewSlug = sanitizeSlug(draft.slug || draft.name);
+    const willRename =
+      editing && previewSlug && previewSlug !== this._dialog!.original;
 
     return html`
       <label>
@@ -657,15 +819,16 @@ export class SimpleChoresPanel extends LitElement {
           type="text"
           .value=${draft.slug}
           placeholder=${previewSlug || "auto-generated from name"}
-          ?disabled=${editing}
           @input=${(e: Event) => {
             draft.slug = (e.target as HTMLInputElement).value;
             this.requestUpdate();
           }}
         />
-        ${editing
-          ? nothing
-          : html`<span class="hint">Will be saved as "${previewSlug}"</span>`}
+        ${willRename
+          ? html`<span class="hint">Will be renamed to "${previewSlug}"</span>`
+          : editing
+            ? nothing
+            : html`<span class="hint">Will be saved as "${previewSlug}"</span>`}
       </label>
 
       <label>
@@ -739,9 +902,9 @@ export class SimpleChoresPanel extends LitElement {
   private _renderPrivilegeForm(chores: ChoreDefinition[], assignees: string[]) {
     const draft = this._dialog!.draft as PrivilegeDraft;
     const editing = Boolean(this._dialog!.original);
-    const previewSlug = editing
-      ? draft.slug
-      : sanitizeSlug(draft.slug || draft.name);
+    const previewSlug = sanitizeSlug(draft.slug || draft.name);
+    const willRename =
+      editing && previewSlug && previewSlug !== this._dialog!.original;
 
     return html`
       <label>
@@ -762,15 +925,16 @@ export class SimpleChoresPanel extends LitElement {
           type="text"
           .value=${draft.slug}
           placeholder=${previewSlug || "auto-generated from name"}
-          ?disabled=${editing}
           @input=${(e: Event) => {
             draft.slug = (e.target as HTMLInputElement).value;
             this.requestUpdate();
           }}
         />
-        ${editing
-          ? nothing
-          : html`<span class="hint">Will be saved as "${previewSlug}"</span>`}
+        ${willRename
+          ? html`<span class="hint">Will be renamed to "${previewSlug}"</span>`
+          : editing
+            ? nothing
+            : html`<span class="hint">Will be saved as "${previewSlug}"</span>`}
       </label>
 
       <label>
@@ -835,9 +999,9 @@ export class SimpleChoresPanel extends LitElement {
   private _renderCategoryForm() {
     const draft = this._dialog!.draft as CategoryDraft;
     const editing = Boolean(this._dialog!.original);
-    const previewSlug = editing
-      ? draft.slug
-      : sanitizeSlug(draft.slug || draft.name);
+    const previewSlug = sanitizeSlug(draft.slug || draft.name);
+    const willRename =
+      editing && previewSlug && previewSlug !== this._dialog!.original;
 
     return html`
       <label>
@@ -858,15 +1022,16 @@ export class SimpleChoresPanel extends LitElement {
           type="text"
           .value=${draft.slug}
           placeholder=${previewSlug || "auto-generated from name"}
-          ?disabled=${editing}
           @input=${(e: Event) => {
             draft.slug = (e.target as HTMLInputElement).value;
             this.requestUpdate();
           }}
         />
-        ${editing
-          ? nothing
-          : html`<span class="hint">Will be saved as "${previewSlug}"</span>`}
+        ${willRename
+          ? html`<span class="hint">Will be renamed to "${previewSlug}"</span>`
+          : editing
+            ? nothing
+            : html`<span class="hint">Will be saved as "${previewSlug}"</span>`}
       </label>
 
       ${this._renderIconField(draft.icon, DEFAULT_CATEGORY_ICON, (icon) => {
@@ -908,7 +1073,7 @@ export class SimpleChoresPanel extends LitElement {
           ${draft.assignees.map(
             (name) => html`
               <span class="chip">
-                ${name}
+                ${this._displayName(name)}
                 <button
                   class="chip-remove"
                   @click=${() => {
@@ -932,7 +1097,9 @@ export class SimpleChoresPanel extends LitElement {
         </div>
       </label>
       <datalist id="simple-chores-known-assignees">
-        ${suggestions.map((a) => html`<option value=${a}></option>`)}
+        ${suggestions.map(
+          (a) => html`<option value=${a} label=${this._displayName(a)}></option>`
+        )}
       </datalist>
     `;
   }
@@ -1007,6 +1174,20 @@ export class SimpleChoresPanel extends LitElement {
     };
   }
 
+  /**
+   * Build the `new_slug` field for an update_* service call, if the slug
+   * field was actually edited to something new - `{}` otherwise, so
+   * spreading this into the call data is a no-op when nothing changed.
+   */
+  private _renameField(
+    originalSlug: string,
+    slugFieldValue: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Record<string, any> {
+    const sanitized = sanitizeSlug(slugFieldValue);
+    return sanitized && sanitized !== originalSlug ? { new_slug: sanitized } : {};
+  }
+
   private async _call(
     domain: string,
     service: string,
@@ -1049,6 +1230,7 @@ export class SimpleChoresPanel extends LitElement {
       | "mark_complete_by_category"
       | "mark_pending_by_category"
       | "mark_not_requested_by_category"
+      | "finalize_by_category"
   ) {
     const data = {
       category_slug: categorySlug,
@@ -1058,7 +1240,7 @@ export class SimpleChoresPanel extends LitElement {
   }
 
   private async _deleteChore(chore: ChoreDefinition) {
-    const names = chore.assignees.map((a) => a.assignee).join(", ");
+    const names = chore.assignees.map((a) => this._displayName(a.assignee)).join(", ");
     if (
       !confirm(
         `Delete "${chore.name}"? This removes it for every assignee (${names}).`
@@ -1070,7 +1252,9 @@ export class SimpleChoresPanel extends LitElement {
   }
 
   private async _deletePrivilege(privilege: PrivilegeDefinition) {
-    const names = privilege.assignees.map((a) => a.assignee).join(", ");
+    const names = privilege.assignees
+      .map((a) => this._displayName(a.assignee))
+      .join(", ");
     if (
       !confirm(
         `Delete "${privilege.name}"? This removes it for every assignee (${names}).`
@@ -1166,6 +1350,7 @@ export class SimpleChoresPanel extends LitElement {
           icon: draft.icon || DEFAULT_CHORE_ICON,
           points: draft.points,
           category: draft.category,
+          ...this._renameField(dialog.original, draft.slug || draft.name),
         })
       : await this._call(SERVICE_DOMAIN, "create_chore", {
           name: draft.name,
@@ -1195,6 +1380,7 @@ export class SimpleChoresPanel extends LitElement {
           slug: dialog.original,
           name: draft.name,
           icon: draft.icon || DEFAULT_CATEGORY_ICON,
+          ...this._renameField(dialog.original, draft.slug || draft.name),
         })
       : await this._call(SERVICE_DOMAIN, "create_category", {
           name: draft.name,
@@ -1228,6 +1414,7 @@ export class SimpleChoresPanel extends LitElement {
           behavior: draft.behavior,
           linked_chores: linkedChores,
           assignees,
+          ...this._renameField(dialog.original, draft.slug || draft.name),
         })
       : await this._call(SERVICE_DOMAIN, "create_privilege", {
           name: draft.name,
@@ -1685,6 +1872,26 @@ export class SimpleChoresPanel extends LitElement {
       gap: 8px;
       font-size: 14px;
       color: var(--primary-text-color, #212121);
+    }
+
+    .settings-section {
+      background: var(--card-background-color, #fff);
+      border-radius: 12px;
+      box-shadow: var(--ha-card-box-shadow, 0 2px 4px rgba(0, 0, 0, 0.1));
+      padding: 16px;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .settings-section h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--primary-text-color, #212121);
+    }
+    .settings-toggle {
+      font-size: 14px;
     }
 
     .chip-list {

@@ -1,5 +1,6 @@
 """Constants for simple_chores."""
 
+import re
 from logging import Logger, getLogger
 
 LOGGER: Logger = getLogger(__package__)
@@ -44,6 +45,9 @@ SERVICE_CREATE_CATEGORY = "create_category"
 SERVICE_UPDATE_CATEGORY = "update_category"
 SERVICE_DELETE_CATEGORY = "delete_category"
 
+# Settings service
+SERVICE_UPDATE_SETTINGS = "update_settings"
+
 # Privilege Services
 SERVICE_ENABLE_PRIVILEGE = "enable_privilege"
 SERVICE_DISABLE_PRIVILEGE = "disable_privilege"
@@ -68,6 +72,11 @@ ATTR_ADJUSTMENT = "adjustment"
 ATTR_RESET_TOTAL = "reset_total"
 ATTR_CATEGORY = "category"
 ATTR_CATEGORY_SLUG = "category_slug"
+ATTR_NEW_SLUG = "new_slug"
+
+# Settings service parameters
+ATTR_AUTO_FINALIZE_ENABLED = "auto_finalize_enabled"
+ATTR_AUTO_FINALIZE_DELAY_MINUTES = "auto_finalize_delay_minutes"
 
 # Privilege service parameters
 ATTR_PRIVILEGE_SLUG = "privilege_slug"
@@ -85,13 +94,21 @@ PANEL_NAME = "simple-chores-panel"
 PANEL_TITLE = "Chores"
 PANEL_ICON = "mdi:clipboard-check-outline"
 
+# Singleton entity publishing integration-wide settings (see SettingsConfig
+# in models.py) for the admin panel to read - lives under the same
+# `..._meta_` prefix as the per-assignee summary sensors so it's already
+# excluded by the frontend's chore-sensor scan.
+SETTINGS_ENTITY_ID = "sensor.simple_chore_meta_settings"
+
 
 def sanitize_entity_id(value: str) -> str:
     """
     Sanitize a string for use in entity IDs.
 
-    Converts hyphens to underscores and removes any characters
-    that are not alphanumeric or underscores.
+    Converts hyphens to underscores, removes any characters that are not
+    alphanumeric or underscores, and collapses runs of consecutive
+    underscores (e.g. from a name with several separators in a row) into a
+    single one.
 
     Args:
         value: String to sanitize
@@ -105,4 +122,6 @@ def sanitize_entity_id(value: str) -> str:
     # Replace hyphens with underscores
     value = value.replace("-", "_")
     # Keep only alphanumeric and underscores
-    return "".join(c for c in value if c.isalnum() or c == "_")
+    value = "".join(c for c in value if c.isalnum() or c == "_")
+    # Collapse double (or longer) underscores into one
+    return re.sub(r"_+", "_", value)

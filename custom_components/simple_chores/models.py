@@ -172,6 +172,32 @@ class PrivilegeConfig(BaseModel):
     model_config = {"frozen": False, "extra": "forbid"}
 
 
+class SettingsConfig(BaseModel):
+    """
+    Integration-wide behavior settings.
+
+    Unlike chores/privileges/categories, these aren't items an admin creates
+    multiple of - there's exactly one settings object, tuning how the
+    integration behaves overall.
+    """
+
+    auto_finalize_enabled: bool = Field(
+        default=True,
+        description=(
+            "Whether a chore left Complete is automatically reset to Not "
+            "Requested after auto_finalize_delay_minutes, so completed "
+            "chores don't linger on the pending/complete display."
+        ),
+    )
+    auto_finalize_delay_minutes: int = Field(
+        default=60,
+        description="Minutes a chore stays Complete before auto-finalizing.",
+        ge=1,
+    )
+
+    model_config = {"frozen": False, "extra": "forbid"}
+
+
 class SimpleChoresConfig(BaseModel):
     """Root configuration for simple_chores integration."""
 
@@ -183,6 +209,9 @@ class SimpleChoresConfig(BaseModel):
     )
     categories: list[CategoryConfig] = Field(
         default_factory=list, description="List of chore categories"
+    )
+    settings: SettingsConfig = Field(
+        default_factory=SettingsConfig, description="Integration-wide settings"
     )
 
     @field_validator("chores")

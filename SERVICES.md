@@ -85,6 +85,19 @@ Service actions have been implemented to allow external automation and scripts t
 - `behavior` (optional, string): New behavior mode
 - `linked_chores` (optional, string): New linked chores (comma-separated)
 - `assignees` (optional, string): New assignees (comma-separated)
+- `new_slug` (optional, string): Rename the privilege to this slug
+
+`update_chore` and `update_category` accept the same `new_slug` parameter to
+rename a chore or category; renaming a chore also updates any privilege
+that links to it, and renaming a category updates every chore assigned to
+it.
+
+### update_settings
+
+- `auto_finalize_enabled` (optional, boolean): Whether a completed chore
+  automatically resets to Not Requested after `auto_finalize_delay_minutes`
+- `auto_finalize_delay_minutes` (optional, integer, >= 1): Minutes a chore
+  stays Complete before auto-finalizing
 
 ### delete_privilege
 

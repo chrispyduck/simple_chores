@@ -11,7 +11,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, LOGGER, sanitize_entity_id
+from .const import DOMAIN, LOGGER, SETTINGS_ENTITY_ID, sanitize_entity_id
 from .data import PointsStorage
 from .models import (
     CategoryConfig,
@@ -20,6 +20,7 @@ from .models import (
     PrivilegeBehavior,
     PrivilegeConfig,
     PrivilegeState,
+    SettingsConfig,
     SimpleChoresConfig,
 )
 
@@ -34,6 +35,23 @@ if TYPE_CHECKING:
 # We manage our own parallelism using asyncio.gather() in services.py
 # Our async_update() is empty, so there's no I/O to limit
 PARALLEL_UPDATES = 0
+
+
+def _cancel_auto_finalize_timer(hass: HomeAssistant, entity_id: str) -> None:
+    """
+    Cancel a chore sensor's pending auto-finalize timer, if any.
+
+    services.py schedules these (see `_schedule_auto_finalize` there) when a
+    chore is marked complete, keyed by entity_id in
+    hass.data[DOMAIN]["auto_finalize_unsubs"]. A sensor being removed here
+    (chore deleted, or unassigned from it) should never fire that timer.
+    """
+    unsubs = hass.data.get(DOMAIN, {}).get("auto_finalize_unsubs")
+    if not unsubs:
+        return
+    unsub = unsubs.pop(entity_id, None)
+    if unsub:
+        unsub()
 
 
 async def async_setup_entry(
@@ -65,6 +83,7 @@ async def async_setup_entry(
     hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
     hass.data[DOMAIN]["privilege_sensors"] = manager.privilege_sensors
     hass.data[DOMAIN]["category_sensors"] = manager.category_sensors
+    hass.data[DOMAIN]["settings_sensor"] = manager.settings_sensor
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
@@ -111,6 +130,7 @@ async def async_setup_platform(
     hass.data[DOMAIN]["summary_sensors"] = manager.summary_sensors
     hass.data[DOMAIN]["privilege_sensors"] = manager.privilege_sensors
     hass.data[DOMAIN]["category_sensors"] = manager.category_sensors
+    hass.data[DOMAIN]["settings_sensor"] = manager.settings_sensor
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
@@ -151,6 +171,7 @@ class ChoreSensorManager:
         self.summary_sensors: dict[str, ChoreSummarySensor] = {}  # type: ignore[name-defined]
         self.privilege_sensors: dict[str, PrivilegeSensor] = {}  # type: ignore[name-defined]
         self.category_sensors: dict[str, CategorySensor] = {}  # type: ignore[name-defined]
+        self.settings_sensor: SettingsSensor | None = None
         self.points_storage = PointsStorage(hass)
 
     async def async_setup(self) -> None:
@@ -161,6 +182,7 @@ class ChoreSensorManager:
         await self._create_privilege_sensors(config)
         await self._create_category_sensors(config)
         await self._create_summary_sensors(config)
+        self._create_settings_sensor(config)
 
     async def async_config_changed(self, config: SimpleChoresConfig) -> None:
         """
@@ -175,6 +197,20 @@ class ChoreSensorManager:
         await self._update_privilege_sensors(config)
         await self._update_category_sensors(config)
         await self._update_summary_sensors(config)
+        self._update_settings_sensor(config)
+
+    def _create_settings_sensor(self, config: SimpleChoresConfig) -> None:
+        """Create the singleton settings sensor from configuration."""
+        self.settings_sensor = SettingsSensor(self.hass, config.settings)
+        self.async_add_entities([self.settings_sensor])
+        LOGGER.debug("Created settings sensor")
+
+    def _update_settings_sensor(self, config: SimpleChoresConfig) -> None:
+        """Refresh the singleton settings sensor with new configuration."""
+        if self.settings_sensor is None:
+            self._create_settings_sensor(config)
+            return
+        self.settings_sensor.update_settings(config.settings)
 
     async def _create_sensors_from_config(self, config: SimpleChoresConfig) -> None:
         """
@@ -227,6 +263,7 @@ class ChoreSensorManager:
         for entity_id, sensor in self.sensors.items():
             if entity_id not in expected_entities:
                 sensors_to_remove.append(entity_id)
+                _cancel_auto_finalize_timer(self.hass, entity_id)
                 # Remove the entity - only if it's properly initialized
                 if sensor.hass is not None and hasattr(sensor, "platform"):
                     try:
@@ -1325,3 +1362,70 @@ class CategorySensor(SensorEntity):
         self._attr_name = f"{category.name} - Category"
         self._attr_icon = category.icon
         self.async_write_ha_state()
+
+
+class SettingsSensor(SensorEntity):
+    """
+    Singleton sensor publishing integration-wide settings (see SettingsConfig).
+
+    There's exactly one of these, unlike chores/privileges/categories -
+    it exists so the admin panel can discover and edit settings the same
+    no-dedicated-backend-API way it discovers everything else: by reading
+    `sensor.simple_chore_meta_settings`'s attributes.
+    """
+
+    _attr_has_entity_name = False
+    _attr_should_poll = False
+    _attr_icon = "mdi:cog-outline"
+
+    def __init__(self, hass: HomeAssistant, settings: SettingsConfig) -> None:
+        """
+        Initialize the settings sensor.
+
+        Args:
+            hass: Home Assistant instance
+            settings: Current integration-wide settings
+
+        """
+        self.hass = hass
+        self._settings = settings
+        self._attr_unique_id = f"{DOMAIN}_settings"
+        self._attr_name = "Simple Chores Settings"
+        self.entity_id = SETTINGS_ENTITY_ID
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "settings")},
+            name="Simple Chores Settings",
+            manufacturer="Simple Chores",
+            model="Chore Tracker",
+            entry_type=dr.DeviceEntryType.SERVICE,
+        )
+
+    @property
+    def native_value(self) -> str:
+        """Return whether auto-finalize is currently enabled, as the state."""
+        return "Enabled" if self._settings.auto_finalize_enabled else "Disabled"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        return {
+            "auto_finalize_enabled": self._settings.auto_finalize_enabled,
+            "auto_finalize_delay_minutes": self._settings.auto_finalize_delay_minutes,
+        }
+
+    def update_settings(self, settings: SettingsConfig) -> None:
+        """
+        Update the published settings.
+
+        Args:
+            settings: New integration-wide settings
+
+        """
+        self._settings = settings
+        # Only write if this entity actually finished being added to hass -
+        # guards against writing state for an entity that was never
+        # registered with a real EntityPlatform (e.g. in unit tests that
+        # stub out async_add_entities).
+        if self.hass is not None and self.platform is not None:
+            self.async_write_ha_state()

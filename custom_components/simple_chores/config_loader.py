@@ -10,8 +10,14 @@ from typing import TYPE_CHECKING
 import yaml
 from pydantic import ValidationError
 
-from .const import LOGGER
-from .models import CategoryConfig, ChoreConfig, PrivilegeConfig, SimpleChoresConfig
+from .const import LOGGER, sanitize_entity_id
+from .models import (
+    CategoryConfig,
+    ChoreConfig,
+    PrivilegeConfig,
+    SettingsConfig,
+    SimpleChoresConfig,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -22,6 +28,40 @@ if TYPE_CHECKING:
 
 class ConfigLoadError(Exception):
     """Error loading configuration."""
+
+
+def _resolve_renamed_slug(
+    new_slug: str | None, current_slug: str, slug_taken: Callable[[str], bool]
+) -> str | None:
+    """
+    Validate a requested slug rename.
+
+    Args:
+        new_slug: The requested new slug, or None if no rename was requested
+        current_slug: The item's current slug
+        slug_taken: Called with the sanitized new slug to check whether
+            another item already uses it
+
+    Returns:
+        The sanitized new slug, or None if no rename is actually needed
+        (either none was requested, or it sanitizes to the current slug)
+
+    Raises:
+        ConfigLoadError: If the sanitized slug is empty, or already taken
+
+    """
+    if new_slug is None:
+        return None
+    sanitized = sanitize_entity_id(new_slug)
+    if not sanitized:
+        msg = f"New slug '{new_slug}' must contain at least one alphanumeric character"
+        raise ConfigLoadError(msg)
+    if sanitized == current_slug:
+        return None
+    if slug_taken(sanitized):
+        msg = f"Slug '{sanitized}' is already in use"
+        raise ConfigLoadError(msg)
+    return sanitized
 
 
 class ConfigLoader:
@@ -288,6 +328,7 @@ class ConfigLoader:
             chores=new_chores,
             privileges=self._config.privileges,
             categories=self._config.categories,
+            settings=self._config.settings,
         )
 
         # Save and notify
@@ -296,9 +337,10 @@ class ConfigLoader:
 
         LOGGER.info("Created chore '%s'", chore.slug)
 
-    async def async_update_chore(
+    async def async_update_chore(  # noqa: PLR0913 - one optional kwarg per updatable field
         self,
         slug: str,
+        *,
         name: str | None = None,
         description: str | None = None,
         frequency: str | None = None,
@@ -306,6 +348,7 @@ class ConfigLoader:
         icon: str | None = None,
         points: int | None = None,
         category: str | None = None,
+        new_slug: str | None = None,
     ) -> None:
         """
         Update an existing chore and save to YAML.
@@ -319,9 +362,11 @@ class ConfigLoader:
             icon: New icon (None to keep current)
             points: New points value (None to keep current)
             category: New category slug, or "" to uncategorize (None to keep current)
+            new_slug: Rename the chore to this slug (None to keep current slug)
 
         Raises:
-            ConfigLoadError: If chore not found or save fails
+            ConfigLoadError: If chore not found, the new slug is taken, or
+                save fails
 
         """
         if self._config is None:
@@ -333,6 +378,10 @@ class ConfigLoader:
         if not chore:
             msg = f"Chore with slug '{slug}' not found"
             raise ConfigLoadError(msg)
+
+        renamed_slug = _resolve_renamed_slug(
+            new_slug, slug, lambda s: self._config.get_chore_by_slug(s) is not None
+        )
 
         # Create updated chore
         updated_data = chore.model_dump()
@@ -350,6 +399,8 @@ class ConfigLoader:
             updated_data["points"] = points
         if category is not None:
             updated_data["category"] = category
+        if renamed_slug is not None:
+            updated_data["slug"] = renamed_slug
 
         updated_chore = ChoreConfig(**updated_data)
 
@@ -357,17 +408,39 @@ class ConfigLoader:
         new_chores = [
             updated_chore if c.slug == slug else c for c in self._config.chores
         ]
+
+        # A rename must also be reflected wherever privileges reference the
+        # chore by its old slug.
+        new_privileges = self._config.privileges
+        if renamed_slug is not None:
+            new_privileges = [
+                p.model_copy(
+                    update={
+                        "linked_chores": [
+                            renamed_slug if lc == slug else lc for lc in p.linked_chores
+                        ]
+                    }
+                )
+                if slug in p.linked_chores
+                else p
+                for p in self._config.privileges
+            ]
+
         new_config = SimpleChoresConfig(
             chores=new_chores,
-            privileges=self._config.privileges,
+            privileges=new_privileges,
             categories=self._config.categories,
+            settings=self._config.settings,
         )
 
         # Save and notify
         await self.async_save(new_config)
         await self._notify_callbacks()
 
-        LOGGER.info("Updated chore '%s'", slug)
+        if renamed_slug is not None:
+            LOGGER.info("Updated chore '%s' (renamed to '%s')", slug, renamed_slug)
+        else:
+            LOGGER.info("Updated chore '%s'", slug)
 
     async def async_delete_chore(self, slug: str) -> None:
         """
@@ -395,6 +468,7 @@ class ConfigLoader:
             chores=new_chores,
             privileges=self._config.privileges,
             categories=self._config.categories,
+            settings=self._config.settings,
         )
 
         # Save and notify
@@ -429,6 +503,7 @@ class ConfigLoader:
             chores=self._config.chores,
             privileges=new_privileges,
             categories=self._config.categories,
+            settings=self._config.settings,
         )
 
         # Save and notify
@@ -445,6 +520,7 @@ class ConfigLoader:
         behavior: str | None = None,
         linked_chores: list[str] | None = None,
         assignees: list[str] | None = None,
+        new_slug: str | None = None,
     ) -> None:
         """
         Update an existing privilege and save to YAML.
@@ -456,9 +532,11 @@ class ConfigLoader:
             behavior: New behavior (None to keep current)
             linked_chores: New linked chores list (None to keep current)
             assignees: New assignees list (None to keep current)
+            new_slug: Rename the privilege to this slug (None to keep current)
 
         Raises:
-            ConfigLoadError: If privilege not found or save fails
+            ConfigLoadError: If privilege not found, the new slug is taken,
+                or save fails
 
         """
         if self._config is None:
@@ -470,6 +548,10 @@ class ConfigLoader:
         if not privilege:
             msg = f"Privilege with slug '{slug}' not found"
             raise ConfigLoadError(msg)
+
+        renamed_slug = _resolve_renamed_slug(
+            new_slug, slug, lambda s: self._config.get_privilege_by_slug(s) is not None
+        )
 
         # Create updated privilege
         updated_data = privilege.model_dump()
@@ -483,10 +565,13 @@ class ConfigLoader:
             updated_data["linked_chores"] = linked_chores
         if assignees is not None:
             updated_data["assignees"] = assignees
+        if renamed_slug is not None:
+            updated_data["slug"] = renamed_slug
 
         updated_privilege = PrivilegeConfig(**updated_data)
 
-        # Replace in config
+        # Replace in config. Nothing else references a privilege by slug, so
+        # unlike chores/categories a rename needs no further cascading.
         new_privileges = [
             updated_privilege if p.slug == slug else p for p in self._config.privileges
         ]
@@ -494,13 +579,17 @@ class ConfigLoader:
             chores=self._config.chores,
             privileges=new_privileges,
             categories=self._config.categories,
+            settings=self._config.settings,
         )
 
         # Save and notify
         await self.async_save(new_config)
         await self._notify_callbacks()
 
-        LOGGER.info("Updated privilege '%s'", slug)
+        if renamed_slug is not None:
+            LOGGER.info("Updated privilege '%s' (renamed to '%s')", slug, renamed_slug)
+        else:
+            LOGGER.info("Updated privilege '%s'", slug)
 
     async def async_delete_privilege(self, slug: str) -> None:
         """
@@ -528,6 +617,7 @@ class ConfigLoader:
             chores=self._config.chores,
             privileges=new_privileges,
             categories=self._config.categories,
+            settings=self._config.settings,
         )
 
         # Save and notify
@@ -562,6 +652,7 @@ class ConfigLoader:
             chores=self._config.chores,
             privileges=self._config.privileges,
             categories=new_categories,
+            settings=self._config.settings,
         )
 
         # Save and notify
@@ -575,6 +666,7 @@ class ConfigLoader:
         slug: str,
         name: str | None = None,
         icon: str | None = None,
+        new_slug: str | None = None,
     ) -> None:
         """
         Update an existing category and save to YAML.
@@ -583,9 +675,11 @@ class ConfigLoader:
             slug: Slug of the category to update
             name: New name (None to keep current)
             icon: New icon (None to keep current)
+            new_slug: Rename the category to this slug (None to keep current)
 
         Raises:
-            ConfigLoadError: If category not found or save fails
+            ConfigLoadError: If category not found, the new slug is taken,
+                or save fails
 
         """
         if self._config is None:
@@ -598,12 +692,18 @@ class ConfigLoader:
             msg = f"Category with slug '{slug}' not found"
             raise ConfigLoadError(msg)
 
+        renamed_slug = _resolve_renamed_slug(
+            new_slug, slug, lambda s: self._config.get_category_by_slug(s) is not None
+        )
+
         # Create updated category
         updated_data = category.model_dump()
         if name is not None:
             updated_data["name"] = name
         if icon is not None:
             updated_data["icon"] = icon
+        if renamed_slug is not None:
+            updated_data["slug"] = renamed_slug
 
         updated_category = CategoryConfig(**updated_data)
 
@@ -611,17 +711,33 @@ class ConfigLoader:
         new_categories = [
             updated_category if c.slug == slug else c for c in self._config.categories
         ]
+
+        # A rename must also be reflected on every chore currently assigned
+        # to this category.
+        new_chores = self._config.chores
+        if renamed_slug is not None:
+            new_chores = [
+                c.model_copy(update={"category": renamed_slug})
+                if c.category == slug
+                else c
+                for c in self._config.chores
+            ]
+
         new_config = SimpleChoresConfig(
-            chores=self._config.chores,
+            chores=new_chores,
             privileges=self._config.privileges,
             categories=new_categories,
+            settings=self._config.settings,
         )
 
         # Save and notify
         await self.async_save(new_config)
         await self._notify_callbacks()
 
-        LOGGER.info("Updated category '%s'", slug)
+        if renamed_slug is not None:
+            LOGGER.info("Updated category '%s' (renamed to '%s')", slug, renamed_slug)
+        else:
+            LOGGER.info("Updated category '%s'", slug)
 
     async def async_delete_category(self, slug: str) -> None:
         """
@@ -652,6 +768,7 @@ class ConfigLoader:
             chores=self._config.chores,
             privileges=self._config.privileges,
             categories=new_categories,
+            settings=self._config.settings,
         )
 
         # Save and notify
@@ -659,3 +776,49 @@ class ConfigLoader:
         await self._notify_callbacks()
 
         LOGGER.info("Deleted category '%s'", slug)
+
+    def get_settings(self) -> SettingsConfig:
+        """Return the current integration-wide settings (defaults if unloaded)."""
+        if self._config is None:
+            return SettingsConfig()
+        return self._config.settings
+
+    async def async_update_settings(
+        self,
+        *,
+        auto_finalize_enabled: bool | None = None,
+        auto_finalize_delay_minutes: int | None = None,
+    ) -> None:
+        """
+        Update integration-wide settings and save to YAML.
+
+        Args:
+            auto_finalize_enabled: New value (None to keep current)
+            auto_finalize_delay_minutes: New value (None to keep current)
+
+        Raises:
+            ConfigLoadError: If save fails
+
+        """
+        if self._config is None:
+            msg = "Configuration not loaded"
+            raise ConfigLoadError(msg)
+
+        updated_data = self._config.settings.model_dump()
+        if auto_finalize_enabled is not None:
+            updated_data["auto_finalize_enabled"] = auto_finalize_enabled
+        if auto_finalize_delay_minutes is not None:
+            updated_data["auto_finalize_delay_minutes"] = auto_finalize_delay_minutes
+
+        new_config = SimpleChoresConfig(
+            chores=self._config.chores,
+            privileges=self._config.privileges,
+            categories=self._config.categories,
+            settings=SettingsConfig(**updated_data),
+        )
+
+        # Save and notify
+        await self.async_save(new_config)
+        await self._notify_callbacks()
+
+        LOGGER.info("Updated settings: %s", new_config.settings.model_dump())

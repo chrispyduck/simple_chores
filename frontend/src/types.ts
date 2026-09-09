@@ -19,6 +19,17 @@ export interface HomeAssistant {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     serviceData?: Record<string, any>
   ) => Promise<unknown>;
+  // Used to fetch the HA user list (for display names) via
+  // "config/auth/list" - see knownUserDisplayNames() below.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  callWS: <T = any>(msg: Record<string, any>) => Promise<T>;
+}
+
+/** One entry from the "config/auth/list" websocket command. */
+export interface HaUserInfo {
+  id: string;
+  username: string | null;
+  name: string;
 }
 
 export const DOMAIN = "simple_chores";
@@ -31,6 +42,11 @@ export const CHORE_ENTITY_PREFIX = "sensor.simple_chore_";
 export const PRIVILEGE_ENTITY_PREFIX = "sensor.simple_chore_privilege_";
 export const SUMMARY_ENTITY_PREFIX = "sensor.simple_chore_meta_";
 export const CATEGORY_ENTITY_PREFIX = "sensor.simple_chore_category_";
+
+// Singleton entity publishing integration-wide settings - see
+// SETTINGS_ENTITY_ID in custom_components/simple_chores/const.py. It's
+// already excluded from chore scans since it falls under SUMMARY_ENTITY_PREFIX.
+export const SETTINGS_ENTITY_ID = "sensor.simple_chore_meta_settings";
 
 export type ChoreFrequency = "daily" | "manual" | "once";
 export type ChoreStateValue = "Pending" | "Complete" | "Not Requested";
@@ -70,6 +86,12 @@ export interface CategoryDefinition {
   icon: string;
   entityId: string;
   choreCount: number;
+}
+
+/** Integration-wide settings, published on SETTINGS_ENTITY_ID. */
+export interface SettingsDefinition {
+  autoFinalizeEnabled: boolean;
+  autoFinalizeDelayMinutes: number;
 }
 
 export interface PrivilegeAssigneeStatus {
@@ -191,7 +213,10 @@ export function sanitizeSlug(value: string): string {
     .toLowerCase()
     .replace(/\s+/g, "-")
     .replace(/-/g, "_")
-    .replace(/[^a-z0-9_]/g, "");
+    .replace(/[^a-z0-9_]/g, "")
+    // Collapse runs of underscores (e.g. from "Foo  Bar" or "foo__bar")
+    // into one, matching sanitize_entity_id in const.py.
+    .replace(/_+/g, "_");
 }
 
 /**
@@ -312,6 +337,28 @@ export function parseCategories(
   return categories.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+const DEFAULT_SETTINGS: SettingsDefinition = {
+  autoFinalizeEnabled: true,
+  autoFinalizeDelayMinutes: 60,
+};
+
+/**
+ * Read integration-wide settings from SETTINGS_ENTITY_ID. Falls back to the
+ * backend's own defaults if the sensor hasn't shown up yet (e.g. right
+ * after startup, before the sensor platform finishes loading).
+ */
+export function parseSettings(states: Record<string, HassEntity>): SettingsDefinition {
+  const entity = states[SETTINGS_ENTITY_ID];
+  if (!entity) return { ...DEFAULT_SETTINGS };
+
+  const attrs = entity.attributes;
+  return {
+    autoFinalizeEnabled: attrs.auto_finalize_enabled ?? DEFAULT_SETTINGS.autoFinalizeEnabled,
+    autoFinalizeDelayMinutes:
+      attrs.auto_finalize_delay_minutes ?? DEFAULT_SETTINGS.autoFinalizeDelayMinutes,
+  };
+}
+
 /** Every assignee name seen across any chore or privilege, for suggestions. */
 export function knownAssignees(
   chores: ChoreDefinition[],
@@ -325,4 +372,28 @@ export function knownAssignees(
     for (const a of privilege.assignees) names.add(a.assignee);
   }
   return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Build a lowercased-username -> display name lookup from the HA user
+ * list ("config/auth/list"), so the panel can show "Alice" instead of the
+ * login username stored as `assignee` (see README: "Assignees are Home
+ * Assistant users ... identified by name"). Users without a `homeassistant`
+ * auth-provider credential (no username) are skipped - they can't match an
+ * assignee anyway.
+ */
+export function userDisplayNameMap(users: HaUserInfo[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const user of users) {
+    if (user.username) map[user.username.toLowerCase()] = user.name;
+  }
+  return map;
+}
+
+/** Look up `assignee`'s display name, falling back to the raw value. */
+export function displayName(
+  assignee: string,
+  userDisplayNames: Record<string, string>
+): string {
+  return userDisplayNames[assignee.toLowerCase()] ?? assignee;
 }
