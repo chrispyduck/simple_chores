@@ -652,6 +652,33 @@ class TestConfigLoaderUpdateChore:
         assert dishes_chore["icon"] == "mdi:dishwasher"
 
     @pytest.mark.asyncio
+    async def test_update_chore_points_by_assignee(
+        self,
+        hass,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test setting and clearing per-assignee point overrides."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        await loader.async_update_chore(slug="dishes", points_by_assignee={"alice": 5})
+
+        chore = loader.config.get_chore_by_slug("dishes")
+        assert chore is not None
+        assert chore.points_by_assignee == {"alice": 5}
+        assert chore.points_for("alice") == 5
+
+        # An empty dict explicitly clears existing overrides.
+        await loader.async_update_chore(slug="dishes", points_by_assignee={})
+
+        chore = loader.config.get_chore_by_slug("dishes")
+        assert chore is not None
+        assert chore.points_by_assignee == {}
+
+    @pytest.mark.asyncio
     async def test_update_chore_multiple_fields(
         self,
         hass,

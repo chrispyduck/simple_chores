@@ -58,8 +58,15 @@ class ChoreConfig(BaseModel):
     )
     points: int = Field(
         default=1,
-        description="Points awarded when chore is completed",
+        description="Default points awarded when chore is completed",
         ge=0,
+    )
+    points_by_assignee: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "Per-assignee point overrides. An assignee not listed here earns "
+            "`points` instead."
+        ),
     )
     category: str | None = Field(
         default=None,
@@ -89,6 +96,16 @@ class ChoreConfig(BaseModel):
             raise ValueError(msg)
         return v
 
+    @field_validator("points_by_assignee")
+    @classmethod
+    def validate_points_by_assignee(cls, v: dict[str, int]) -> dict[str, int]:
+        """Validate that every point override is non-negative."""
+        for assignee, points in v.items():
+            if points < 0:
+                msg = f"Points override for '{assignee}' must be non-negative"
+                raise ValueError(msg)
+        return v
+
     @field_validator("category")
     @classmethod
     def validate_category(cls, v: str | None) -> str | None:
@@ -96,6 +113,10 @@ class ChoreConfig(BaseModel):
         if not v:
             return None
         return sanitize_entity_id(v) or None
+
+    def points_for(self, assignee: str) -> int:
+        """Return the points this chore awards `assignee`, honoring any override."""
+        return self.points_by_assignee.get(assignee, self.points)
 
     model_config = {"frozen": False, "extra": "forbid"}
 

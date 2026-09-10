@@ -347,6 +347,7 @@ class ConfigLoader:
         assignees: list[str] | None = None,
         icon: str | None = None,
         points: int | None = None,
+        points_by_assignee: dict[str, int] | None = None,
         category: str | None = None,
         new_slug: str | None = None,
     ) -> None:
@@ -360,7 +361,9 @@ class ConfigLoader:
             frequency: New frequency (None to keep current)
             assignees: New assignees list (None to keep current)
             icon: New icon (None to keep current)
-            points: New points value (None to keep current)
+            points: New default points value (None to keep current)
+            points_by_assignee: New per-assignee point overrides, or {} to
+                clear them all (None to keep current)
             category: New category slug, or "" to uncategorize (None to keep current)
             new_slug: Rename the chore to this slug (None to keep current slug)
 
@@ -397,6 +400,8 @@ class ConfigLoader:
             updated_data["icon"] = icon
         if points is not None:
             updated_data["points"] = points
+        if points_by_assignee is not None:
+            updated_data["points_by_assignee"] = points_by_assignee
         if category is not None:
             updated_data["category"] = category
         if renamed_slug is not None:

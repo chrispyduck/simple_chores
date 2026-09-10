@@ -30,6 +30,7 @@ from .const import (
     ATTR_NAME,
     ATTR_NEW_SLUG,
     ATTR_POINTS,
+    ATTR_POINTS_BY_ASSIGNEE,
     ATTR_PRIVILEGE_SLUG,
     ATTR_RESET_TOTAL,
     ATTR_SLUG,
@@ -360,6 +361,7 @@ CREATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_POINTS, default=1): vol.All(
             vol.Coerce(int), vol.Range(min=0)
         ),
+        vol.Optional(ATTR_POINTS_BY_ASSIGNEE, default=""): cv.string,
         vol.Optional(ATTR_CATEGORY, default=""): cv.string,
     }
 )
@@ -373,6 +375,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON): cv.string,
         vol.Optional(ATTR_POINTS): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Optional(ATTR_POINTS_BY_ASSIGNEE): cv.string,
         vol.Optional(ATTR_CATEGORY): cv.string,
         vol.Optional(ATTR_NEW_SLUG): cv.string,
     }
@@ -560,7 +563,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
 
         # Award points for newly completed chore
         if not was_complete and points_storage:
-            chore_points = sensor.chore.points
+            chore_points = sensor.chore.points_for(sensor.assignee)
             old_total = points_storage.get_points(sensor.assignee)
             old_earned = points_storage.get_points_earned(sensor.assignee)
             await points_storage.add_points(sensor.assignee, chore_points)
@@ -652,7 +655,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
 
         # Deduct points for un-completing a chore
         if was_complete and points_storage:
-            chore_points = sensor.chore.points
+            chore_points = sensor.chore.points_for(sensor.assignee)
             old_total = points_storage.get_points(sensor.assignee)
             old_earned = points_storage.get_points_earned(sensor.assignee)
             await points_storage.add_points(sensor.assignee, -chore_points)
@@ -894,7 +897,7 @@ async def _apply_start_new_day_points_missed(
             assignee_stats[assignee] = {"missed": 0}
 
         if sensor.get_state() == ChoreState.PENDING.value:
-            assignee_stats[assignee]["missed"] += sensor.chore.points
+            assignee_stats[assignee]["missed"] += sensor.chore.points_for(assignee)
 
     for assignee, stats in assignee_stats.items():
         if stats["missed"] > 0:
@@ -1032,6 +1035,40 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     await _update_privilege_sensors_from_chores(hass, user)
 
 
+def _parse_points_by_assignee(value: str) -> dict[str, int]:
+    """
+    Parse a "user:points,user2:points2" string into a points override map.
+
+    An empty string parses to an empty dict (no overrides), same as
+    omitting every entry.
+
+    Raises:
+        ServiceValidationError: If an entry is malformed or its points
+            value isn't a non-negative integer.
+
+    """
+    overrides: dict[str, int] = {}
+    for raw_entry in value.split(","):
+        entry = raw_entry.strip()
+        if not entry:
+            continue
+        if ":" not in entry:
+            msg = f"Invalid points_by_assignee entry '{entry}' - expected 'user:points'"
+            raise ServiceValidationError(msg)
+        user, _, points_str = entry.partition(":")
+        user = user.strip()
+        try:
+            points = int(points_str.strip())
+        except ValueError as err:
+            msg = f"Invalid points value '{points_str}' for '{user}'"
+            raise ServiceValidationError(msg) from err
+        if not user or points < 0:
+            msg = f"Invalid points_by_assignee entry '{entry}'"
+            raise ServiceValidationError(msg)
+        overrides[user] = points
+    return overrides
+
+
 async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the create_chore service call."""
     LOGGER.info(
@@ -1062,6 +1099,9 @@ async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             assignees=assignees,
             icon=call.data.get(ATTR_ICON, "mdi:clipboard-list-outline"),
             points=call.data.get(ATTR_POINTS, 1),
+            points_by_assignee=_parse_points_by_assignee(
+                call.data.get(ATTR_POINTS_BY_ASSIGNEE, "")
+            ),
             category=call.data.get(ATTR_CATEGORY, ""),
         )
         await config_loader.async_create_chore(chore)
@@ -1090,8 +1130,15 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     assignees_str = call.data.get(ATTR_ASSIGNEES)
     icon = call.data.get(ATTR_ICON)
     points = call.data.get(ATTR_POINTS)
+    points_by_assignee_str = call.data.get(ATTR_POINTS_BY_ASSIGNEE)
     category = call.data.get(ATTR_CATEGORY)
     new_slug = call.data.get(ATTR_NEW_SLUG)
+
+    points_by_assignee = (
+        _parse_points_by_assignee(points_by_assignee_str)
+        if points_by_assignee_str is not None
+        else None
+    )
 
     # Parse assignees if provided
     assignees = None
@@ -1111,6 +1158,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             assignees=assignees,
             icon=icon,
             points=points,
+            points_by_assignee=points_by_assignee,
             category=category,
             new_slug=new_slug,
         )
@@ -1229,7 +1277,7 @@ async def _set_chore_sensors_state_by_category(
         elif was_complete and new_state != ChoreState.COMPLETE:
             await _clear_completion_tracking(hass, sensor)
 
-        chore_points = sensor.chore.points
+        chore_points = sensor.chore.points_for(sensor.assignee)
         if points_storage and new_state == ChoreState.COMPLETE and not was_complete:
             await points_storage.add_points(sensor.assignee, chore_points)
             await points_storage.add_points_earned(sensor.assignee, chore_points)
@@ -1405,10 +1453,9 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
 
         if current_state == ChoreState.PENDING.value:
             affected_users.add(sensor.assignee)
-            if points_storage and sensor.chore.points:
-                await points_storage.add_points_missed(
-                    sensor.assignee, sensor.chore.points
-                )
+            chore_points = sensor.chore.points_for(sensor.assignee)
+            if points_storage and chore_points:
+                await points_storage.add_points_missed(sensor.assignee, chore_points)
         elif current_state == ChoreState.COMPLETE.value:
             affected_users.add(sensor.assignee)
             sensors_to_reset.append(sensor)

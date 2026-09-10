@@ -67,6 +67,8 @@ export interface ChoreAssigneeStatus {
   assignee: string;
   entityId: string;
   state: ChoreStateValue;
+  /** This assignee's resolved points - the override if set, else chore.points. */
+  points: number;
 }
 
 export interface ChoreDefinition {
@@ -75,6 +77,7 @@ export interface ChoreDefinition {
   description: string;
   frequency: ChoreFrequency;
   icon: string;
+  /** Default points; an assignee's own resolved value lives on ChoreAssigneeStatus. */
   points: number;
   category: string | null;
   assignees: ChoreAssigneeStatus[];
@@ -92,6 +95,18 @@ export interface CategoryDefinition {
 export interface SettingsDefinition {
   autoFinalizeEnabled: boolean;
   autoFinalizeDelayMinutes: number;
+}
+
+/** One assignee's points summary, published on their `..._meta_{assignee}_summary` sensor. */
+export interface SummaryDefinition {
+  assignee: string;
+  entityId: string;
+  totalPoints: number;
+  pointsEarned: number;
+  pointsMissed: number;
+  pointsPossible: number;
+  totalPending: number;
+  totalComplete: number;
 }
 
 export interface PrivilegeAssigneeStatus {
@@ -118,6 +133,11 @@ export interface ChoreDraft {
   frequency: ChoreFrequency;
   icon: string;
   points: number;
+  /**
+   * Sparse per-assignee point overrides - only assignees whose reward
+   * differs from `points` appear here (see choreToDraft).
+   */
+  pointsByAssignee: Record<string, number>;
   category: string; // "" (UNCATEGORIZED) means no category
   assignees: string[];
 }
@@ -147,12 +167,18 @@ export function emptyChoreDraft(): ChoreDraft {
     frequency: "daily",
     icon: DEFAULT_CHORE_ICON,
     points: 1,
+    pointsByAssignee: {},
     category: UNCATEGORIZED,
     assignees: [],
   };
 }
 
 export function choreToDraft(chore: ChoreDefinition): ChoreDraft {
+  const pointsByAssignee: Record<string, number> = {};
+  for (const a of chore.assignees) {
+    if (a.points !== chore.points) pointsByAssignee[a.assignee] = a.points;
+  }
+
   return {
     slug: chore.slug,
     name: chore.name,
@@ -160,6 +186,7 @@ export function choreToDraft(chore: ChoreDefinition): ChoreDraft {
     frequency: chore.frequency,
     icon: chore.icon,
     points: chore.points,
+    pointsByAssignee,
     category: chore.category ?? UNCATEGORIZED,
     assignees: chore.assignees.map((a) => a.assignee),
   };
@@ -246,7 +273,10 @@ export function parseChores(states: Record<string, HassEntity>): ChoreDefinition
         description: attrs.description ?? "",
         frequency: (attrs.frequency as ChoreFrequency) ?? "daily",
         icon: attrs.icon ?? DEFAULT_CHORE_ICON,
-        points: attrs.points ?? 0,
+        // default_points is the chore's shared value; older/unrefreshed
+        // sensors may not have it yet, so fall back to this assignee's
+        // resolved points rather than leaving the definition unset.
+        points: attrs.default_points ?? attrs.points ?? 0,
         category: attrs.category ?? null,
         assignees: [],
       };
@@ -257,6 +287,7 @@ export function parseChores(states: Record<string, HassEntity>): ChoreDefinition
       assignee: attrs.assignee,
       entityId,
       state: entity.state as ChoreStateValue,
+      points: attrs.points ?? definition.points,
     });
   }
 
@@ -357,6 +388,38 @@ export function parseSettings(states: Record<string, HassEntity>): SettingsDefin
     autoFinalizeDelayMinutes:
       attrs.auto_finalize_delay_minutes ?? DEFAULT_SETTINGS.autoFinalizeDelayMinutes,
   };
+}
+
+/**
+ * Rebuild each assignee's points summary from their
+ * `sensor.simple_chore_meta_{assignee}_summary` entity. Excludes
+ * SETTINGS_ENTITY_ID, which lives under the same prefix but isn't a
+ * per-assignee summary.
+ */
+export function parseSummaries(states: Record<string, HassEntity>): SummaryDefinition[] {
+  const summaries: SummaryDefinition[] = [];
+
+  for (const [entityId, entity] of Object.entries(states)) {
+    if (!entityId.startsWith(SUMMARY_ENTITY_PREFIX)) continue;
+    if (entityId === SETTINGS_ENTITY_ID) continue;
+
+    const attrs = entity.attributes;
+    const assignee: string | undefined = attrs.assignee;
+    if (!assignee) continue;
+
+    summaries.push({
+      assignee,
+      entityId,
+      totalPoints: attrs.total_points ?? 0,
+      pointsEarned: attrs.points_earned ?? 0,
+      pointsMissed: attrs.points_missed ?? 0,
+      pointsPossible: attrs.points_possible ?? 0,
+      totalPending: attrs.total_pending ?? 0,
+      totalComplete: attrs.total_complete ?? 0,
+    });
+  }
+
+  return summaries.sort((a, b) => a.assignee.localeCompare(b.assignee));
 }
 
 /** Every assignee name seen across any chore or privilege, for suggestions. */
