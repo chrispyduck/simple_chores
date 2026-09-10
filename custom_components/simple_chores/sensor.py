@@ -686,7 +686,11 @@ class ChoreSensor(RestoreEntity, SensorEntity):
             "assignee": self._assignee,
             "all_assignees": self._chore.assignees,
             "icon": self._chore.icon,
-            "points": self._chore.points,
+            # This assignee's resolved points (honors points_by_assignee);
+            # default_points is the chore's shared/default value, so the
+            # admin panel can tell an override apart from the default.
+            "points": self._chore.points_for(self._assignee),
+            "default_points": self._chore.points,
             "category": self._chore.category,
         }
 
@@ -822,7 +826,7 @@ class ChoreSummarySensor(SensorEntity):
                 if current_state == ChoreState.PENDING.value:
                     pending_entities.append(full_entity_id)
                     pending_count += 1
-                    pending_points += sensor.chore.points
+                    pending_points += sensor.chore.points_for(sensor.assignee)
                 elif current_state == ChoreState.COMPLETE.value:
                     complete_entities.append(full_entity_id)
                 elif current_state == ChoreState.NOT_REQUESTED.value:

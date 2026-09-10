@@ -18,6 +18,7 @@ import {
   PrivilegeDraft,
   PRIVILEGE_BEHAVIORS,
   SettingsDefinition,
+  SummaryDefinition,
   UNCATEGORIZED,
   categoryToDraft,
   choreToDraft,
@@ -30,6 +31,7 @@ import {
   parseChores,
   parsePrivileges,
   parseSettings,
+  parseSummaries,
   privilegeToDraft,
   sanitizeSlug,
   userDisplayNameMap,
@@ -42,7 +44,9 @@ const SERVICE_DOMAIN = "simple_chores";
 // "no filter, show every chore" in the filter dropdown.
 const UNCATEGORIZED_FILTER = "__uncategorized__";
 
-type Tab = "chores" | "privileges" | "categories" | "settings";
+type Tab = "chores" | "privileges" | "categories" | "users" | "settings";
+
+type ChoreSortKey = "name" | "points" | "frequency" | "category";
 
 interface DialogState {
   kind: "chore" | "privilege" | "category";
@@ -54,6 +58,12 @@ interface DialogState {
 interface SettingsDraft {
   autoFinalizeEnabled: boolean;
   autoFinalizeDelayMinutes: number;
+}
+
+/** Draft backing the Settings tab's "reset points" danger-zone dialog. */
+interface ResetPointsDraft {
+  user: string; // "" means all users
+  resetTotal: boolean;
 }
 
 /**
@@ -80,8 +90,11 @@ export class SimpleChoresPanel extends LitElement {
   @state() private _error: string | null = null;
   @state() private _bulkUser = "";
   @state() private _categoryFilter = "";
+  @state() private _choreSort: ChoreSortKey = "name";
   @state() private _userDisplayNames: Record<string, string> = {};
   @state() private _settingsDraft: SettingsDraft | null = null;
+  @state() private _resetPointsDialog: ResetPointsDraft | null = null;
+  @state() private _userAdjustInput: Record<string, string> = {};
   private _loadedUserDisplayNames = false;
 
   protected updated(changed: PropertyValues): void {
@@ -125,6 +138,7 @@ export class SimpleChoresPanel extends LitElement {
     const privileges = parsePrivileges(this.hass.states);
     const categories = parseCategories(this.hass.states);
     const settings = parseSettings(this.hass.states);
+    const summaries = parseSummaries(this.hass.states);
     const assignees = knownAssignees(chores, privileges);
 
     return html`
@@ -168,6 +182,12 @@ export class SimpleChoresPanel extends LitElement {
             Categories
           </button>
           <button
+            class="tab ${this._tab === "users" ? "active" : ""}"
+            @click=${() => (this._tab = "users")}
+          >
+            Users
+          </button>
+          <button
             class="tab ${this._tab === "settings" ? "active" : ""}"
             @click=${() => (this._tab = "settings")}
           >
@@ -181,10 +201,13 @@ export class SimpleChoresPanel extends LitElement {
             ? this._renderPrivilegesTab(privileges, chores, assignees)
             : this._tab === "categories"
               ? this._renderCategoriesTab(categories, assignees)
-              : this._renderSettingsTab(settings)}
+              : this._tab === "users"
+                ? this._renderUsersTab(assignees, summaries)
+                : this._renderSettingsTab(settings, assignees)}
       </div>
 
       ${this._dialog ? this._renderDialog(chores, categories, assignees) : nothing}
+      ${this._resetPointsDialog ? this._renderResetPointsDialog(assignees) : nothing}
     `;
   }
 
@@ -208,6 +231,7 @@ export class SimpleChoresPanel extends LitElement {
       }
       return true;
     });
+    const sorted = this._sortChores(filtered, categories);
 
     // Only offer "Finalize by category" once a specific category is picked -
     // it needs one to scope to, unlike Reset completed / Start new day.
@@ -220,6 +244,7 @@ export class SimpleChoresPanel extends LitElement {
           <ha-icon icon="mdi:plus"></ha-icon> New chore
         </button>
         ${this._renderCategoryFilterPicker(categories)}
+        ${this._renderChoreSortPicker()}
         ${canFinalizeByCategory
           ? html`
               <button
@@ -237,15 +262,102 @@ export class SimpleChoresPanel extends LitElement {
         <button @click=${() => this._startNewDay()}>Start new day</button>
       </div>
 
-      ${filtered.length === 0
+      ${this._renderPointsSummary(filtered)}
+
+      ${sorted.length === 0
         ? html`<p class="empty">
             ${chores.length === 0
               ? "No chores yet. Create one to get started."
               : "No chores match the current filters."}
           </p>`
         : html`<div class="card-grid">
-            ${filtered.map((chore) => this._renderChoreCard(chore, categories))}
+            ${sorted.map((chore) => this._renderChoreCard(chore, categories))}
           </div>`}
+    `;
+  }
+
+  private _renderChoreSortPicker() {
+    const options: Array<{ value: ChoreSortKey; label: string }> = [
+      { value: "name", label: "Sort: Name" },
+      { value: "points", label: "Sort: Points (high to low)" },
+      { value: "frequency", label: "Sort: Frequency" },
+      { value: "category", label: "Sort: Category" },
+    ];
+    return html`
+      <select
+        class="user-picker"
+        title="Sort chores"
+        .value=${this._choreSort}
+        @change=${(e: Event) =>
+          (this._choreSort = (e.target as HTMLSelectElement).value as ChoreSortKey)}
+      >
+        ${options.map((o) => html`<option value=${o.value}>${o.label}</option>`)}
+      </select>
+    `;
+  }
+
+  private _sortChores(
+    chores: ChoreDefinition[],
+    categories: CategoryDefinition[]
+  ): ChoreDefinition[] {
+    const sorted = [...chores];
+    const categoryName = (slug: string | null) =>
+      slug ? (categories.find((c) => c.slug === slug)?.name ?? slug) : "";
+
+    switch (this._choreSort) {
+      case "points":
+        sorted.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+        break;
+      case "frequency":
+        sorted.sort(
+          (a, b) => a.frequency.localeCompare(b.frequency) || a.name.localeCompare(b.name)
+        );
+        break;
+      case "category":
+        sorted.sort(
+          (a, b) =>
+            categoryName(a.category).localeCompare(categoryName(b.category)) ||
+            a.name.localeCompare(b.name)
+        );
+        break;
+      case "name":
+      default:
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return sorted;
+  }
+
+  /**
+   * A "points possible" line summing each displayed assignee's points
+   * across the currently-filtered chores - "if you did everything shown
+   * here, how many points could you earn". Respects the same per-assignee
+   * filter the chore cards themselves apply (see _renderChoreCard).
+   */
+  private _renderPointsSummary(chores: ChoreDefinition[]) {
+    const totals = new Map<string, number>();
+    for (const chore of chores) {
+      for (const a of chore.assignees) {
+        if (this._bulkUser && a.assignee !== this._bulkUser) continue;
+        totals.set(a.assignee, (totals.get(a.assignee) ?? 0) + a.points);
+      }
+    }
+    if (totals.size === 0) return nothing;
+
+    const entries = [...totals.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+    return html`
+      <div class="points-summary">
+        <ha-icon icon="mdi:star-outline"></ha-icon>
+        <span>Points possible:</span>
+        ${entries.map(
+          ([assignee, total], i) => html`
+            ${i > 0 ? html`<span class="points-summary-sep">·</span>` : nothing}
+            <span
+              ><strong>${this._displayName(assignee)}</strong> ${total}</span
+            >
+          `
+        )}
+      </div>
     `;
   }
 
@@ -285,7 +397,8 @@ export class SimpleChoresPanel extends LitElement {
   }
 
   private _renderChoreCard(chore: ChoreDefinition, categories: CategoryDefinition[]) {
-    const pointsLabel = `${chore.points} point${chore.points === 1 ? "" : "s"}`;
+    const hasOverrides = chore.assignees.some((a) => a.points !== chore.points);
+    const pointsLabel = `${chore.points} point${chore.points === 1 ? "" : "s"}${hasOverrides ? " (default)" : ""}`;
     const categoryName = chore.category
       ? (categories.find((c) => c.slug === chore.category)?.name ?? chore.category)
       : null;
@@ -325,6 +438,11 @@ export class SimpleChoresPanel extends LitElement {
               (a) => html`
                 <div class="assignee-row">
                   <span class="assignee-name">${this._displayName(a.assignee)}</span>
+                  ${a.points !== chore.points
+                    ? html`<span class="points-override-badge" title="Point override"
+                        >${a.points}pt</span
+                      >`
+                    : nothing}
                   <span class="state-chip ${this._choreStateClass(a.state)}"
                     >${a.state}</span
                   >
@@ -673,7 +791,7 @@ export class SimpleChoresPanel extends LitElement {
 
   // --- Settings tab ------------------------------------------------------
 
-  private _renderSettingsTab(settings: SettingsDefinition) {
+  private _renderSettingsTab(settings: SettingsDefinition, assignees: string[]) {
     // Lazily seed the editable draft from the live sensor the first time
     // this tab is rendered (or after a save clears it back to null), so
     // in-progress edits aren't clobbered by unrelated hass state updates.
@@ -733,6 +851,23 @@ export class SimpleChoresPanel extends LitElement {
           <button @click=${() => (this._settingsDraft = null)}>Reset</button>
         </div>
       </div>
+
+      <div class="danger-zone">
+        <h3>Danger zone</h3>
+        <div class="danger-zone-row">
+          <div class="danger-zone-text">
+            <div class="danger-zone-title">Reset points</div>
+            <p class="hint">
+              Clears daily point stats (earned/missed) for one or every
+              assignee. Optionally wipes their lifetime point total too.
+              This cannot be undone.
+            </p>
+          </div>
+          <button class="danger" @click=${() => this._openResetPointsDialog(assignees)}>
+            Reset points&hellip;
+          </button>
+        </div>
+      </div>
     `;
   }
 
@@ -746,6 +881,179 @@ export class SimpleChoresPanel extends LitElement {
     });
 
     if (ok) this._settingsDraft = null;
+  }
+
+  private _openResetPointsDialog = (assignees: string[]) => {
+    this._error = null;
+    this._resetPointsDialog = {
+      user: assignees.length === 1 ? assignees[0] : "",
+      resetTotal: false,
+    };
+  };
+
+  private _renderResetPointsDialog(assignees: string[]) {
+    const draft = this._resetPointsDialog;
+    if (!draft) return nothing;
+
+    return html`
+      <div class="overlay" @click=${this._onResetPointsOverlayClick}>
+        <div class="dialog" role="dialog" aria-modal="true">
+          <div class="dialog-header">
+            <h2>Reset points</h2>
+            <button
+              class="icon-button"
+              @click=${() => (this._resetPointsDialog = null)}
+            >
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="dialog-body">
+            <p class="hint danger-text">
+              This clears daily point stats and cannot be undone.
+            </p>
+            <label>
+              Assignee
+              <select
+                .value=${draft.user}
+                @change=${(e: Event) => {
+                  draft.user = (e.target as HTMLSelectElement).value;
+                  this.requestUpdate();
+                }}
+              >
+                <option value="">All users</option>
+                ${assignees.map(
+                  (a) => html`<option value=${a}>${this._displayName(a)}</option>`
+                )}
+              </select>
+            </label>
+            <label class="checkbox-item">
+              <input
+                type="checkbox"
+                .checked=${draft.resetTotal}
+                @change=${(e: Event) => {
+                  draft.resetTotal = (e.target as HTMLInputElement).checked;
+                  this.requestUpdate();
+                }}
+              />
+              Also reset lifetime total points
+            </label>
+          </div>
+          <div class="dialog-footer">
+            <button @click=${() => (this._resetPointsDialog = null)}>Cancel</button>
+            <button
+              class="danger"
+              ?disabled=${this._busy}
+              @click=${() => this._confirmResetPoints()}
+            >
+              Reset points
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private _onResetPointsOverlayClick = (e: MouseEvent) => {
+    if (e.target === e.currentTarget) this._resetPointsDialog = null;
+  };
+
+  private async _confirmResetPoints() {
+    const draft = this._resetPointsDialog;
+    if (!draft) return;
+
+    const ok = await this._call(SERVICE_DOMAIN, "reset_points", {
+      ...(draft.user ? { user: draft.user } : {}),
+      reset_total: draft.resetTotal,
+    });
+
+    if (ok) this._resetPointsDialog = null;
+  }
+
+  // --- Users tab -----------------------------------------------------
+
+  private _renderUsersTab(assignees: string[], summaries: SummaryDefinition[]) {
+    const byAssignee = new Map(summaries.map((s) => [s.assignee, s]));
+
+    return html`
+      ${assignees.length === 0
+        ? html`<p class="empty">
+            No assignees yet. Add one to a chore or privilege to get started.
+          </p>`
+        : html`<div class="card-grid">
+            ${assignees.map((a) => this._renderUserCard(a, byAssignee.get(a)))}
+          </div>`}
+    `;
+  }
+
+  private _renderUserCard(assignee: string, summary: SummaryDefinition | undefined) {
+    const totalPoints = summary?.totalPoints ?? 0;
+    const pointsEarned = summary?.pointsEarned ?? 0;
+    const pointsMissed = summary?.pointsMissed ?? 0;
+    const pointsPossible = summary?.pointsPossible ?? 0;
+
+    return html`
+      <div class="card">
+        <div class="user-card-header">
+          <div class="user-identity">
+            <ha-icon icon="mdi:account-outline"></ha-icon>
+            <span class="name">${this._displayName(assignee)}</span>
+          </div>
+          <div class="user-points-total" title="Lifetime total points">
+            <span class="user-points-value">${totalPoints}</span>
+            <span class="user-points-label">points</span>
+          </div>
+        </div>
+        <div class="points-stats">
+          <div class="points-stat">
+            <span class="points-stat-value">${pointsEarned}</span>
+            <span class="points-stat-label">earned today</span>
+          </div>
+          <div class="points-stat">
+            <span class="points-stat-value">${pointsMissed}</span>
+            <span class="points-stat-label">missed</span>
+          </div>
+          <div class="points-stat">
+            <span class="points-stat-value">${pointsPossible}</span>
+            <span class="points-stat-label">possible today</span>
+          </div>
+        </div>
+        <div class="user-adjust-row">
+          <input
+            type="number"
+            class="user-adjust-input"
+            placeholder="±points"
+            .value=${this._userAdjustInput[assignee] ?? ""}
+            @input=${(e: Event) => {
+              this._userAdjustInput = {
+                ...this._userAdjustInput,
+                [assignee]: (e.target as HTMLInputElement).value,
+              };
+            }}
+          />
+          <button @click=${() => this._applyPointsAdjustment(assignee)}>
+            Apply adjustment
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private async _applyPointsAdjustment(assignee: string) {
+    const raw = this._userAdjustInput[assignee];
+    const adjustment = Number(raw);
+    if (!raw || Number.isNaN(adjustment) || adjustment === 0) {
+      this._error = "Enter a non-zero point adjustment first.";
+      return;
+    }
+
+    const ok = await this._call(SERVICE_DOMAIN, "adjust_points", {
+      user: assignee,
+      adjustment,
+    });
+
+    if (ok) {
+      this._userAdjustInput = { ...this._userAdjustInput, [assignee]: "" };
+    }
   }
 
   // --- Dialog ------------------------------------------------------------
@@ -904,6 +1212,54 @@ export class SimpleChoresPanel extends LitElement {
       })}
 
       ${this._renderAssigneeEditor(draft, assignees)}
+      ${this._renderPointsByAssigneeEditor(draft)}
+    `;
+  }
+
+  /**
+   * Per-assignee point override inputs, one row per currently-listed
+   * assignee. An input left matching the shared "Points" field above
+   * follows it automatically; typing a different value overrides it just
+   * for that assignee (see ChoreDraft.pointsByAssignee).
+   */
+  private _renderPointsByAssigneeEditor(draft: ChoreDraft) {
+    if (draft.assignees.length === 0) return nothing;
+
+    return html`
+      <label>
+        Points per assignee
+        <span class="hint"
+          >Leave matching the default above to use it; change a value to
+          reward that assignee differently for this chore.</span
+        >
+        <div class="points-override-list">
+          ${draft.assignees.map((name) => {
+            const value = draft.pointsByAssignee[name] ?? draft.points;
+            return html`
+              <div class="points-override-row">
+                <span class="points-override-name">${this._displayName(name)}</span>
+                <input
+                  type="number"
+                  min="0"
+                  class="points-override-input"
+                  .value=${String(value)}
+                  @input=${(e: Event) => {
+                    const typed = Number((e.target as HTMLInputElement).value) || 0;
+                    const rest = { ...draft.pointsByAssignee };
+                    if (typed === draft.points) {
+                      delete rest[name];
+                    } else {
+                      rest[name] = typed;
+                    }
+                    draft.pointsByAssignee = rest;
+                    this.requestUpdate();
+                  }}
+                />
+              </div>
+            `;
+          })}
+        </div>
+      </label>
     `;
   }
 
@@ -1356,6 +1712,11 @@ export class SimpleChoresPanel extends LitElement {
     }
 
     const assignees = draft.assignees.join(",");
+    // Drop overrides for anyone no longer listed as an assignee.
+    const pointsByAssignee = Object.entries(draft.pointsByAssignee)
+      .filter(([name]) => draft.assignees.includes(name))
+      .map(([name, points]) => `${name}:${points}`)
+      .join(",");
     const ok = dialog.original
       ? await this._call(SERVICE_DOMAIN, "update_chore", {
           slug: dialog.original,
@@ -1365,6 +1726,7 @@ export class SimpleChoresPanel extends LitElement {
           assignees,
           icon: draft.icon || DEFAULT_CHORE_ICON,
           points: draft.points,
+          points_by_assignee: pointsByAssignee,
           category: draft.category,
           ...this._renameField(dialog.original, draft.slug || draft.name),
         })
@@ -1376,6 +1738,7 @@ export class SimpleChoresPanel extends LitElement {
           assignees,
           icon: draft.icon || DEFAULT_CHORE_ICON,
           points: draft.points,
+          points_by_assignee: pointsByAssignee,
           category: draft.category,
         });
 
@@ -1552,6 +1915,7 @@ export class SimpleChoresPanel extends LitElement {
     }
 
     button.primary,
+    button.danger:not(.icon-button),
     .actions-row button,
     .dialog-footer button {
       border: 1px solid var(--divider-color, #e0e0e0);
@@ -1567,6 +1931,15 @@ export class SimpleChoresPanel extends LitElement {
     .dialog-footer button.primary {
       background: var(--primary-color, #03a9f4);
       border-color: var(--primary-color, #03a9f4);
+      color: #fff;
+    }
+    /* :not(.icon-button) keeps this out of the circular icon-button.danger
+       delete buttons below, which have their own (transparent-background)
+       danger styling. */
+    button.danger:not(.icon-button),
+    .dialog-footer button.danger {
+      background: var(--error-color, #db4437);
+      border-color: var(--error-color, #db4437);
       color: #fff;
     }
     button:disabled {
@@ -1908,6 +2281,186 @@ export class SimpleChoresPanel extends LitElement {
     }
     .settings-toggle {
       font-size: 14px;
+    }
+
+    .danger-zone {
+      max-width: 420px;
+      margin-top: 20px;
+      border: 1px solid var(--error-color, #db4437);
+      border-radius: 12px;
+      padding: 16px;
+      background: rgba(219, 68, 55, 0.05);
+    }
+    .danger-zone h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--error-color, #db4437);
+    }
+    .danger-zone-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .danger-zone-text {
+      flex: 1;
+      min-width: 180px;
+    }
+    .danger-zone-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary-text-color, #212121);
+      margin-bottom: 2px;
+    }
+    .danger-zone .hint {
+      margin: 0;
+    }
+    .danger-text {
+      color: var(--error-color, #db4437);
+    }
+
+    .points-summary {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--secondary-text-color, #727272);
+      margin-bottom: 12px;
+    }
+    .points-summary ha-icon {
+      --mdc-icon-size: 16px;
+      color: var(--primary-color, #03a9f4);
+    }
+    .points-summary strong {
+      color: var(--primary-text-color, #212121);
+      font-weight: 500;
+    }
+    .points-summary-sep {
+      opacity: 0.5;
+    }
+
+    .user-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .user-identity {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .user-identity .name {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--primary-text-color, #212121);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .user-points-total {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      flex-shrink: 0;
+    }
+    .user-points-value {
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1.1;
+      color: var(--primary-color, #03a9f4);
+    }
+    .user-points-label {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--secondary-text-color, #727272);
+    }
+
+    .points-stats {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--divider-color, #e0e0e0);
+    }
+    .points-stat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .points-stat-value {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--primary-text-color, #212121);
+    }
+    .points-stat-label {
+      font-size: 11px;
+      color: var(--secondary-text-color, #727272);
+      text-align: center;
+    }
+
+    .user-adjust-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--divider-color, #e0e0e0);
+    }
+    .user-adjust-input {
+      width: 90px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--primary-text-color, #212121);
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .points-override-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 8px;
+      padding: 8px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .points-override-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .points-override-name {
+      font-size: 14px;
+      color: var(--primary-text-color, #212121);
+    }
+    .points-override-input {
+      width: 70px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--primary-text-color, #212121);
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 8px;
+      padding: 6px 8px;
+    }
+    .points-override-badge {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--primary-color, #03a9f4);
+      background: rgba(3, 169, 244, 0.12);
+      border-radius: 999px;
+      padding: 2px 7px;
     }
 
     .chip-list {

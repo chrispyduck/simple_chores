@@ -36,7 +36,7 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
   * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending, once chores are deleted entirely. Calculates daily points statistics before resetting. Takes an optional user parameter.
   * `simple_chores.finalize_by_category` - Like `start_new_day`, but scoped to a single category and only for `manual` chores: completed manual chores in the category reset to not requested, and pending ones count towards missed points. Daily and once chores in the category are left untouched. Takes a category slug and optional user parameter.
   * `simple_chores.create_chore` - Dynamically create a new chore at runtime with specified properties including points.
-  * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon. Pass `new_slug` to rename it; any privilege linking to it by slug is updated to match.
+  * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon. Pass `new_slug` to rename it; any privilege linking to it by slug is updated to match. Pass `points_by_assignee` (`"user:points,..."`) to set or clear per-assignee point overrides.
   * `simple_chores.delete_chore` - Remove a chore from the system.
   * `simple_chores.refresh_summary` - Force refresh of summary sensor attributes for one or all assignees.
   * `simple_chores.adjust_points` - Manually adjusts an assignee's earned points by a specified amount (positive or negative). Useful for bonuses, penalties, or corrections.
@@ -105,7 +105,8 @@ chores:
   - `manual`: Chore will be reset to Not Requested each day after being completed
   - `once`: One-off chore that is deleted entirely after completion when start_new_day is called (useful for temporary or ad-hoc tasks)
 - `assignees`: List of Home Assistant usernames who can be assigned this chore (required, at least one)
-- `points`: Number of points awarded when the chore is completed (optional, default: 1, must be >= 0)
+- `points`: Default number of points awarded when the chore is completed (optional, default: 1, must be >= 0)
+- `points_by_assignee`: Per-assignee point overrides, e.g. `{alice: 10, bob: 5}` (optional). An assignee not listed here earns `points` instead - useful for giving an older or younger kid a different reward for the same chore.
 - `icon`: Material Design Icon for the chore (optional, default: `mdi:clipboard-list-outline`)
 
 The configuration file is automatically reloaded when changes are detected (checked every 5 seconds).

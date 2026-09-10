@@ -41,3 +41,20 @@ no need to restart Home Assistant).
 ```sh
 npx tsc --noEmit
 ```
+
+## Testing
+
+```sh
+npm test        # run once
+npm run test:watch   # re-run on save
+```
+
+Tests run under [Vitest](https://vitest.dev/) with a jsdom environment (see
+`vitest.config.ts`). `src/types.test.ts` covers the pure parsing/mapping
+functions in `src/types.ts` (rebuilding chore/privilege/category/settings/
+summary definitions from `hass.states`, drafts, slugs, display names).
+`src/simple-chores-panel.test.ts` mounts the actual `<simple-chores-panel>`
+custom element against a stubbed `hass` object and asserts on its rendered
+shadow DOM (tabs, the admin gate, chore cards, the Settings danger zone,
+the Users tab). CI runs type checking, tests, and the build on every push
+and PR (see `.github/workflows/lint.yml`).

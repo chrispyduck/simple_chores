@@ -4164,3 +4164,93 @@ class TestFinalizeOneService:
         )
 
         assert points_storage.get_chore_completed_at(mock_sensor.entity_id) is None
+
+
+class TestPerAssigneePoints:
+    """Tests for per-assignee point overrides (ChoreConfig.points_by_assignee)."""
+
+    def _make_dishes_sensors(self, hass) -> tuple[ChoreSensor, ChoreSensor]:
+        """Build alice/bob sensors for a chore where only alice has an override."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+            points=2,
+            points_by_assignee={"alice": 10},
+        )
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            alice_sensor = ChoreSensor(hass, chore, "alice")
+            alice_sensor.async_update_ha_state = AsyncMock()
+            bob_sensor = ChoreSensor(hass, chore, "bob")
+            bob_sensor.async_update_ha_state = AsyncMock()
+        return alice_sensor, bob_sensor
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_awards_override_points(self, hass) -> None:
+        """A completed chore awards its override, not the shared default."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        alice_sensor, bob_sensor = self._make_dishes_sensors(hass)
+        points_storage = PointsStorage(hass)
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": alice_sensor, "bob_dishes": bob_sensor},
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "bob", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        # Alice has a 10-point override; bob falls back to the shared default of 2.
+        assert points_storage.get_points("alice") == 10
+        assert points_storage.get_points("bob") == 2
+
+    @pytest.mark.asyncio
+    async def test_mark_pending_deducts_override_points(self, hass) -> None:
+        """Un-completing a chore deducts the same override amount that was awarded."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        alice_sensor, _bob_sensor = self._make_dishes_sensors(hass)
+        points_storage = PointsStorage(hass)
+        hass.data[DOMAIN] = {
+            "sensors": {"alice_dishes": alice_sensor},
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        assert points_storage.get_points("alice") == 10
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_PENDING,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        assert points_storage.get_points("alice") == 0
+
+    def test_sensor_exposes_resolved_and_default_points(self, hass) -> None:
+        """The sensor's 'points' resolves per-assignee; 'default_points' doesn't."""
+        alice_sensor, bob_sensor = self._make_dishes_sensors(hass)
+
+        assert alice_sensor.extra_state_attributes["points"] == 10
+        assert alice_sensor.extra_state_attributes["default_points"] == 2
+        assert bob_sensor.extra_state_attributes["points"] == 2
+        assert bob_sensor.extra_state_attributes["default_points"] == 2

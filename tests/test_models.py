@@ -68,6 +68,47 @@ class TestChoreConfig:
         assert chore.frequency == ChoreFrequency.DAILY
         assert chore.assignees == ["alice"]
 
+    def test_points_by_assignee_defaults_empty(self) -> None:
+        """Test that a chore with no overrides has an empty points_by_assignee."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+        )
+
+        assert chore.points_by_assignee == {}
+        assert chore.points_for("alice") == chore.points
+        assert chore.points_for("bob") == chore.points
+
+    def test_points_for_honors_override(self) -> None:
+        """Test that points_for returns the override for a listed assignee."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice", "bob"],
+            points=2,
+            points_by_assignee={"alice": 5},
+        )
+
+        assert chore.points_for("alice") == 5
+        assert chore.points_for("bob") == 2
+
+    def test_points_by_assignee_rejects_negative_values(self) -> None:
+        """Test that a negative points override raises a validation error."""
+        with pytest.raises(ValidationError) as exc_info:
+            ChoreConfig(
+                name="Dishes",
+                slug="dishes",
+                frequency=ChoreFrequency.DAILY,
+                assignees=["alice"],
+                points_by_assignee={"alice": -1},
+            )
+
+        errors = exc_info.value.errors()
+        assert any("must be non-negative" in str(err) for err in errors)
+
     def test_slug_validation_empty(self) -> None:
         """Test that empty slug raises validation error."""
         with pytest.raises(ValidationError) as exc_info:

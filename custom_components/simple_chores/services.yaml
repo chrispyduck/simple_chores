@@ -153,7 +153,7 @@ create_chore:
         text:
     points:
       name: Points
-      description: Points awarded when the chore is completed
+      description: Default points awarded when the chore is completed
       required: false
       default: 1
       example: 5
@@ -162,6 +162,13 @@ create_chore:
           min: 0
           max: 1000000000
           mode: box
+    points_by_assignee:
+      name: Points by assignee
+      description: Comma-separated per-assignee point overrides as "user:points" pairs (e.g. "alice:10,bob:5") - an assignee not listed here earns the default Points value instead
+      required: false
+      example: "alice:10,bob:5"
+      selector:
+        text:
     category:
       name: Category
       description: Slug of the category this chore belongs to (optional - leave empty for uncategorized)
@@ -222,7 +229,7 @@ update_chore:
         text:
     points:
       name: Points
-      description: New point value for completing the chore (leave empty to keep current)
+      description: New default point value for completing the chore (leave empty to keep current)
       required: false
       example: 5
       selector:
@@ -230,6 +237,13 @@ update_chore:
           min: 0
           max: 1000000000
           mode: box
+    points_by_assignee:
+      name: Points by assignee
+      description: New comma-separated per-assignee point overrides as "user:points" pairs (e.g. "alice:10,bob:5") - pass an empty string to clear all overrides, or leave unset to keep current
+      required: false
+      example: "alice:10,bob:5"
+      selector:
+        text:
     category:
       name: Category
       description: New category slug, or an empty string to uncategorize (leave unset to keep current)
