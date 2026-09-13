@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
+from custom_components.simple_chores.const import DOMAIN
 from custom_components.simple_chores.models import (
     ChoreConfig,
     ChoreFrequency,
@@ -383,3 +384,62 @@ class TestChoreSummarySensor:
         assert attrs["total_complete"] == 2
         assert attrs["total_chores_today"] == 2  # 0 pending + 2 complete
         assert attrs["total_pending"] != attrs["total_complete"]
+
+    @pytest.mark.asyncio
+    async def test_summary_sensor_dict_keyed_by_sanitized_assignee(self, hass) -> None:
+        """
+        Ensure summary_sensors is keyed the same sanitized way as other dicts.
+
+        The manager's summary_sensors dict must be keyed the same sanitized
+        way as sensors/privilege_sensors/category_sensors are.
+
+        services._update_summary_sensors() (used by finalize_one,
+        finalize_by_category, mark_complete, reset_completed, ...) always
+        looks a user up by sanitize_entity_id(user). An assignee name that
+        isn't already all-lowercase-alnum (e.g. "Chris", any name with a
+        space) used to be stored under its raw form, so that lookup would
+        silently miss and the summary sensor would never refresh - leading
+        to stale total_complete/total_pending counts after exactly the
+        actions (finalize_one, finalize_by_category) that are supposed to
+        change them.
+        """
+        config = SimpleChoresConfig(
+            chores=[
+                ChoreConfig(
+                    name="Dishes",
+                    slug="dishes",
+                    frequency=ChoreFrequency.MANUAL,
+                    assignees=["Chris"],
+                ),
+            ]
+        )
+        hass.data = {}
+        mock_config_loader = MagicMock()
+        mock_config_loader.config = config
+        async_add_entities = Mock()
+
+        manager = ChoreSensorManager(hass, async_add_entities, mock_config_loader)
+        await manager.async_setup()
+
+        # Stored under the sanitized key, matching every other per-assignee
+        # dict (sensors, privilege_sensors, category_sensors) - not the raw
+        # "Chris" the config used.
+        assert "chris" in manager.summary_sensors
+        assert "Chris" not in manager.summary_sensors
+
+        # And the services-layer helper, which always sanitizes its lookup,
+        # can therefore actually find and refresh it for the raw-cased name.
+        from custom_components.simple_chores import services
+
+        hass.data[DOMAIN] = {
+            "sensors": manager.sensors,
+            "summary_sensors": manager.summary_sensors,
+            "privilege_sensors": manager.privilege_sensors,
+            "points_storage": manager.points_storage,
+        }
+
+        manager.sensors["chris_dishes"].set_state(ChoreState.COMPLETE.value)
+        await services._update_summary_sensors(hass, "Chris")
+
+        attrs = manager.summary_sensors["chris"].extra_state_attributes
+        assert attrs["total_complete"] == 1

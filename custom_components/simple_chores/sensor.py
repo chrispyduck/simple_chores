@@ -324,9 +324,10 @@ class ChoreSensorManager:
 
         summary_sensors_to_add = []
         for assignee in assignees:
-            if assignee not in self.summary_sensors:
+            sanitized_assignee = sanitize_entity_id(assignee)
+            if sanitized_assignee not in self.summary_sensors:
                 summary_sensor = ChoreSummarySensor(self.hass, assignee, self)
-                self.summary_sensors[assignee] = summary_sensor
+                self.summary_sensors[sanitized_assignee] = summary_sensor
                 summary_sensors_to_add.append(summary_sensor)
                 LOGGER.debug("Created summary sensor for assignee %s", assignee)
 
@@ -346,23 +347,28 @@ class ChoreSensorManager:
         assignees = set()
         for chore in config.chores:
             assignees.update(chore.assignees)
+        sanitized_assignees = {sanitize_entity_id(assignee) for assignee in assignees}
 
         # Remove summary sensors for assignees no longer in config
         summary_sensors_to_remove = []
-        for assignee, sensor in list(self.summary_sensors.items()):
-            if assignee not in assignees:
-                summary_sensors_to_remove.append(assignee)
+        for sanitized_assignee, sensor in list(self.summary_sensors.items()):
+            if sanitized_assignee not in sanitized_assignees:
+                summary_sensors_to_remove.append(sanitized_assignee)
                 if sensor.hass is not None and hasattr(sensor, "platform"):
                     try:
                         await sensor.async_remove()
-                        LOGGER.debug("Removed summary sensor for %s", assignee)
+                        LOGGER.debug(
+                            "Removed summary sensor for %s", sanitized_assignee
+                        )
                     except Exception as err:  # noqa: BLE001 - best-effort cleanup, don't abort the reconciliation loop
                         LOGGER.warning(
-                            "Failed to remove summary sensor %s: %s", assignee, err
+                            "Failed to remove summary sensor %s: %s",
+                            sanitized_assignee,
+                            err,
                         )
 
-        for assignee in summary_sensors_to_remove:
-            del self.summary_sensors[assignee]
+        for sanitized_assignee in summary_sensors_to_remove:
+            del self.summary_sensors[sanitized_assignee]
 
         if summary_sensors_to_remove:
             LOGGER.info("Removed %d summary sensor(s)", len(summary_sensors_to_remove))
@@ -370,9 +376,10 @@ class ChoreSensorManager:
         # Create new summary sensors for new assignees
         summary_sensors_to_add = []
         for assignee in assignees:
-            if assignee not in self.summary_sensors:
+            sanitized_assignee = sanitize_entity_id(assignee)
+            if sanitized_assignee not in self.summary_sensors:
                 summary_sensor = ChoreSummarySensor(self.hass, assignee, self)
-                self.summary_sensors[assignee] = summary_sensor
+                self.summary_sensors[sanitized_assignee] = summary_sensor
                 summary_sensors_to_add.append(summary_sensor)
                 LOGGER.debug("Created summary sensor for assignee %s", assignee)
 
