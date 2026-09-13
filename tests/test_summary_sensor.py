@@ -386,9 +386,7 @@ class TestChoreSummarySensor:
         assert attrs["total_pending"] != attrs["total_complete"]
 
     @pytest.mark.asyncio
-    async def test_summary_sensor_dict_keyed_by_sanitized_assignee(
-        self, hass
-    ) -> None:
+    async def test_summary_sensor_dict_keyed_by_sanitized_assignee(self, hass) -> None:
         """
         Ensure summary_sensors is keyed the same sanitized way as other dicts.
 
