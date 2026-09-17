@@ -325,6 +325,14 @@ reset_points:
       selector:
         boolean:
 
+get_history:
+  name: Get History
+  description: Return every stored chore-history entry (completions, reversals, and resets), oldest first. Read-only - used by the admin panel's History tab.
+
+reset_history:
+  name: Reset History
+  description: Permanently delete every chore-history entry. This cannot be undone.
+
 # Category-scoped chore services
 mark_complete_by_category:
   name: Mark Complete by Category

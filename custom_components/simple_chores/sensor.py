@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, LOGGER, SETTINGS_ENTITY_ID, sanitize_entity_id
-from .data import PointsStorage
+from .data import HistoryStorage, PointsStorage
 from .models import (
     CategoryConfig,
     ChoreConfig,
@@ -88,6 +88,7 @@ async def async_setup_entry(
     hass.data[DOMAIN]["category_sensors"] = manager.category_sensors
     hass.data[DOMAIN]["settings_sensor"] = manager.settings_sensor
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
+    hass.data[DOMAIN]["history_storage"] = manager.history_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
         "Stored %d chore sensors, %d summary sensors, %d privilege sensors, "
@@ -135,6 +136,7 @@ async def async_setup_platform(
     hass.data[DOMAIN]["category_sensors"] = manager.category_sensors
     hass.data[DOMAIN]["settings_sensor"] = manager.settings_sensor
     hass.data[DOMAIN]["points_storage"] = manager.points_storage
+    hass.data[DOMAIN]["history_storage"] = manager.history_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
         "Stored %d chore sensors, %d summary sensors, %d privilege sensors, "
@@ -176,10 +178,12 @@ class ChoreSensorManager:
         self.category_sensors: dict[str, CategorySensor] = {}  # type: ignore[name-defined]
         self.settings_sensor: SettingsSensor | None = None
         self.points_storage = PointsStorage(hass)
+        self.history_storage = HistoryStorage(hass)
 
     async def async_setup(self) -> None:
         """Set up initial sensors from configuration."""
         await self.points_storage.async_load()
+        await self.history_storage.async_load()
         config = self.config_loader.config
         await self._create_sensors_from_config(config)
         await self._create_privilege_sensors(config)

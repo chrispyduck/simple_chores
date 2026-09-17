@@ -10,9 +10,11 @@ import {
   choreToDraft,
   displayName,
   emptyChoreDraft,
+  historyActionLabel,
   knownAssignees,
   parseCategories,
   parseChores,
+  parseHistoryEntries,
   parsePrivileges,
   parseSettings,
   parseSummaries,
@@ -453,5 +455,68 @@ describe("categoryToDraft / privilegeToDraft", () => {
     });
     expect(draft.linkedChores).toEqual(["dishes"]);
     expect(draft.linkedChores).not.toBe(privilege.linkedChores);
+  });
+});
+
+describe("parseHistoryEntries", () => {
+  it("returns an empty array for null/undefined input", () => {
+    expect(parseHistoryEntries(null)).toEqual([]);
+    expect(parseHistoryEntries(undefined)).toEqual([]);
+  });
+
+  it("converts raw snake_case entries to HistoryEntry objects", () => {
+    const raw = [
+      {
+        id: "abc123",
+        timestamp: "2026-01-01T12:00:00+00:00",
+        action: "completed",
+        chore_slug: "dishes",
+        chore_name: "Dishes",
+        category: "kitchen",
+        assignee: "alice",
+        points_delta: 10,
+        points_total: 10,
+      },
+    ];
+
+    expect(parseHistoryEntries(raw)).toEqual([
+      {
+        id: "abc123",
+        timestamp: "2026-01-01T12:00:00+00:00",
+        action: "completed",
+        choreSlug: "dishes",
+        choreName: "Dishes",
+        category: "kitchen",
+        assignee: "alice",
+        pointsDelta: 10,
+        pointsTotal: 10,
+      },
+    ]);
+  });
+
+  it("defaults category to null and falls back choreName to the slug", () => {
+    const raw = [
+      {
+        id: "abc123",
+        timestamp: "2026-01-01T12:00:00+00:00",
+        action: "reset",
+        chore_slug: "dishes",
+        assignee: "alice",
+      },
+    ];
+
+    const [entry] = parseHistoryEntries(raw);
+    expect(entry.category).toBeNull();
+    expect(entry.choreName).toBe("dishes");
+    expect(entry.pointsDelta).toBe(0);
+    expect(entry.pointsTotal).toBe(0);
+  });
+});
+
+describe("historyActionLabel", () => {
+  it("labels each known action", () => {
+    expect(historyActionLabel("completed")).toBe("Completed");
+    expect(historyActionLabel("uncompleted")).toBe("Un-completed");
+    expect(historyActionLabel("reset")).toBe("Reset");
   });
 });

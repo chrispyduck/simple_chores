@@ -12,6 +12,8 @@ import {
   DEFAULT_CHORE_ICON,
   DEFAULT_PRIVILEGE_ICON,
   HaUserInfo,
+  HistoryAction,
+  HistoryEntry,
   HomeAssistant,
   PrivilegeBehavior,
   PrivilegeDefinition,
@@ -26,9 +28,11 @@ import {
   emptyCategoryDraft,
   emptyChoreDraft,
   emptyPrivilegeDraft,
+  historyActionLabel,
   knownAssignees,
   parseCategories,
   parseChores,
+  parseHistoryEntries,
   parsePrivileges,
   parseSettings,
   parseSummaries,
@@ -44,7 +48,7 @@ const SERVICE_DOMAIN = "simple_chores";
 // "no filter, show every chore" in the filter dropdown.
 const UNCATEGORIZED_FILTER = "__uncategorized__";
 
-type Tab = "chores" | "privileges" | "categories" | "users" | "settings";
+type Tab = "chores" | "privileges" | "categories" | "users" | "history" | "settings";
 
 type ChoreSortKey = "name" | "points" | "frequency" | "category";
 
@@ -95,6 +99,11 @@ export class SimpleChoresPanel extends LitElement {
   @state() private _settingsDraft: SettingsDraft | null = null;
   @state() private _resetPointsDialog: ResetPointsDraft | null = null;
   @state() private _userAdjustInput: Record<string, string> = {};
+  @state() private _historyEntries: HistoryEntry[] | null = null;
+  @state() private _historyLoading = false;
+  @state() private _historyUserFilter = "";
+  @state() private _historyCategoryFilter = "";
+  @state() private _historyChoreFilter = "";
   private _loadedUserDisplayNames = false;
 
   protected updated(changed: PropertyValues): void {
@@ -188,6 +197,12 @@ export class SimpleChoresPanel extends LitElement {
             Users
           </button>
           <button
+            class="tab ${this._tab === "history" ? "active" : ""}"
+            @click=${this._openHistoryTab}
+          >
+            History
+          </button>
+          <button
             class="tab ${this._tab === "settings" ? "active" : ""}"
             @click=${() => (this._tab = "settings")}
           >
@@ -203,7 +218,9 @@ export class SimpleChoresPanel extends LitElement {
               ? this._renderCategoriesTab(categories, assignees)
               : this._tab === "users"
                 ? this._renderUsersTab(assignees, summaries)
-                : this._renderSettingsTab(settings, assignees)}
+                : this._tab === "history"
+                  ? this._renderHistoryTab(chores, categories, assignees)
+                  : this._renderSettingsTab(settings, assignees)}
       </div>
 
       ${this._dialog ? this._renderDialog(chores, categories, assignees) : nothing}
@@ -867,6 +884,19 @@ export class SimpleChoresPanel extends LitElement {
             Reset points&hellip;
           </button>
         </div>
+        <div class="danger-zone-row">
+          <div class="danger-zone-text">
+            <div class="danger-zone-title">Clear chore history</div>
+            <p class="hint">
+              Permanently deletes every entry in the History tab's chore
+              audit log. Point totals are not affected. This cannot be
+              undone.
+            </p>
+          </div>
+          <button class="danger" @click=${() => this._clearHistory()}>
+            Clear history&hellip;
+          </button>
+        </div>
       </div>
     `;
   }
@@ -1054,6 +1084,195 @@ export class SimpleChoresPanel extends LitElement {
     if (ok) {
       this._userAdjustInput = { ...this._userAdjustInput, [assignee]: "" };
     }
+  }
+
+  // --- History tab -----------------------------------------------------
+
+  private _openHistoryTab = () => {
+    this._tab = "history";
+    if (this._historyEntries === null) void this._loadHistory();
+  };
+
+  /**
+   * Fetch the chore audit log via the get_history service's response data.
+   * There's no entity backing this (unlike chores/privileges/categories) -
+   * a growing list of history entries doesn't fit in entity attributes - so
+   * this calls the service directly over the websocket connection and asks
+   * for its response, the same way `_loadUserDisplayNames` uses `callWS`
+   * for a websocket command with no `hass.callService` equivalent.
+   */
+  private async _loadHistory(): Promise<void> {
+    this._historyLoading = true;
+    try {
+      const result = await this.hass.callWS<{
+        response?: { entries?: unknown[] };
+      }>({
+        type: "call_service",
+        domain: SERVICE_DOMAIN,
+        service: "get_history",
+        service_data: {},
+        return_response: true,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this._historyEntries = parseHistoryEntries(result?.response?.entries as any[]);
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : String(err);
+    } finally {
+      this._historyLoading = false;
+    }
+  }
+
+  private async _clearHistory() {
+    if (
+      !confirm("Permanently delete every chore history entry? This cannot be undone.")
+    ) {
+      return;
+    }
+    const ok = await this._call(SERVICE_DOMAIN, "reset_history", {});
+    if (ok) this._historyEntries = [];
+  }
+
+  private _renderHistoryTab(
+    chores: ChoreDefinition[],
+    categories: CategoryDefinition[],
+    assignees: string[]
+  ) {
+    const entries = this._historyEntries ?? [];
+    const filtered = entries.filter((entry) => {
+      if (this._historyUserFilter && entry.assignee !== this._historyUserFilter) {
+        return false;
+      }
+      if (this._historyCategoryFilter) {
+        if (this._historyCategoryFilter === UNCATEGORIZED_FILTER) {
+          if (entry.category) return false;
+        } else if (entry.category !== this._historyCategoryFilter) {
+          return false;
+        }
+      }
+      if (this._historyChoreFilter && entry.choreSlug !== this._historyChoreFilter) {
+        return false;
+      }
+      return true;
+    });
+
+    // Newest first - this is an audit log, so the most recent activity is
+    // what an admin checking in on it wants to see first.
+    const sorted = [...filtered].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    const choreOptions = [...chores].sort((a, b) => a.name.localeCompare(b.name));
+
+    return html`
+      <div class="actions-row">
+        <select
+          class="user-picker"
+          title="Filter history by assignee"
+          .value=${this._historyUserFilter}
+          @change=${(e: Event) =>
+            (this._historyUserFilter = (e.target as HTMLSelectElement).value)}
+        >
+          <option value="">All assignees</option>
+          ${assignees.map(
+            (a) => html`<option value=${a}>${this._displayName(a)}</option>`
+          )}
+        </select>
+        <select
+          class="user-picker"
+          title="Filter history by category"
+          .value=${this._historyCategoryFilter}
+          @change=${(e: Event) =>
+            (this._historyCategoryFilter = (e.target as HTMLSelectElement).value)}
+        >
+          <option value="">All categories</option>
+          <option value=${UNCATEGORIZED_FILTER}>Uncategorized</option>
+          ${categories.map((c) => html`<option value=${c.slug}>${c.name}</option>`)}
+        </select>
+        <select
+          class="user-picker"
+          title="Filter history by chore"
+          .value=${this._historyChoreFilter}
+          @change=${(e: Event) =>
+            (this._historyChoreFilter = (e.target as HTMLSelectElement).value)}
+        >
+          <option value="">All chores</option>
+          ${choreOptions.map((c) => html`<option value=${c.slug}>${c.name}</option>`)}
+        </select>
+        <div class="spacer"></div>
+        <button ?disabled=${this._historyLoading} @click=${() => this._loadHistory()}>
+          ${this._historyLoading ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
+
+      ${this._historyEntries === null
+        ? html`<p class="empty">Loading history&hellip;</p>`
+        : sorted.length === 0
+          ? html`<p class="empty">
+              ${entries.length === 0
+                ? "No chore history yet. Complete a chore to get started."
+                : "No history entries match the current filters."}
+            </p>`
+          : html`
+              <div class="history-list">
+                <div class="history-row history-header">
+                  <div class="history-cell history-time">Time</div>
+                  <div class="history-cell history-chore">Chore</div>
+                  <div class="history-cell history-assignee">Assignee</div>
+                  <div class="history-cell history-action">Action</div>
+                  <div class="history-cell history-points">Points</div>
+                  <div class="history-cell history-balance">Balance</div>
+                </div>
+                ${sorted.map((entry) => this._renderHistoryRow(entry, categories))}
+              </div>
+            `}
+    `;
+  }
+
+  private _renderHistoryRow(entry: HistoryEntry, categories: CategoryDefinition[]) {
+    const categoryName = entry.category
+      ? (categories.find((c) => c.slug === entry.category)?.name ?? entry.category)
+      : null;
+    const pointsClass =
+      entry.pointsDelta > 0
+        ? "points-positive"
+        : entry.pointsDelta < 0
+          ? "points-negative"
+          : "";
+    const pointsLabel = entry.pointsDelta > 0 ? `+${entry.pointsDelta}` : entry.pointsDelta;
+
+    return html`
+      <div class="history-row">
+        <div class="history-cell history-time">
+          ${this._formatHistoryTimestamp(entry.timestamp)}
+        </div>
+        <div class="history-cell history-chore">
+          <div class="name">${entry.choreName}</div>
+          ${categoryName ? html`<div class="meta">${categoryName}</div>` : nothing}
+        </div>
+        <div class="history-cell history-assignee">
+          ${this._displayName(entry.assignee)}
+        </div>
+        <div class="history-cell history-action">
+          <span class="state-chip ${this._historyActionClass(entry.action)}">
+            ${historyActionLabel(entry.action)}
+          </span>
+        </div>
+        <div class="history-cell history-points ${pointsClass}">
+          ${entry.pointsDelta === 0 ? "—" : pointsLabel}
+        </div>
+        <div class="history-cell history-balance" title="Points balance after this entry">
+          ${entry.pointsTotal}
+        </div>
+      </div>
+    `;
+  }
+
+  private _historyActionClass(action: HistoryAction): string {
+    if (action === "completed") return "state-good";
+    if (action === "uncompleted") return "state-bad";
+    return "state-neutral";
+  }
+
+  private _formatHistoryTimestamp(iso: string): string {
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
   }
 
   // --- Dialog ------------------------------------------------------------
@@ -2339,6 +2558,53 @@ export class SimpleChoresPanel extends LitElement {
     }
     .points-summary-sep {
       opacity: 0.5;
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      background: var(--card-background-color, #fff);
+      border-radius: 12px;
+      box-shadow: var(--ha-card-box-shadow, 0 2px 4px rgba(0, 0, 0, 0.1));
+      overflow-x: auto;
+    }
+    .history-row {
+      display: grid;
+      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.7fr 0.8fr;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--divider-color, #e0e0e0);
+      font-size: 13px;
+      min-width: 560px;
+    }
+    .history-row:last-child {
+      border-bottom: none;
+    }
+    .history-header {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--secondary-text-color, #727272);
+      background: rgba(0, 0, 0, 0.03);
+    }
+    .history-cell.history-chore .name {
+      font-weight: 500;
+      color: var(--primary-text-color, #212121);
+    }
+    .history-cell.history-chore .meta {
+      font-size: 11px;
+      color: var(--secondary-text-color, #727272);
+    }
+    .history-points,
+    .history-balance {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .points-positive {
+      color: #2e7d32;
+    }
+    .points-negative {
+      color: var(--error-color, #db4437);
     }
 
     .user-card-header {

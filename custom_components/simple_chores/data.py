@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from homeassistant.helpers.storage import Store
 
@@ -15,6 +16,15 @@ if TYPE_CHECKING:
 
 STORAGE_VERSION = 1
 STORAGE_KEY = "simple_chores.points"
+
+HISTORY_STORAGE_VERSION = 1
+HISTORY_STORAGE_KEY = "simple_chores.history"
+
+# Hard cap on stored audit-log entries. This is meant to be a household's
+# day-to-day chore history, not indefinite bookkeeping - once it's exceeded,
+# the oldest entries are evicted first so both the storage file and the
+# get_history service response stay bounded.
+MAX_HISTORY_ENTRIES = 500
 
 
 @dataclass
@@ -229,3 +239,68 @@ class PointsStorage:
         if assignee in self._privilege_pre_block_state:
             self._privilege_pre_block_state[assignee].pop(privilege_slug, None)
         await self.async_save()
+
+
+class HistoryStorage:
+    """
+    Append-only audit log of chore completions, reversals and resets.
+
+    Deliberately separate from PointsStorage (a different Store/file) so
+    resetting the audit log - see async_clear, used by the reset_history
+    service - can never touch live points/privilege state, and vice versa.
+    """
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize history storage."""
+        self._store = Store(hass, HISTORY_STORAGE_VERSION, HISTORY_STORAGE_KEY)
+        self._entries: list[dict[str, Any]] = []
+
+    async def async_load(self) -> None:
+        """Load history entries from storage."""
+        data = await self._store.async_load()
+        if data:
+            self._entries = data.get("entries", [])
+
+    async def async_save(self) -> None:
+        """Save history entries to storage."""
+        await self._store.async_save({"entries": self._entries})
+
+    def get_entries(self) -> list[dict[str, Any]]:
+        """Return every stored entry, oldest first."""
+        return list(self._entries)
+
+    async def async_add_entry(
+        self,
+        *,
+        action: str,
+        chore_slug: str,
+        chore_name: str,
+        category: str | None,
+        assignee: str,
+        points_delta: int,
+        points_total: int,
+    ) -> dict[str, Any]:
+        """Append a new entry, evicting the oldest past MAX_HISTORY_ENTRIES."""
+        entry: dict[str, Any] = {
+            "id": uuid4().hex,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "action": action,
+            "chore_slug": chore_slug,
+            "chore_name": chore_name,
+            "category": category,
+            "assignee": assignee,
+            "points_delta": points_delta,
+            "points_total": points_total,
+        }
+        self._entries.append(entry)
+        if len(self._entries) > MAX_HISTORY_ENTRIES:
+            self._entries = self._entries[-MAX_HISTORY_ENTRIES:]
+        await self.async_save()
+        return entry
+
+    async def async_clear(self) -> int:
+        """Delete every stored entry, returning how many were removed."""
+        count = len(self._entries)
+        self._entries = []
+        await self.async_save()
+        return count

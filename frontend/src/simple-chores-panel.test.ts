@@ -57,7 +57,14 @@ describe("simple-chores-panel", () => {
     const el = await mountPanel(makeHass());
 
     const labels = tabButtons(el).map((t) => t.textContent?.trim());
-    expect(labels).toEqual(["Chores", "Privileges", "Categories", "Users", "Settings"]);
+    expect(labels).toEqual([
+      "Chores",
+      "Privileges",
+      "Categories",
+      "Users",
+      "History",
+      "Settings",
+    ]);
   });
 
   it("defaults to the Chores tab with an empty state when there are no chores", async () => {
@@ -174,5 +181,77 @@ describe("simple-chores-panel", () => {
     await el.updateComplete;
 
     expect(el.shadowRoot!.querySelector(".user-points-value")?.textContent).toBe("42");
+  });
+
+  it("loads and renders history entries when the History tab is opened", async () => {
+    const callWS = vi.fn().mockResolvedValue({
+      response: {
+        entries: [
+          {
+            id: "1",
+            timestamp: "2026-01-01T12:00:00+00:00",
+            action: "completed",
+            chore_slug: "dishes",
+            chore_name: "Dishes",
+            category: "kitchen",
+            assignee: "alice",
+            points_delta: 10,
+            points_total: 10,
+          },
+        ],
+      },
+    });
+    const el = await mountPanel(makeHass({ callWS }));
+
+    const historyTab = tabButtons(el).find((t) => t.textContent?.trim() === "History")!;
+    historyTab.click();
+    await el.updateComplete;
+    // _loadHistory awaits callWS before assigning _historyEntries.
+    await el.updateComplete;
+
+    expect(callWS).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "call_service",
+        domain: "simple_chores",
+        service: "get_history",
+        return_response: true,
+      })
+    );
+
+    const row = el.shadowRoot!.querySelector(".history-row:not(.history-header)");
+    expect(row?.querySelector(".history-chore .name")?.textContent).toBe("Dishes");
+    expect(row?.querySelector(".history-points")?.textContent?.trim()).toBe("+10");
+    expect(row?.querySelector(".history-balance")?.textContent?.trim()).toBe("10");
+  });
+
+  it("shows an empty state on the History tab with no entries", async () => {
+    const el = await mountPanel(makeHass({ callWS: vi.fn().mockResolvedValue({}) }));
+
+    const historyTab = tabButtons(el).find((t) => t.textContent?.trim() === "History")!;
+    historyTab.click();
+    await el.updateComplete;
+    await el.updateComplete;
+
+    expect(el.shadowRoot!.querySelector(".empty")?.textContent).toContain(
+      "No chore history yet"
+    );
+  });
+
+  it("clears history from the Settings danger zone after confirming", async () => {
+    const callService = vi.fn().mockResolvedValue(undefined);
+    const el = await mountPanel(makeHass({ callService }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const settingsTab = tabButtons(el).find((t) => t.textContent?.trim() === "Settings")!;
+    settingsTab.click();
+    await el.updateComplete;
+
+    const clearButton = [
+      ...el.shadowRoot!.querySelectorAll<HTMLButtonElement>(".danger-zone button"),
+    ].find((b) => b.textContent?.includes("Clear history"))!;
+    clearButton.click();
+    await el.updateComplete;
+
+    expect(callService).toHaveBeenCalledWith("simple_chores", "reset_history", {});
   });
 });

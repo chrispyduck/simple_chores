@@ -24,6 +24,7 @@ from custom_components.simple_chores.const import (
     SERVICE_DELETE_CHORE,
     SERVICE_FINALIZE_BY_CATEGORY,
     SERVICE_FINALIZE_ONE,
+    SERVICE_GET_HISTORY,
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_COMPLETE_BY_CATEGORY,
     SERVICE_MARK_NOT_REQUESTED,
@@ -32,6 +33,7 @@ from custom_components.simple_chores.const import (
     SERVICE_MARK_PENDING_BY_CATEGORY,
     SERVICE_REFRESH_SUMMARY,
     SERVICE_RESET_COMPLETED,
+    SERVICE_RESET_HISTORY,
     SERVICE_RESET_POINTS,
     SERVICE_START_NEW_DAY,
     SERVICE_UPDATE_CHORE,
@@ -112,6 +114,8 @@ class TestServiceSetup:
         assert hass.services.has_service(DOMAIN, SERVICE_REFRESH_SUMMARY)
         assert hass.services.has_service(DOMAIN, SERVICE_ADJUST_POINTS)
         assert hass.services.has_service(DOMAIN, SERVICE_RESET_POINTS)
+        assert hass.services.has_service(DOMAIN, SERVICE_GET_HISTORY)
+        assert hass.services.has_service(DOMAIN, SERVICE_RESET_HISTORY)
         assert hass.services.has_service(DOMAIN, SERVICE_UPDATE_SETTINGS)
 
     @pytest.mark.asyncio
@@ -122,8 +126,8 @@ class TestServiceSetup:
         # Verify all services are in the correct domain
         services = hass.services.async_services_for_domain(DOMAIN)
         # 12 chore services (incl. finalize_one) + 7 category services
-        # + 1 settings service + 8 privilege services
-        assert len(services) == 28
+        # + 1 settings service + 8 privilege services + 2 history services
+        assert len(services) == 30
 
 
 class TestMarkCompleteService:
@@ -4254,3 +4258,255 @@ class TestPerAssigneePoints:
         assert alice_sensor.extra_state_attributes["default_points"] == 2
         assert bob_sensor.extra_state_attributes["points"] == 2
         assert bob_sensor.extra_state_attributes["default_points"] == 2
+
+
+class TestHistoryService:
+    """Tests for the chore history (audit log) services and hooks."""
+
+    def _make_sensor(self, hass, *, slug="dishes", assignee="alice", points=1):
+        """Create a ChoreSensor with the given points, defaulting like mock_sensor."""
+        chore = ChoreConfig(
+            name=slug.title(),
+            slug=slug,
+            frequency=ChoreFrequency.DAILY,
+            assignees=[assignee],
+            points=points,
+        )
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(hass, chore, assignee)
+            sensor.async_update_ha_state = AsyncMock()
+        return sensor
+
+    async def _setup(self, hass, sensor):
+        """Wire up hass.data with a sensor plus real points/history storage."""
+        from custom_components.simple_chores.data import HistoryStorage, PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+        history_storage = HistoryStorage(hass)
+        await history_storage.async_load()
+
+        hass.data[DOMAIN] = {
+            "sensors": {f"{sensor.assignee}_{sensor.chore.slug}": sensor},
+            "points_storage": points_storage,
+            "history_storage": history_storage,
+        }
+        await async_setup_services(hass)
+        return history_storage
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_records_completed_entry(self, hass) -> None:
+        """Completing a chore appends a 'completed' entry with points and balance."""
+        sensor = self._make_sensor(hass, points=10)
+        history_storage = await self._setup(hass, sensor)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert len(entries) == 1
+        assert entries[0]["action"] == "completed"
+        assert entries[0]["chore_slug"] == "dishes"
+        assert entries[0]["assignee"] == "alice"
+        assert entries[0]["points_delta"] == 10
+        assert entries[0]["points_total"] == 10
+
+    @pytest.mark.asyncio
+    async def test_mark_complete_again_does_not_duplicate_entry(self, hass) -> None:
+        """Re-completing an already-complete chore is a no-op for history too."""
+        sensor = self._make_sensor(hass, points=10)
+        history_storage = await self._setup(hass, sensor)
+
+        for _ in range(2):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_MARK_COMPLETE,
+                {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+                blocking=True,
+            )
+
+        assert len(history_storage.get_entries()) == 1
+
+    @pytest.mark.asyncio
+    async def test_mark_pending_after_complete_records_uncompleted_entry(
+        self, hass
+    ) -> None:
+        """Un-completing a chore appends an 'uncompleted' entry with negative points."""
+        sensor = self._make_sensor(hass, points=10)
+        history_storage = await self._setup(hass, sensor)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_PENDING,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert len(entries) == 2
+        assert entries[1]["action"] == "uncompleted"
+        assert entries[1]["points_delta"] == -10
+        assert entries[1]["points_total"] == 0
+
+    @pytest.mark.asyncio
+    async def test_mark_pending_without_prior_completion_records_nothing(
+        self, hass
+    ) -> None:
+        """Requesting a chore that was never complete doesn't touch history."""
+        sensor = self._make_sensor(hass, points=10)
+        history_storage = await self._setup(hass, sensor)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_PENDING,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        assert history_storage.get_entries() == []
+
+    @pytest.mark.asyncio
+    async def test_finalize_one_records_reset_entry(self, hass) -> None:
+        """Finalizing a completed chore appends a points-neutral 'reset' entry."""
+        sensor = self._make_sensor(hass, points=10)
+        history_storage = await self._setup(hass, sensor)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_FINALIZE_ONE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert len(entries) == 2
+        assert entries[1]["action"] == "reset"
+        assert entries[1]["points_delta"] == 0
+        assert entries[1]["points_total"] == 10
+
+    @pytest.mark.asyncio
+    async def test_reset_completed_records_reset_entry(self, hass) -> None:
+        """reset_completed appends a 'reset' entry for each chore it clears."""
+        sensor = self._make_sensor(hass, points=10)
+        history_storage = await self._setup(hass, sensor)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_COMPLETED,
+            {},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert len(entries) == 2
+        assert entries[1]["action"] == "reset"
+
+    @pytest.mark.asyncio
+    async def test_start_new_day_records_reset_entry(self, hass) -> None:
+        """start_new_day appends a 'reset' entry for each completed chore it clears."""
+        sensor = self._make_sensor(hass, points=10)
+        history_storage = await self._setup(hass, sensor)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_START_NEW_DAY,
+            {},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert len(entries) == 2
+        assert entries[1]["action"] == "reset"
+
+    @pytest.mark.asyncio
+    async def test_get_history_returns_entries(self, hass) -> None:
+        """get_history returns every stored entry via the service response."""
+        sensor = self._make_sensor(hass, points=10)
+        await self._setup(hass, sensor)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+
+        response = await hass.services.async_call(
+            DOMAIN,
+            SERVICE_GET_HISTORY,
+            {},
+            blocking=True,
+            return_response=True,
+        )
+
+        assert response is not None
+        assert len(response["entries"]) == 1
+        assert response["entries"][0]["action"] == "completed"
+
+    @pytest.mark.asyncio
+    async def test_reset_history_clears_entries(self, hass) -> None:
+        """reset_history empties the audit log."""
+        sensor = self._make_sensor(hass, points=10)
+        history_storage = await self._setup(hass, sensor)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        assert history_storage.get_entries() != []
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_HISTORY,
+            {},
+            blocking=True,
+        )
+
+        assert history_storage.get_entries() == []
+
+    @pytest.mark.asyncio
+    async def test_reset_history_integration_not_loaded(self, hass) -> None:
+        """reset_history raises like the other services when not loaded."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        if DOMAIN in hass.data:
+            del hass.data[DOMAIN]
+        await async_setup_services(hass)
+
+        with pytest.raises(HomeAssistantError, match="integration not loaded"):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_RESET_HISTORY,
+                {},
+                blocking=True,
+            )

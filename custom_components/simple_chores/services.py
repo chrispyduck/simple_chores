@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant.core import HassJob
+from homeassistant.core import HassJob, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 
@@ -50,6 +50,7 @@ from .const import (
     SERVICE_ENABLE_PRIVILEGE,
     SERVICE_FINALIZE_BY_CATEGORY,
     SERVICE_FINALIZE_ONE,
+    SERVICE_GET_HISTORY,
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_COMPLETE_BY_CATEGORY,
     SERVICE_MARK_NOT_REQUESTED,
@@ -58,6 +59,7 @@ from .const import (
     SERVICE_MARK_PENDING_BY_CATEGORY,
     SERVICE_REFRESH_SUMMARY,
     SERVICE_RESET_COMPLETED,
+    SERVICE_RESET_HISTORY,
     SERVICE_RESET_POINTS,
     SERVICE_START_NEW_DAY,
     SERVICE_TEMPORARILY_DISABLE_PRIVILEGE,
@@ -185,6 +187,39 @@ async def _update_summary_sensors(hass: HomeAssistant, user: str | None = None) 
             await asyncio.gather(*update_tasks)
 
 
+async def _record_history(
+    hass: HomeAssistant,
+    sensor: ChoreSensor,
+    action: str,
+    points_delta: int = 0,
+) -> None:
+    """
+    Append a chore-history entry for a completion, reversal, or reset.
+
+    Only called at the points-bearing edges of a chore's lifecycle -
+    becoming Complete ("completed"), leaving Complete with points clawed
+    back ("uncompleted"), or leaving Complete with points already awarded
+    and left alone ("reset", covering finalize/auto-finalize/reset_completed/
+    start_new_day) - not every state change. That keeps the audit log a
+    meaningful record of "who did what and how many points changed hands"
+    instead of also reflecting every not-yet-complete un-request/re-request.
+    """
+    history_storage = hass.data[DOMAIN].get("history_storage")
+    if not history_storage:
+        return
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    points_total = points_storage.get_points(sensor.assignee) if points_storage else 0
+    await history_storage.async_add_entry(
+        action=action,
+        chore_slug=sensor.chore.slug,
+        chore_name=sensor.chore.name,
+        category=sensor.chore.category,
+        assignee=sensor.assignee,
+        points_delta=points_delta,
+        points_total=points_total,
+    )
+
+
 def _auto_finalize_unsubs(hass: HomeAssistant) -> dict:
     """Return the {entity_id: cancel_callback} map of pending auto-finalize timers."""
     return hass.data[DOMAIN].setdefault("auto_finalize_unsubs", {})
@@ -237,6 +272,7 @@ async def _finalize_sensor(hass: HomeAssistant, sensor: ChoreSensor) -> None:
         sensor.assignee,
         sensor.chore.name,
     )
+    await _record_history(hass, sensor, "reset")
     await _update_summary_sensors(hass, sensor.assignee)
     await _update_privilege_sensors_from_chores(hass, sensor.assignee)
 
@@ -409,6 +445,9 @@ RESET_POINTS_SCHEMA = vol.Schema(
     }
 )
 
+GET_HISTORY_SCHEMA = vol.Schema({})
+RESET_HISTORY_SCHEMA = vol.Schema({})
+
 # Privilege service schemas
 PRIVILEGE_SERVICE_SCHEMA = vol.Schema(
     {
@@ -579,6 +618,7 @@ async def handle_mark_complete(hass: HomeAssistant, call: ServiceCall) -> None:
                 old_earned,
                 old_earned + chore_points,
             )
+            await _record_history(hass, sensor, "completed", chore_points)
 
     # Await all chore sensor updates to complete
     if state_update_tasks:
@@ -671,6 +711,7 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
                 old_earned,
                 old_earned - chore_points,
             )
+            await _record_history(hass, sensor, "uncompleted", -chore_points)
 
     # Await all chore sensor updates to complete
     if state_update_tasks:
@@ -850,6 +891,7 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
             affected_users.add(sensor.assignee)
             reset_count += 1
             await _clear_completion_tracking(hass, sensor)
+            await _record_history(hass, sensor, "reset")
 
             # Audit log: chore reset
             LOGGER.info(
@@ -960,6 +1002,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
             chore_frequency = sensor.chore.frequency
             affected_users.add(sensor.assignee)
             await _clear_completion_tracking(hass, sensor)
+            await _record_history(hass, sensor, "reset")
 
             if chore_frequency == ChoreFrequency.ONCE:
                 # Mark once chore for deletion
@@ -1281,9 +1324,11 @@ async def _set_chore_sensors_state_by_category(
         if points_storage and new_state == ChoreState.COMPLETE and not was_complete:
             await points_storage.add_points(sensor.assignee, chore_points)
             await points_storage.add_points_earned(sensor.assignee, chore_points)
+            await _record_history(hass, sensor, "completed", chore_points)
         elif points_storage and new_state == ChoreState.PENDING and was_complete:
             await points_storage.add_points(sensor.assignee, -chore_points)
             await points_storage.add_points_earned(sensor.assignee, -chore_points)
+            await _record_history(hass, sensor, "uncompleted", -chore_points)
 
     if state_update_tasks:
         await asyncio.gather(*state_update_tasks)
@@ -1465,6 +1510,7 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
         sensor.set_state(ChoreState.NOT_REQUESTED.value)
         update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
         await _clear_completion_tracking(hass, sensor)
+        await _record_history(hass, sensor, "reset")
 
         # Audit log: chore reset by finalize_by_category
         LOGGER.info(
@@ -1750,6 +1796,43 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
             len(users_to_reset),
             "reset" if reset_total else "unchanged",
         )
+
+
+async def handle_get_history(
+    hass: HomeAssistant,
+    call: ServiceCall,  # noqa: ARG001
+) -> ServiceResponse:
+    """
+    Handle the get_history service call.
+
+    Read-only: returns every stored chore-history entry (oldest first, see
+    HistoryStorage.MAX_HISTORY_ENTRIES for the retention cap) so the admin
+    panel's History tab can filter/sort them client-side, the same way it
+    reconstructs chores/privileges/categories from sensor state instead of a
+    dedicated backend API.
+    """
+    _validate_integration_loaded(hass)
+    history_storage = hass.data[DOMAIN].get("history_storage")
+    entries = history_storage.get_entries() if history_storage else []
+    return {"entries": entries}
+
+
+async def handle_reset_history(
+    hass: HomeAssistant,
+    call: ServiceCall,  # noqa: ARG001
+) -> None:
+    """Handle the reset_history service call - clears the chore audit log."""
+    LOGGER.info("Service 'reset_history' called")
+
+    _validate_integration_loaded(hass)
+    history_storage = hass.data[DOMAIN].get("history_storage")
+    if not history_storage:
+        msg = "History storage not initialized"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
+
+    count = await history_storage.async_clear()
+    LOGGER.info("Cleared %d chore history entr%s", count, "y" if count == 1 else "ies")
 
 
 def _find_matching_privilege_sensors(
@@ -2269,6 +2352,19 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_RESET_POINTS,
         partial(handle_reset_points, hass),
         schema=RESET_POINTS_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_HISTORY,
+        partial(handle_get_history, hass),
+        schema=GET_HISTORY_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESET_HISTORY,
+        partial(handle_reset_history, hass),
+        schema=RESET_HISTORY_SCHEMA,
     )
     # Category-scoped chore services
     hass.services.async_register(

@@ -35,6 +35,10 @@ SERVICE_REFRESH_SUMMARY = "refresh_summary"
 SERVICE_ADJUST_POINTS = "adjust_points"
 SERVICE_RESET_POINTS = "reset_points"
 
+# History (audit log) services
+SERVICE_GET_HISTORY = "get_history"
+SERVICE_RESET_HISTORY = "reset_history"
+
 # Category-scoped chore services
 SERVICE_MARK_COMPLETE_BY_CATEGORY = "mark_complete_by_category"
 SERVICE_MARK_PENDING_BY_CATEGORY = "mark_pending_by_category"
