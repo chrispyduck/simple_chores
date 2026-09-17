@@ -460,3 +460,61 @@ export function displayName(
 ): string {
   return userDisplayNames[assignee.toLowerCase()] ?? assignee;
 }
+
+/**
+ * One entry from the chore audit log (see HistoryStorage in
+ * custom_components/simple_chores/data.py). "completed"/"uncompleted" are
+ * points-bearing (a chore was finished, or that was undone); "reset" covers
+ * every points-neutral way a completed chore gets cleared - finalize,
+ * auto-finalize, reset_completed, start_new_day, finalize_by_category -
+ * since points were already awarded when it was completed.
+ */
+export type HistoryAction = "completed" | "uncompleted" | "reset";
+
+export interface HistoryEntry {
+  id: string;
+  timestamp: string; // ISO 8601
+  action: HistoryAction;
+  choreSlug: string;
+  choreName: string;
+  category: string | null;
+  assignee: string;
+  /** Points awarded (positive), clawed back (negative), or 0 for a reset. */
+  pointsDelta: number;
+  /** This assignee's lifetime point total immediately after this entry. */
+  pointsTotal: number;
+}
+
+/**
+ * Convert the raw snake_case entries returned by the get_history service
+ * (see HistoryStorage.async_add_entry) into HistoryEntry objects.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function parseHistoryEntries(raw: any[] | undefined | null): HistoryEntry[] {
+  if (!raw) return [];
+  return raw.map((e) => ({
+    id: e.id,
+    timestamp: e.timestamp,
+    action: e.action as HistoryAction,
+    choreSlug: e.chore_slug,
+    choreName: e.chore_name ?? e.chore_slug,
+    category: e.category ?? null,
+    assignee: e.assignee,
+    pointsDelta: e.points_delta ?? 0,
+    pointsTotal: e.points_total ?? 0,
+  }));
+}
+
+/** Human-readable label for a HistoryAction, for the History tab's table. */
+export function historyActionLabel(action: HistoryAction): string {
+  switch (action) {
+    case "completed":
+      return "Completed";
+    case "uncompleted":
+      return "Un-completed";
+    case "reset":
+      return "Reset";
+    default:
+      return action;
+  }
+}

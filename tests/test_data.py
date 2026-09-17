@@ -7,7 +7,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from custom_components.simple_chores.config_loader import ConfigLoader
-from custom_components.simple_chores.data import PointsStorage, SimpleChoresData
+from custom_components.simple_chores.data import (
+    MAX_HISTORY_ENTRIES,
+    HistoryStorage,
+    PointsStorage,
+    SimpleChoresData,
+)
 
 
 class TestSimpleChoresData:
@@ -244,3 +249,144 @@ class TestPointsStorageChoreCompletedAt:
         await storage2.async_load()
 
         assert storage2.get_chore_completed_at(entity_id) == when
+
+
+class TestHistoryStorage:
+    """Tests for HistoryStorage."""
+
+    @pytest.mark.asyncio
+    async def test_starts_empty(self, hass) -> None:
+        """A fresh HistoryStorage has no entries."""
+        storage = HistoryStorage(hass)
+        await storage.async_load()
+
+        assert storage.get_entries() == []
+
+    @pytest.mark.asyncio
+    async def test_add_entry_returns_and_stores_it(self, hass) -> None:
+        """Test that async_add_entry both returns and persists the new entry."""
+        storage = HistoryStorage(hass)
+        await storage.async_load()
+
+        entry = await storage.async_add_entry(
+            action="completed",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category="kitchen",
+            assignee="alice",
+            points_delta=10,
+            points_total=10,
+        )
+
+        assert entry["action"] == "completed"
+        assert entry["chore_slug"] == "dishes"
+        assert entry["assignee"] == "alice"
+        assert entry["points_delta"] == 10
+        assert entry["points_total"] == 10
+        assert entry["id"]
+        assert entry["timestamp"]
+
+        assert storage.get_entries() == [entry]
+
+    @pytest.mark.asyncio
+    async def test_entries_are_oldest_first(self, hass) -> None:
+        """Test that entries come back in the order they were added."""
+        storage = HistoryStorage(hass)
+        await storage.async_load()
+
+        await storage.async_add_entry(
+            action="completed",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category=None,
+            assignee="alice",
+            points_delta=10,
+            points_total=10,
+        )
+        await storage.async_add_entry(
+            action="completed",
+            chore_slug="trash",
+            chore_name="Trash",
+            category=None,
+            assignee="alice",
+            points_delta=5,
+            points_total=15,
+        )
+
+        entries = storage.get_entries()
+        assert [e["chore_slug"] for e in entries] == ["dishes", "trash"]
+
+    @pytest.mark.asyncio
+    async def test_evicts_oldest_past_max_entries(self, hass) -> None:
+        """Test that adding beyond MAX_HISTORY_ENTRIES drops the oldest first."""
+        storage = HistoryStorage(hass)
+        await storage.async_load()
+
+        for i in range(MAX_HISTORY_ENTRIES + 5):
+            await storage.async_add_entry(
+                action="completed",
+                chore_slug=f"chore_{i}",
+                chore_name=f"Chore {i}",
+                category=None,
+                assignee="alice",
+                points_delta=1,
+                points_total=i + 1,
+            )
+
+        entries = storage.get_entries()
+        assert len(entries) == MAX_HISTORY_ENTRIES
+        # The oldest 5 were evicted, so the first entry left is chore_5.
+        assert entries[0]["chore_slug"] == "chore_5"
+        assert entries[-1]["chore_slug"] == f"chore_{MAX_HISTORY_ENTRIES + 4}"
+
+    @pytest.mark.asyncio
+    async def test_async_clear_removes_everything_and_returns_count(self, hass) -> None:
+        """Test that async_clear empties the log and reports how many were removed."""
+        storage = HistoryStorage(hass)
+        await storage.async_load()
+
+        await storage.async_add_entry(
+            action="completed",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category=None,
+            assignee="alice",
+            points_delta=10,
+            points_total=10,
+        )
+        await storage.async_add_entry(
+            action="uncompleted",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category=None,
+            assignee="alice",
+            points_delta=-10,
+            points_total=0,
+        )
+
+        removed = await storage.async_clear()
+
+        assert removed == 2
+        assert storage.get_entries() == []
+
+    @pytest.mark.asyncio
+    async def test_persists_across_instances(self, hass) -> None:
+        """Test that entries survive a reload, like other stored data."""
+        storage1 = HistoryStorage(hass)
+        await storage1.async_load()
+        await storage1.async_add_entry(
+            action="completed",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category="kitchen",
+            assignee="alice",
+            points_delta=10,
+            points_total=10,
+        )
+
+        storage2 = HistoryStorage(hass)
+        await storage2.async_load()
+
+        entries = storage2.get_entries()
+        assert len(entries) == 1
+        assert entries[0]["chore_slug"] == "dishes"
