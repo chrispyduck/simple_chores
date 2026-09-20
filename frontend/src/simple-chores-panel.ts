@@ -1218,6 +1218,7 @@ export class SimpleChoresPanel extends LitElement {
                   <div class="history-cell history-action">Action</div>
                   <div class="history-cell history-points">Points</div>
                   <div class="history-cell history-balance">Balance</div>
+                  <div class="history-cell history-missed">Missed</div>
                 </div>
                 ${sorted.map((entry) => this._renderHistoryRow(entry, categories))}
               </div>
@@ -1260,6 +1261,15 @@ export class SimpleChoresPanel extends LitElement {
         <div class="history-cell history-balance" title="Points balance after this entry">
           ${entry.pointsTotal}
         </div>
+        <div
+          class="history-cell history-missed"
+          title="Cumulative missed points after this entry"
+        >
+          ${entry.missedTotal ?? "—"}
+          ${entry.pointsMissed > 0
+            ? html`<div class="meta points-negative">+${entry.pointsMissed}</div>`
+            : nothing}
+        </div>
       </div>
     `;
   }
@@ -1267,6 +1277,7 @@ export class SimpleChoresPanel extends LitElement {
   private _historyActionClass(action: HistoryAction): string {
     if (action === "completed") return "state-good";
     if (action === "uncompleted") return "state-bad";
+    if (action === "missed") return "state-warn";
     return "state-neutral";
   }
 
@@ -2570,13 +2581,13 @@ export class SimpleChoresPanel extends LitElement {
     }
     .history-row {
       display: grid;
-      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.7fr 0.8fr;
+      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.7fr 0.8fr 0.8fr;
       gap: 8px;
       align-items: center;
       padding: 10px 14px;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
       font-size: 13px;
-      min-width: 560px;
+      min-width: 640px;
     }
     .history-row:last-child {
       border-bottom: none;
@@ -2591,12 +2602,13 @@ export class SimpleChoresPanel extends LitElement {
       font-weight: 500;
       color: var(--primary-text-color, #212121);
     }
-    .history-cell.history-chore .meta {
+    .history-cell .meta {
       font-size: 11px;
       color: var(--secondary-text-color, #727272);
     }
     .history-points,
-    .history-balance {
+    .history-balance,
+    .history-missed {
       text-align: right;
       font-variant-numeric: tabular-nums;
     }

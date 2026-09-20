@@ -467,9 +467,11 @@ export function displayName(
  * points-bearing (a chore was finished, or that was undone); "reset" covers
  * every points-neutral way a completed chore gets cleared - finalize,
  * auto-finalize, reset_completed, start_new_day, finalize_by_category -
- * since points were already awarded when it was completed.
+ * since points were already awarded when it was completed. "missed" is
+ * logged when start_new_day / finalize_by_category counts a chore that
+ * wasn't completed towards the assignee's cumulative points_missed.
  */
-export type HistoryAction = "completed" | "uncompleted" | "reset";
+export type HistoryAction = "completed" | "uncompleted" | "reset" | "missed";
 
 export interface HistoryEntry {
   id: string;
@@ -483,6 +485,13 @@ export interface HistoryEntry {
   pointsDelta: number;
   /** This assignee's lifetime point total immediately after this entry. */
   pointsTotal: number;
+  /** Points newly counted as missed by this entry (0 unless action is "missed"). */
+  pointsMissed: number;
+  /**
+   * This assignee's cumulative missed-points tally immediately after this
+   * entry, or null for entries logged before missed points were tracked.
+   */
+  missedTotal: number | null;
 }
 
 /**
@@ -502,6 +511,8 @@ export function parseHistoryEntries(raw: any[] | undefined | null): HistoryEntry
     assignee: e.assignee,
     pointsDelta: e.points_delta ?? 0,
     pointsTotal: e.points_total ?? 0,
+    pointsMissed: e.points_missed ?? 0,
+    missedTotal: e.missed_total ?? null,
   }));
 }
 
@@ -514,6 +525,8 @@ export function historyActionLabel(action: HistoryAction): string {
       return "Un-completed";
     case "reset":
       return "Reset";
+    case "missed":
+      return "Missed";
     default:
       return action;
   }

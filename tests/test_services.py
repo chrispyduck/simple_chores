@@ -4263,22 +4263,32 @@ class TestPerAssigneePoints:
 class TestHistoryService:
     """Tests for the chore history (audit log) services and hooks."""
 
-    def _make_sensor(self, hass, *, slug="dishes", assignee="alice", points=1):
+    def _make_sensor(
+        self,
+        hass,
+        *,
+        slug="dishes",
+        assignee="alice",
+        points=1,
+        frequency=ChoreFrequency.DAILY,
+        category=None,
+    ):
         """Create a ChoreSensor with the given points, defaulting like mock_sensor."""
         chore = ChoreConfig(
             name=slug.title(),
             slug=slug,
-            frequency=ChoreFrequency.DAILY,
+            frequency=frequency,
             assignees=[assignee],
             points=points,
+            category=category,
         )
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(hass, chore, assignee)
             sensor.async_update_ha_state = AsyncMock()
         return sensor
 
-    async def _setup(self, hass, sensor):
-        """Wire up hass.data with a sensor plus real points/history storage."""
+    async def _setup(self, hass, *sensors):
+        """Wire up hass.data with sensors plus real points/history storage."""
         from custom_components.simple_chores.data import HistoryStorage, PointsStorage
 
         points_storage = PointsStorage(hass)
@@ -4287,7 +4297,7 @@ class TestHistoryService:
         await history_storage.async_load()
 
         hass.data[DOMAIN] = {
-            "sensors": {f"{sensor.assignee}_{sensor.chore.slug}": sensor},
+            "sensors": {f"{s.assignee}_{s.chore.slug}": s for s in sensors},
             "points_storage": points_storage,
             "history_storage": history_storage,
         }
@@ -4445,6 +4455,81 @@ class TestHistoryService:
         entries = history_storage.get_entries()
         assert len(entries) == 2
         assert entries[1]["action"] == "reset"
+
+    @pytest.mark.asyncio
+    async def test_start_new_day_records_missed_entries(self, hass) -> None:
+        """start_new_day logs a 'missed' entry per pending chore, with a tally."""
+        pending1 = self._make_sensor(hass, slug="dishes", points=10)
+        pending2 = self._make_sensor(hass, slug="trash", points=5)
+        untouched = self._make_sensor(hass, slug="laundry", points=7)
+        pending1.set_state(ChoreState.PENDING.value)
+        pending2.set_state(ChoreState.PENDING.value)
+        untouched.set_state(ChoreState.NOT_REQUESTED.value)
+        history_storage = await self._setup(hass, pending1, pending2, untouched)
+
+        await hass.services.async_call(DOMAIN, SERVICE_START_NEW_DAY, {}, blocking=True)
+
+        entries = history_storage.get_entries()
+        assert [e["action"] for e in entries] == ["missed", "missed"]
+        assert [e["chore_slug"] for e in entries] == ["dishes", "trash"]
+        assert [e["points_missed"] for e in entries] == [10, 5]
+        assert [e["missed_total"] for e in entries] == [10, 15]
+        # Missing points never touches the earned-points columns.
+        assert [e["points_delta"] for e in entries] == [0, 0]
+
+    @pytest.mark.asyncio
+    async def test_start_new_day_skips_missed_entry_for_zero_point_chore(
+        self, hass
+    ) -> None:
+        """A pending chore worth no points missed nothing, so nothing is logged."""
+        sensor = self._make_sensor(hass, points=0)
+        sensor.set_state(ChoreState.PENDING.value)
+        history_storage = await self._setup(hass, sensor)
+
+        await hass.services.async_call(DOMAIN, SERVICE_START_NEW_DAY, {}, blocking=True)
+
+        assert history_storage.get_entries() == []
+
+    @pytest.mark.asyncio
+    async def test_finalize_by_category_records_missed_and_reset_entries(
+        self, hass
+    ) -> None:
+        """finalize_by_category logs 'missed' for pending and 'reset' for complete."""
+        pending = self._make_sensor(
+            hass,
+            slug="dishes",
+            points=10,
+            frequency=ChoreFrequency.MANUAL,
+            category="kitchen",
+        )
+        done = self._make_sensor(
+            hass,
+            slug="trash",
+            points=5,
+            frequency=ChoreFrequency.MANUAL,
+            category="kitchen",
+        )
+        pending.set_state(ChoreState.PENDING.value)
+        done.set_state(ChoreState.COMPLETE.value)
+        history_storage = await self._setup(hass, pending, done)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_FINALIZE_BY_CATEGORY,
+            {ATTR_CATEGORY_SLUG: "kitchen"},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert [(e["action"], e["chore_slug"]) for e in entries] == [
+            ("missed", "dishes"),
+            ("reset", "trash"),
+        ]
+        assert entries[0]["points_missed"] == 10
+        assert entries[0]["missed_total"] == 10
+        # The reset entry carries the same tally forward, with nothing new missed.
+        assert entries[1]["points_missed"] == 0
+        assert entries[1]["missed_total"] == 10
 
     @pytest.mark.asyncio
     async def test_get_history_returns_entries(self, hass) -> None:

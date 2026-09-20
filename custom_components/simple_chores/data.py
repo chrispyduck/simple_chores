@@ -243,7 +243,7 @@ class PointsStorage:
 
 class HistoryStorage:
     """
-    Append-only audit log of chore completions, reversals and resets.
+    Append-only audit log of chore completions, reversals, resets and missed points.
 
     Deliberately separate from PointsStorage (a different Store/file) so
     resetting the audit log - see async_clear, used by the reset_history
@@ -269,7 +269,7 @@ class HistoryStorage:
         """Return every stored entry, oldest first."""
         return list(self._entries)
 
-    async def async_add_entry(
+    async def async_add_entry(  # noqa: PLR0913 - one kwarg per stored field
         self,
         *,
         action: str,
@@ -279,6 +279,8 @@ class HistoryStorage:
         assignee: str,
         points_delta: int,
         points_total: int,
+        points_missed: int = 0,
+        missed_total: int = 0,
     ) -> dict[str, Any]:
         """Append a new entry, evicting the oldest past MAX_HISTORY_ENTRIES."""
         entry: dict[str, Any] = {
@@ -291,6 +293,8 @@ class HistoryStorage:
             "assignee": assignee,
             "points_delta": points_delta,
             "points_total": points_total,
+            "points_missed": points_missed,
+            "missed_total": missed_total,
         }
         self._entries.append(entry)
         if len(self._entries) > MAX_HISTORY_ENTRIES:
