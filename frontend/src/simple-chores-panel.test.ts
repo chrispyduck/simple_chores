@@ -197,6 +197,21 @@ describe("simple-chores-panel", () => {
             assignee: "alice",
             points_delta: 10,
             points_total: 10,
+            points_missed: 0,
+            missed_total: 3,
+          },
+          {
+            id: "2",
+            timestamp: "2026-01-01T13:00:00+00:00",
+            action: "missed",
+            chore_slug: "trash",
+            chore_name: "Trash",
+            category: null,
+            assignee: "alice",
+            points_delta: 0,
+            points_total: 10,
+            points_missed: 5,
+            missed_total: 8,
           },
         ],
       },
@@ -218,10 +233,22 @@ describe("simple-chores-panel", () => {
       })
     );
 
-    const row = el.shadowRoot!.querySelector(".history-row:not(.history-header)");
-    expect(row?.querySelector(".history-chore .name")?.textContent).toBe("Dishes");
-    expect(row?.querySelector(".history-points")?.textContent?.trim()).toBe("+10");
-    expect(row?.querySelector(".history-balance")?.textContent?.trim()).toBe("10");
+    // Newest first, so the missed entry (13:00) precedes the completed one.
+    const [missedRow, row] = [
+      ...el.shadowRoot!.querySelectorAll(".history-row:not(.history-header)"),
+    ];
+    expect(missedRow.querySelector(".history-chore .name")?.textContent).toBe("Trash");
+    expect(missedRow.querySelector(".history-action")?.textContent?.trim()).toBe("Missed");
+    expect(missedRow.querySelector(".history-missed")?.textContent).toContain("8");
+    expect(missedRow.querySelector(".history-missed .meta")?.textContent?.trim()).toBe(
+      "+5"
+    );
+
+    expect(row.querySelector(".history-chore .name")?.textContent).toBe("Dishes");
+    expect(row.querySelector(".history-points")?.textContent?.trim()).toBe("+10");
+    expect(row.querySelector(".history-balance")?.textContent?.trim()).toBe("10");
+    expect(row.querySelector(".history-missed")?.textContent?.trim()).toBe("3");
+    expect(row.querySelector(".history-missed .meta")).toBeNull();
   });
 
   it("shows an empty state on the History tab with no entries", async () => {

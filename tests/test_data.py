@@ -283,10 +283,36 @@ class TestHistoryStorage:
         assert entry["assignee"] == "alice"
         assert entry["points_delta"] == 10
         assert entry["points_total"] == 10
+        # Missed-point fields default to zero for entries that miss nothing.
+        assert entry["points_missed"] == 0
+        assert entry["missed_total"] == 0
         assert entry["id"]
         assert entry["timestamp"]
 
         assert storage.get_entries() == [entry]
+
+    @pytest.mark.asyncio
+    async def test_add_entry_records_missed_points(self, hass) -> None:
+        """Test that a missed entry stores its delta and the running tally."""
+        storage = HistoryStorage(hass)
+        await storage.async_load()
+
+        entry = await storage.async_add_entry(
+            action="missed",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category=None,
+            assignee="alice",
+            points_delta=0,
+            points_total=20,
+            points_missed=5,
+            missed_total=12,
+        )
+
+        assert entry["action"] == "missed"
+        assert entry["points_delta"] == 0
+        assert entry["points_missed"] == 5
+        assert entry["missed_total"] == 12
 
     @pytest.mark.asyncio
     async def test_entries_are_oldest_first(self, hass) -> None:

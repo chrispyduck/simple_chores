@@ -192,15 +192,18 @@ async def _record_history(
     sensor: ChoreSensor,
     action: str,
     points_delta: int = 0,
+    points_missed: int = 0,
 ) -> None:
     """
-    Append a chore-history entry for a completion, reversal, or reset.
+    Append a chore-history entry for a completion, reversal, reset, or miss.
 
     Only called at the points-bearing edges of a chore's lifecycle -
     becoming Complete ("completed"), leaving Complete with points clawed
     back ("uncompleted"), or leaving Complete with points already awarded
     and left alone ("reset", covering finalize/auto-finalize/reset_completed/
-    start_new_day) - not every state change. That keeps the audit log a
+    start_new_day) - or a pending chore's points being counted as missed
+    ("missed", by start_new_day/finalize_by_category) - not every state
+    change. That keeps the audit log a
     meaningful record of "who did what and how many points changed hands"
     instead of also reflecting every not-yet-complete un-request/re-request.
     """
@@ -209,6 +212,11 @@ async def _record_history(
         return
     points_storage = hass.data[DOMAIN].get("points_storage")
     points_total = points_storage.get_points(sensor.assignee) if points_storage else 0
+    # Cumulative points_missed after this entry - callers record a "missed"
+    # entry only after adding to points_storage, so the tally includes it.
+    missed_total = (
+        points_storage.get_points_missed(sensor.assignee) if points_storage else 0
+    )
     await history_storage.async_add_entry(
         action=action,
         chore_slug=sensor.chore.slug,
@@ -217,7 +225,27 @@ async def _record_history(
         assignee=sensor.assignee,
         points_delta=points_delta,
         points_total=points_total,
+        points_missed=points_missed,
+        missed_total=missed_total,
     )
+
+
+async def _record_missed_points(hass: HomeAssistant, sensor: ChoreSensor) -> int:
+    """
+    Count a not-completed chore's points as missed and log it to history.
+
+    Adds the chore's points to the assignee's cumulative points_missed, then
+    appends a "missed" history entry. Chores worth no points to this
+    assignee are skipped entirely (nothing was missed). Returns the points
+    counted.
+    """
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    chore_points = sensor.chore.points_for(sensor.assignee)
+    if not points_storage or not chore_points:
+        return 0
+    await points_storage.add_points_missed(sensor.assignee, chore_points)
+    await _record_history(hass, sensor, "missed", points_missed=chore_points)
+    return chore_points
 
 
 def _auto_finalize_unsubs(hass: HomeAssistant) -> dict:
@@ -919,39 +947,26 @@ async def _apply_start_new_day_points_missed(
     hass: HomeAssistant, sensors: dict, sanitized_user: str | None
 ) -> None:
     """
-    Add each assignee's pending chore points to their cumulative points_missed.
+    Add each PENDING chore's points to its assignee's cumulative points_missed.
 
     Must run before start_new_day resets any sensor's state, since it counts
     chores that are still PENDING (points are already awarded on complete,
-    so completed chores need no adjustment here).
+    so completed chores need no adjustment here). Each missed chore also
+    gets its own "missed" history entry.
     """
-    points_storage = hass.data[DOMAIN].get("points_storage")
-    if not points_storage:
-        return
-
-    assignee_stats: dict[str, dict[str, int]] = {}
     for sensor_id, sensor in sensors.items():
         if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
             continue
 
-        assignee = sensor.assignee
-        if assignee not in assignee_stats:
-            assignee_stats[assignee] = {"missed": 0}
-
         if sensor.get_state() == ChoreState.PENDING.value:
-            assignee_stats[assignee]["missed"] += sensor.chore.points_for(assignee)
-
-    for assignee, stats in assignee_stats.items():
-        if stats["missed"] > 0:
-            current_missed = points_storage.get_points_missed(assignee)
-            await points_storage.add_points_missed(assignee, stats["missed"])
-            LOGGER.debug(
-                "Updated cumulative points_missed for %s: added %d (was %d, now %d)",
-                assignee,
-                stats["missed"],
-                current_missed,
-                current_missed + stats["missed"],
-            )
+            missed = await _record_missed_points(hass, sensor)
+            if missed:
+                LOGGER.debug(
+                    "Missed %d point(s) for %s's pending chore '%s'",
+                    missed,
+                    sensor.assignee,
+                    sensor.chore.name,
+                )
 
 
 async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -1474,7 +1489,6 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
 
     _validate_integration_loaded(hass)
     sensors = hass.data[DOMAIN].get("sensors", {})
-    points_storage = hass.data[DOMAIN].get("points_storage")
     matching_sensors = _find_matching_sensors_by_category(
         sensors, category_slug, user, frequency=ChoreFrequency.MANUAL
     )
@@ -1498,9 +1512,7 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
 
         if current_state == ChoreState.PENDING.value:
             affected_users.add(sensor.assignee)
-            chore_points = sensor.chore.points_for(sensor.assignee)
-            if points_storage and chore_points:
-                await points_storage.add_points_missed(sensor.assignee, chore_points)
+            await _record_missed_points(hass, sensor)
         elif current_state == ChoreState.COMPLETE.value:
             affected_users.add(sensor.assignee)
             sensors_to_reset.append(sensor)

@@ -490,6 +490,8 @@ describe("parseHistoryEntries", () => {
         assignee: "alice",
         pointsDelta: 10,
         pointsTotal: 10,
+        pointsMissed: 0,
+        missedTotal: null,
       },
     ]);
   });
@@ -510,6 +512,25 @@ describe("parseHistoryEntries", () => {
     expect(entry.choreName).toBe("dishes");
     expect(entry.pointsDelta).toBe(0);
     expect(entry.pointsTotal).toBe(0);
+    expect(entry.pointsMissed).toBe(0);
+    expect(entry.missedTotal).toBeNull();
+  });
+
+  it("parses missed-point fields", () => {
+    const [entry] = parseHistoryEntries([
+      {
+        id: "abc123",
+        timestamp: "2026-01-01T12:00:00+00:00",
+        action: "missed",
+        chore_slug: "dishes",
+        assignee: "alice",
+        points_missed: 5,
+        missed_total: 12,
+      },
+    ]);
+    expect(entry.action).toBe("missed");
+    expect(entry.pointsMissed).toBe(5);
+    expect(entry.missedTotal).toBe(12);
   });
 });
 
@@ -518,5 +539,6 @@ describe("historyActionLabel", () => {
     expect(historyActionLabel("completed")).toBe("Completed");
     expect(historyActionLabel("uncompleted")).toBe("Un-completed");
     expect(historyActionLabel("reset")).toBe("Reset");
+    expect(historyActionLabel("missed")).toBe("Missed");
   });
 });
