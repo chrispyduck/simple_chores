@@ -1,0 +1,253 @@
+#!/usr/bin/env python3
+"""
+Seed the local dev Home Assistant instance with sample Simple Chores data:
+categories, chores, privileges, and a mix of completions/resets/missed
+activity so the frontend has something to look at.
+
+Expects a clean instance - onboarded, with the Simple Chores integration
+already added (Settings -> Devices & Services -> Add Integration). Re-run
+after wiping config/ and redoing those two steps; it doesn't try to detect
+or skip data that's already there.
+
+Needs a long-lived access token: click your name (bottom left of the HA
+UI) -> Security -> Long-Lived Access Tokens -> Create Token. A fresh
+instance means a fresh token every time, since the token is tied to the
+user account that onboarding just recreated.
+
+Usage:
+  HA_TOKEN=... scripts/seed
+  scripts/seed --token ... --url http://localhost:8123
+  scripts/seed --dry-run   # print the service calls without making them
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+DOMAIN = "simple_chores"
+
+CATEGORIES = [
+    {"name": "Kitchen", "slug": "kitchen", "icon": "mdi:silverware-fork-knife"},
+    {"name": "Bedroom", "slug": "bedroom", "icon": "mdi:bed"},
+    {"name": "Outdoor", "slug": "outdoor", "icon": "mdi:tree"},
+    {"name": "Homework", "slug": "homework", "icon": "mdi:book-open-variant"},
+]
+
+CHORES = [
+    {
+        "name": "Wash the dishes",
+        "slug": "wash_dishes",
+        "frequency": "daily",
+        "assignees": "alice,bob",
+        "points": 5,
+        "category": "kitchen",
+    },
+    {
+        "name": "Take out the trash",
+        "slug": "take_out_trash",
+        "frequency": "daily",
+        "assignees": "alice,bob,charlie",
+        "points": 3,
+        "category": "kitchen",
+    },
+    {
+        "name": "Feed the pet",
+        "slug": "feed_pet",
+        "frequency": "daily",
+        "assignees": "alice,bob,charlie",
+        "points": 2,
+    },
+    {
+        "name": "Make your bed",
+        "slug": "make_bed",
+        "frequency": "daily",
+        "assignees": "alice,bob,charlie",
+        "points": 2,
+        "category": "bedroom",
+    },
+    {
+        "name": "Clean your room",
+        "slug": "clean_room",
+        "frequency": "manual",
+        "assignees": "alice,bob,charlie",
+        "points": 10,
+        "points_by_assignee": "charlie:15",
+        "category": "bedroom",
+    },
+    {
+        "name": "Mow the lawn",
+        "slug": "mow_lawn",
+        "frequency": "manual",
+        "assignees": "bob",
+        "points": 20,
+        "category": "outdoor",
+    },
+    {
+        "name": "Rake the leaves",
+        "slug": "rake_leaves",
+        "frequency": "once",
+        "assignees": "alice,bob,charlie",
+        "points": 15,
+        "category": "outdoor",
+    },
+    {
+        "name": "Reading homework",
+        "slug": "homework_reading",
+        "frequency": "daily",
+        "assignees": "alice,charlie",
+        "points": 5,
+        "category": "homework",
+    },
+    {
+        "name": "Math homework",
+        "slug": "homework_math",
+        "frequency": "daily",
+        "assignees": "bob,charlie",
+        "points": 5,
+        "category": "homework",
+    },
+]
+
+PRIVILEGES = [
+    {
+        "name": "Screen Time",
+        "slug": "screen_time",
+        "icon": "mdi:television",
+        "behavior": "automatic",
+        "linked_chores": "wash_dishes,take_out_trash,make_bed",
+        "assignees": "alice,bob,charlie",
+    },
+    {
+        "name": "Late Bedtime",
+        "slug": "late_bedtime",
+        "icon": "mdi:weather-night",
+        "behavior": "manual",
+        "assignees": "alice,bob,charlie",
+    },
+    {
+        "name": "Bonus Allowance",
+        "slug": "bonus_allowance",
+        "icon": "mdi:cash-plus",
+        "behavior": "automatic",
+        "linked_chores": "clean_room,mow_lawn",
+        "assignees": "alice,bob,charlie",
+    },
+]
+
+
+def call_service(base_url, token, service, data, *, dry_run, return_response=False):
+    if dry_run:
+        print(f"  [dry-run] {service} {json.dumps(data)}")
+        return None
+
+    url = f"{base_url}/api/services/{DOMAIN}/{service}"
+    if return_response:
+        url += "?return_response"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(data).encode(),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request) as response:
+            return json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as err:
+        detail = err.read().decode(errors="replace")
+        sys.exit(f"{service} failed: HTTP {err.code} {err.reason}\n{detail}")
+    except urllib.error.URLError as err:
+        sys.exit(f"Could not reach {base_url}: {err.reason}")
+
+
+def seed(base_url: str, token: str | None, *, dry_run: bool) -> None:
+    def call(service, data, **kwargs):
+        return call_service(base_url, token, service, data, dry_run=dry_run, **kwargs)
+
+    print("Creating categories...")
+    for category in CATEGORIES:
+        call("create_category", category)
+
+    print("Creating chores...")
+    for chore in CHORES:
+        call("create_chore", chore)
+
+    print("Creating privileges...")
+    for privilege in PRIVILEGES:
+        call("create_privilege", privilege)
+
+    print("Simulating activity...")
+    call("mark_complete", {"chore_slug": "wash_dishes", "user": "alice"})
+    call("mark_complete", {"chore_slug": "wash_dishes", "user": "bob"})
+    call("mark_complete", {"chore_slug": "take_out_trash"})
+    call("mark_complete", {"chore_slug": "make_bed", "user": "alice"})
+    call("mark_complete", {"chore_slug": "make_bed", "user": "bob"})
+    call("mark_complete", {"chore_slug": "homework_reading", "user": "alice"})
+    call("mark_complete", {"chore_slug": "homework_math", "user": "bob"})
+    call("mark_complete", {"chore_slug": "feed_pet"})
+
+    # Undo and redo a couple of completions, for "uncompleted" history entries.
+    call("mark_pending", {"chore_slug": "wash_dishes", "user": "alice"})
+    call("mark_pending", {"chore_slug": "homework_math", "user": "bob"})
+    call("mark_complete", {"chore_slug": "wash_dishes", "user": "alice"})
+    call("mark_complete", {"chore_slug": "homework_math", "user": "bob"})
+
+    # Explicitly clear charlie's completions, for "reset" history entries.
+    call("reset_completed", {"user": "charlie"})
+
+    # Request some chores but never finish them, so start_new_day below logs
+    # "missed" history entries for them.
+    call("mark_pending", {"chore_slug": "mow_lawn", "user": "bob"})
+    call("mark_pending", {"chore_slug": "clean_room", "user": "charlie"})
+    call("mark_pending", {"chore_slug": "rake_leaves"})
+
+    call("adjust_points", {"user": "alice", "adjustment": 15})
+    call(
+        "temporarily_disable_privilege",
+        {"privilege_slug": "late_bedtime", "user": "bob", "duration": 60},
+    )
+
+    print("Rolling over to a new day (resets completions, logs missed points)...")
+    call("start_new_day", {})
+
+    if dry_run:
+        print("Done (dry run).")
+        return
+
+    result = call("get_history", {}, return_response=True) or {}
+    entries = result.get("service_response", {}).get("entries", [])
+    print(f"Done - {len(entries)} history entries now on record.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--url", default=os.environ.get("HA_URL", "http://localhost:8123")
+    )
+    parser.add_argument("--token", default=os.environ.get("HA_TOKEN"))
+    parser.add_argument(
+        "--dry-run", action="store_true", help="print the calls without making them"
+    )
+    args = parser.parse_args()
+
+    if not args.token and not args.dry_run:
+        sys.exit(
+            "No token provided. Set HA_TOKEN or pass --token.\n"
+            "Create one from the HA profile page: click your name (bottom "
+            "left) -> Security -> Long-Lived Access Tokens -> Create Token."
+        )
+
+    seed(args.url.rstrip("/"), args.token, dry_run=args.dry_run)
+
+
+if __name__ == "__main__":
+    main()
