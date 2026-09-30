@@ -43,3 +43,9 @@ max-statements = 69
     "ANN", # Missing type annotations - not enforced by home-assistant/core either; low-value on fixture/mock parameters
     "ARG", # Unused function/method argument - common for pytest fixtures required by signature but unused in the test body
 ]
+"scripts/*" = [
+    "ANN", # Missing type annotations - low-value on a small imperative CLI script
+    "D", # Missing docstrings - the module docstring covers usage; no library API to document
+    "T201", # print found - this script's whole job is CLI progress output
+    "S310", # Audit URL open for permitted schemes - talks to the user's own local HA instance
+]
