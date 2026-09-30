@@ -130,6 +130,19 @@ describe("simple-chores-history-card", () => {
     ).toThrow(/assignee/);
   });
 
+  it("spans the Earned and Missed column headers over their delta+total pair", async () => {
+    const callWS = vi.fn().mockResolvedValue({ response: { entries: ENTRIES } });
+    const el = await mountCard(makeHass({ callWS }), {
+      type: "custom:simple-chores-history-card",
+      assignee: "alice",
+    });
+
+    const spanHeaders = [
+      ...el.shadowRoot!.querySelectorAll(".col-header .col-span-header"),
+    ];
+    expect(spanHeaders.map((h) => h.textContent?.trim())).toEqual(["Earned", "Missed"]);
+  });
+
   it("renders no header by default", async () => {
     const callWS = vi.fn().mockResolvedValue({ response: { entries: ENTRIES } });
     const el = await mountCard(makeHass({ callWS }), {

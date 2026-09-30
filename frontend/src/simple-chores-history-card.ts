@@ -152,10 +152,8 @@ export class SimpleChoresHistoryCard extends LitElement {
           <div class="cell time">Time</div>
           <div class="cell event">Event</div>
           <div class="cell chore">Chore</div>
-          <div class="cell delta"></div>
-          <div class="cell earned">Earned</div>
-          <div class="cell delta"></div>
-          <div class="cell missed">Missed</div>
+          <div class="cell col-span-header">Earned</div>
+          <div class="cell col-span-header">Missed</div>
         </div>
         ${rows}
       </div>
@@ -243,7 +241,7 @@ export class SimpleChoresHistoryCard extends LitElement {
     }
     .row {
       display: grid;
-      grid-template-columns: 0.8fr 1fr 1.3fr 0.5fr 0.6fr 0.5fr 0.6fr;
+      grid-template-columns: 0.6fr 0.9fr 1.6fr 0.35fr 0.45fr 0.35fr 0.45fr;
       gap: 6px;
       align-items: center;
       padding: 4px 0;
@@ -267,6 +265,12 @@ export class SimpleChoresHistoryCard extends LitElement {
       font-weight: 500;
       color: var(--secondary-text-color, #727272);
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
+    }
+    /* Covers its delta+total column pair, so those two can be narrower
+       individually while the label still reads clearly across both. */
+    .col-span-header {
+      grid-column: span 2;
+      text-align: center;
     }
     .cell.chore {
       overflow: hidden;
