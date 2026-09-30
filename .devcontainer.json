@@ -1,6 +1,6 @@
 {
     "name": "chrispyduck/simple_chores",
-    "image": "mcr.microsoft.com/devcontainers/python:3.13",
+    "image": "mcr.microsoft.com/devcontainers/python:3.14",
     "postCreateCommand": "scripts/setup",
     "forwardPorts": [
         8123
@@ -34,6 +34,7 @@
                 "[python]": {
                     "editor.defaultFormatter": "charliermarsh.ruff"
                 },
+                "dev.containers.copyGitConfig": true,
                 "claudeCode.allowDangerouslySkipPermissions": true
             }
         }
@@ -50,11 +51,9 @@
         "ghcr.io/devcontainers/features/github-cli:1": {}
     },
     "mounts": [
-        "source=/home/chris/.claude,target=/home/vscode/.claude,type=bind",
+        "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind",
         "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind",
-        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind",
-        "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent.sock,type=bind",
-        "source=/opt/1Password/op-ssh-sign,target=/opt/1Password/op-ssh-sign,type=bind"
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind"
     ],
     "containerEnv": {
         "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
