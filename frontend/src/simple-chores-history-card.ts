@@ -241,7 +241,7 @@ export class SimpleChoresHistoryCard extends LitElement {
     }
     .row {
       display: grid;
-      grid-template-columns: 0.6fr 0.9fr 1.6fr 0.35fr 0.45fr 0.35fr 0.45fr;
+      grid-template-columns: 0.6fr 0.9fr 1.6fr 0.35fr 0.25fr 0.35fr 0.25fr;
       gap: 6px;
       align-items: center;
       padding: 4px 0;
