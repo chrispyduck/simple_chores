@@ -473,6 +473,14 @@ export function displayName(
  */
 export type HistoryAction = "completed" | "uncompleted" | "reset" | "missed";
 
+/** Every HistoryAction value, for building the History tab's event-type filter. */
+export const HISTORY_ACTIONS: HistoryAction[] = [
+  "completed",
+  "uncompleted",
+  "reset",
+  "missed",
+];
+
 export interface HistoryEntry {
   id: string;
   timestamp: string; // ISO 8601

@@ -251,6 +251,87 @@ describe("simple-chores-panel", () => {
     expect(row.querySelector(".history-missed .meta")).toBeNull();
   });
 
+  it("filters history entries by event type via the multi-select chips", async () => {
+    const callWS = vi.fn().mockResolvedValue({
+      response: {
+        entries: [
+          {
+            id: "1",
+            timestamp: "2026-01-01T12:00:00+00:00",
+            action: "completed",
+            chore_slug: "dishes",
+            chore_name: "Dishes",
+            category: "kitchen",
+            assignee: "alice",
+            points_delta: 10,
+            points_total: 10,
+            points_missed: 0,
+            missed_total: 3,
+          },
+          {
+            id: "2",
+            timestamp: "2026-01-01T13:00:00+00:00",
+            action: "missed",
+            chore_slug: "trash",
+            chore_name: "Trash",
+            category: null,
+            assignee: "alice",
+            points_delta: 0,
+            points_total: 10,
+            points_missed: 5,
+            missed_total: 8,
+          },
+          {
+            id: "3",
+            timestamp: "2026-01-01T14:00:00+00:00",
+            action: "reset",
+            chore_slug: "dishes",
+            chore_name: "Dishes",
+            category: "kitchen",
+            assignee: "alice",
+            points_delta: 0,
+            points_total: 10,
+            points_missed: 0,
+            missed_total: 8,
+          },
+        ],
+      },
+    });
+    const el = await mountPanel(makeHass({ callWS }));
+
+    const historyTab = tabButtons(el).find((t) => t.textContent?.trim() === "History")!;
+    historyTab.click();
+    await el.updateComplete;
+    await el.updateComplete;
+
+    const rows = () =>
+      el.shadowRoot!.querySelectorAll(".history-row:not(.history-header)");
+    expect(rows().length).toBe(3);
+
+    const chip = (label: string) =>
+      [...el.shadowRoot!.querySelectorAll<HTMLButtonElement>(".chip-toggle")].find(
+        (b) => b.textContent?.trim() === label
+      )!;
+
+    // Selecting "Missed" narrows to just the missed entry.
+    chip("Missed").click();
+    await el.updateComplete;
+    expect(rows().length).toBe(1);
+    expect(rows()[0].querySelector(".history-chore .name")?.textContent).toBe("Trash");
+    expect(chip("Missed").getAttribute("aria-pressed")).toBe("true");
+
+    // Also selecting "Reset" is additive (multi-select), not exclusive.
+    chip("Reset").click();
+    await el.updateComplete;
+    expect(rows().length).toBe(2);
+
+    // Deselecting both restores the full list.
+    chip("Missed").click();
+    chip("Reset").click();
+    await el.updateComplete;
+    expect(rows().length).toBe(3);
+  });
+
   it("shows an empty state on the History tab with no entries", async () => {
     const el = await mountPanel(makeHass({ callWS: vi.fn().mockResolvedValue({}) }));
 
