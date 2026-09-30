@@ -15,14 +15,15 @@ export interface HistoryCardConfig {
   type: string;
   assignee: string;
   title?: string;
-  limit?: number;
+  days?: number;
   show_completed?: boolean;
   show_uncompleted?: boolean;
   show_missed?: boolean;
   show_reset?: boolean;
 }
 
-const DEFAULT_LIMIT = 15;
+const DEFAULT_DAYS = 7;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * Read-only Lovelace card showing one assignee's recent chore-history
@@ -58,7 +59,7 @@ export class SimpleChoresHistoryCard extends LitElement {
   }
 
   getCardSize(): number {
-    return 1 + Math.min(this._config?.limit ?? DEFAULT_LIMIT, 10);
+    return 1 + Math.min(this._config?.days ?? DEFAULT_DAYS, 10);
   }
 
   static getStubConfig(): Partial<HistoryCardConfig> {
@@ -104,18 +105,20 @@ export class SimpleChoresHistoryCard extends LitElement {
   protected render() {
     if (!this._config) return nothing;
 
-    const title = this._config.title ?? `${this._config.assignee}'s Activity`;
-    const limit = this._config.limit ?? DEFAULT_LIMIT;
+    const days = this._config.days ?? DEFAULT_DAYS;
+    const cutoff = Date.now() - days * MS_PER_DAY;
 
     const entries = (this._entries ?? [])
       .filter(
-        (e) => e.assignee === this._config.assignee && this._actionEnabled(e.action)
+        (e) =>
+          e.assignee === this._config.assignee &&
+          this._actionEnabled(e.action) &&
+          new Date(e.timestamp).getTime() >= cutoff
       )
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-      .slice(0, limit);
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
     return html`
-      <ha-card header=${title}>
+      <ha-card header=${this._config.title ?? nothing}>
         <div class="card-content">
           ${this._error
             ? html`<p class="error">${this._error}</p>`
@@ -149,8 +152,8 @@ export class SimpleChoresHistoryCard extends LitElement {
           <div class="cell time">Time</div>
           <div class="cell event">Event</div>
           <div class="cell chore">Chore</div>
-          <div class="cell earned">Earned</div>
-          <div class="cell missed">Missed</div>
+          <div class="cell col-span-header">Earned</div>
+          <div class="cell col-span-header">Missed</div>
         </div>
         ${rows}
       </div>
@@ -175,18 +178,14 @@ export class SimpleChoresHistoryCard extends LitElement {
           </span>
         </div>
         <div class="cell chore">${entry.choreName}</div>
-        <div class="cell earned">
-          ${entry.pointsTotal}
-          ${entry.pointsDelta !== 0
-            ? html`<div class="meta ${pointsClass}">${pointsLabel}</div>`
-            : nothing}
+        <div class="cell delta ${pointsClass}">
+          ${entry.pointsDelta !== 0 ? pointsLabel : nothing}
         </div>
-        <div class="cell missed">
-          ${entry.missedTotal ?? "—"}
-          ${entry.pointsMissed > 0
-            ? html`<div class="meta points-negative">+${entry.pointsMissed}</div>`
-            : nothing}
+        <div class="cell earned">${entry.pointsTotal}</div>
+        <div class="cell delta points-negative">
+          ${entry.pointsMissed > 0 ? `+${entry.pointsMissed}` : nothing}
         </div>
+        <div class="cell missed">${entry.missedTotal ?? "—"}</div>
       </div>
     `;
   }
@@ -242,13 +241,21 @@ export class SimpleChoresHistoryCard extends LitElement {
     }
     .row {
       display: grid;
-      grid-template-columns: 0.8fr 1fr 1.4fr 0.8fr 0.8fr;
-      gap: 8px;
+      grid-template-columns: 0.6fr 0.9fr 1.6fr 0.35fr 0.25fr 0.35fr 0.25fr;
+      gap: 6px;
       align-items: center;
-      padding: 8px 0;
+      padding: 4px 0;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
       font-size: 13px;
-      min-width: 420px;
+      min-width: 460px;
+    }
+    /* Each .row is its own grid, so fr-tracks only line up across rows if
+       no cell's content can force its track wider than its fr share - the
+       default min-width:auto on grid items sizes to content otherwise
+       (most visibly .chore, where a long name ignores its white-space:
+       nowrap + ellipsis and just widens the track instead of truncating). */
+    .cell {
+      min-width: 0;
     }
     .row:last-child {
       border-bottom: none;
@@ -259,6 +266,12 @@ export class SimpleChoresHistoryCard extends LitElement {
       color: var(--secondary-text-color, #727272);
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
     }
+    /* Covers its delta+total column pair, so those two can be narrower
+       individually while the label still reads clearly across both. */
+    .col-span-header {
+      grid-column: span 2;
+      text-align: center;
+    }
     .cell.chore {
       overflow: hidden;
       text-overflow: ellipsis;
@@ -266,21 +279,18 @@ export class SimpleChoresHistoryCard extends LitElement {
       color: var(--primary-text-color, #212121);
     }
     .cell.earned,
-    .cell.missed {
+    .cell.missed,
+    .cell.delta {
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
-    .cell .meta {
+    .cell.delta {
       font-size: 11px;
-      color: var(--secondary-text-color, #727272);
     }
-    /* .meta prefix matches ".cell .meta"'s specificity so these actually
-       win (a delta is always rendered as class="meta points-positive" or
-       "meta points-negative" - see _renderRow). */
-    .meta.points-positive {
+    .points-positive {
       color: #2e7d32;
     }
-    .meta.points-negative {
+    .points-negative {
       color: var(--error-color, #db4437);
     }
     .state-chip {

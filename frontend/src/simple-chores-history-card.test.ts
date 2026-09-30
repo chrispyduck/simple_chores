@@ -17,10 +17,20 @@ function makeHass(overrides: Partial<HomeAssistant> = {}): HomeAssistant {
   };
 }
 
+/** An ISO timestamp `daysAgo` full days before now, at the given UTC hour. */
+function daysAgo(days: number, hour: number): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - days);
+  date.setUTCHours(hour, 0, 0, 0);
+  return date.toISOString();
+}
+
+// All within the default 7-day window, 3 days ago so a 1-day window excludes
+// them without needing to worry about what hour "now" happens to be.
 const ENTRIES = [
   {
     id: "1",
-    timestamp: "2026-01-01T12:00:00+00:00",
+    timestamp: daysAgo(3, 12),
     action: "completed",
     chore_slug: "dishes",
     chore_name: "Dishes",
@@ -33,7 +43,7 @@ const ENTRIES = [
   },
   {
     id: "2",
-    timestamp: "2026-01-01T13:00:00+00:00",
+    timestamp: daysAgo(3, 13),
     action: "missed",
     chore_slug: "trash",
     chore_name: "Trash",
@@ -46,7 +56,7 @@ const ENTRIES = [
   },
   {
     id: "3",
-    timestamp: "2026-01-01T14:00:00+00:00",
+    timestamp: daysAgo(3, 14),
     action: "reset",
     chore_slug: "dishes",
     chore_name: "Dishes",
@@ -59,7 +69,7 @@ const ENTRIES = [
   },
   {
     id: "4",
-    timestamp: "2026-01-01T15:00:00+00:00",
+    timestamp: daysAgo(3, 15),
     action: "completed",
     chore_slug: "sweeping",
     chore_name: "Sweeping",
@@ -100,6 +110,12 @@ function dateHeaders(el: SimpleChoresHistoryCard): string[] {
   );
 }
 
+/** [earned delta, missed delta] cells for a row, in column order. */
+function deltaCells(row: Element): [Element, Element] {
+  const [earned, missed] = [...row.querySelectorAll(".cell.delta")];
+  return [earned, missed];
+}
+
 describe("simple-chores-history-card", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -112,6 +128,42 @@ describe("simple-chores-history-card", () => {
     expect(() =>
       el.setConfig({ type: "custom:simple-chores-history-card" } as HistoryCardConfig)
     ).toThrow(/assignee/);
+  });
+
+  it("spans the Earned and Missed column headers over their delta+total pair", async () => {
+    const callWS = vi.fn().mockResolvedValue({ response: { entries: ENTRIES } });
+    const el = await mountCard(makeHass({ callWS }), {
+      type: "custom:simple-chores-history-card",
+      assignee: "alice",
+    });
+
+    const spanHeaders = [
+      ...el.shadowRoot!.querySelectorAll(".col-header .col-span-header"),
+    ];
+    expect(spanHeaders.map((h) => h.textContent?.trim())).toEqual(["Earned", "Missed"]);
+  });
+
+  it("renders no header by default", async () => {
+    const callWS = vi.fn().mockResolvedValue({ response: { entries: ENTRIES } });
+    const el = await mountCard(makeHass({ callWS }), {
+      type: "custom:simple-chores-history-card",
+      assignee: "alice",
+    });
+
+    expect(el.shadowRoot!.querySelector("ha-card")?.hasAttribute("header")).toBe(false);
+  });
+
+  it("renders a header only when title is configured", async () => {
+    const callWS = vi.fn().mockResolvedValue({ response: { entries: ENTRIES } });
+    const el = await mountCard(makeHass({ callWS }), {
+      type: "custom:simple-chores-history-card",
+      assignee: "alice",
+      title: "Alice's Activity",
+    });
+
+    expect(el.shadowRoot!.querySelector("ha-card")?.getAttribute("header")).toBe(
+      "Alice's Activity"
+    );
   });
 
   it("fetches history for the configured assignee via get_history", async () => {
@@ -167,7 +219,7 @@ describe("simple-chores-history-card", () => {
     expect(names).toEqual(["Dishes"]);
   });
 
-  it("shows earned/missed totals with an inline delta only when non-zero", async () => {
+  it("shows earned/missed totals with the delta in its own column, only when non-zero", async () => {
     const callWS = vi.fn().mockResolvedValue({ response: { entries: ENTRIES } });
     const el = await mountCard(makeHass({ callWS }), {
       type: "custom:simple-chores-history-card",
@@ -177,24 +229,24 @@ describe("simple-chores-history-card", () => {
     // Newest first: the "missed" entry (13:00, +5 missed) then "completed"
     // (12:00, +10 earned).
     const [missedRow, completedRow] = rows(el);
+    const [missedRowEarnedDelta, missedRowMissedDelta] = deltaCells(missedRow);
+    const [completedRowEarnedDelta, completedRowMissedDelta] = deltaCells(completedRow);
 
-    expect(missedRow.querySelector(".cell.earned")?.textContent).toContain("10");
-    expect(missedRow.querySelector(".cell.earned .meta")).toBeNull();
-    expect(missedRow.querySelector(".cell.missed")?.textContent).toContain("5");
-    expect(missedRow.querySelector(".cell.missed .meta")?.textContent?.trim()).toBe("+5");
+    expect(missedRow.querySelector(".cell.earned")?.textContent?.trim()).toBe("10");
+    expect(missedRowEarnedDelta.textContent?.trim()).toBe("");
+    expect(missedRow.querySelector(".cell.missed")?.textContent?.trim()).toBe("5");
+    expect(missedRowMissedDelta.textContent?.trim()).toBe("+5");
 
-    expect(completedRow.querySelector(".cell.earned")?.textContent).toContain("10");
-    expect(completedRow.querySelector(".cell.earned .meta")?.textContent?.trim()).toBe(
-      "+10"
-    );
-    expect(completedRow.querySelector(".cell.missed .meta")).toBeNull();
+    expect(completedRow.querySelector(".cell.earned")?.textContent?.trim()).toBe("10");
+    expect(completedRowEarnedDelta.textContent?.trim()).toBe("+10");
+    expect(completedRowMissedDelta.textContent?.trim()).toBe("");
   });
 
   it("groups rows under a date header, one per distinct day", async () => {
     const otherDay = {
       ...ENTRIES[0],
       id: "5",
-      timestamp: "2026-01-02T09:00:00+00:00",
+      timestamp: daysAgo(2, 9),
       chore_name: "Vacuuming",
     };
     const callWS = vi
@@ -211,15 +263,19 @@ describe("simple-chores-history-card", () => {
     expect(dateHeaders(el)).toHaveLength(2);
   });
 
-  it("caps the number of rows to the configured limit", async () => {
+  it("excludes entries older than the configured number of days", async () => {
     const callWS = vi.fn().mockResolvedValue({ response: { entries: ENTRIES } });
     const el = await mountCard(makeHass({ callWS }), {
       type: "custom:simple-chores-history-card",
       assignee: "alice",
-      limit: 1,
+      days: 1,
     });
 
-    expect(rows(el)).toHaveLength(1);
+    // All alice entries are 3 days old, outside a 1-day window.
+    expect(rows(el)).toHaveLength(0);
+    expect(el.shadowRoot!.querySelector(".empty")?.textContent).toContain(
+      "Nothing to show yet"
+    );
   });
 
   it("shows an empty state when the assignee has no matching entries", async () => {
