@@ -17,7 +17,12 @@ from homeassistant.const import Platform
 from .config_loader import ConfigLoader, ConfigLoadError
 from .const import CONFIG_FILE_NAME, DOMAIN, LOGGER
 from .data import SimpleChoresData as SimpleChoresData
-from .panel import async_register_panel, async_unregister_panel
+from .panel import (
+    async_register_history_card,
+    async_register_panel,
+    async_unregister_history_card,
+    async_unregister_panel,
+)
 from .sensor import async_setup_platform
 from .services import async_catch_up_auto_finalize, async_setup_services
 
@@ -104,6 +109,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:  # noqa: ARG00
     # Add the admin-only "Chores" panel to the sidebar
     await async_register_panel(hass)
 
+    # Make the read-only history Lovelace card available on every dashboard
+    await async_register_history_card(hass)
+
     LOGGER.info("Simple Chores integration loaded successfully")
     return True
 
@@ -157,6 +165,9 @@ async def async_setup_entry(
     # Add the admin-only "Chores" panel to the sidebar
     await async_register_panel(hass)
 
+    # Make the read-only history Lovelace card available on every dashboard
+    await async_register_history_card(hass)
+
     LOGGER.info("Simple Chores integration loaded successfully")
     return True
 
@@ -182,6 +193,7 @@ async def async_unload_entry(
     if unload_ok:
         # Remove the sidebar panel
         async_unregister_panel(hass)
+        async_unregister_history_card(hass)
 
         # Stop watching config file
         if DOMAIN in hass.data:

@@ -29,6 +29,7 @@ import {
   emptyCategoryDraft,
   emptyChoreDraft,
   emptyPrivilegeDraft,
+  historyActionClass,
   historyActionLabel,
   knownAssignees,
   parseCategories,
@@ -1214,7 +1215,7 @@ export class SimpleChoresPanel extends LitElement {
             return html`
               <button
                 type="button"
-                class="chip-toggle ${this._historyActionClass(action)} ${selected
+                class="chip-toggle ${historyActionClass(action)} ${selected
                   ? "selected"
                   : ""}"
                 aria-pressed=${selected}
@@ -1280,7 +1281,7 @@ export class SimpleChoresPanel extends LitElement {
           ${this._displayName(entry.assignee)}
         </div>
         <div class="history-cell history-action">
-          <span class="state-chip ${this._historyActionClass(entry.action)}">
+          <span class="state-chip ${historyActionClass(entry.action)}">
             ${historyActionLabel(entry.action)}
           </span>
         </div>
@@ -1307,13 +1308,6 @@ export class SimpleChoresPanel extends LitElement {
     this._historyActionFilter = this._historyActionFilter.includes(action)
       ? this._historyActionFilter.filter((a) => a !== action)
       : [...this._historyActionFilter, action];
-  }
-
-  private _historyActionClass(action: HistoryAction): string {
-    if (action === "completed") return "state-good";
-    if (action === "uncompleted") return "state-bad";
-    if (action === "missed") return "state-warn";
-    return "state-neutral";
   }
 
   private _formatHistoryTimestamp(iso: string): string {

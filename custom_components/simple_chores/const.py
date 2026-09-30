@@ -100,6 +100,15 @@ PANEL_NAME = "simple-chores-panel"
 PANEL_TITLE = "Chores"
 PANEL_ICON = "mdi:clipboard-check-outline"
 
+# --- Lovelace history card ----------------------------------------------
+# A separate, much smaller bundle (no admin CRUD code) than the panel above,
+# read-only and usable by non-admin users, for a per-assignee "how you're
+# doing" card on a regular dashboard. Registered as an extra frontend
+# module (see panel.py) so it's available on every dashboard without the
+# user having to add a Lovelace resource by hand.
+CARD_FILENAME = "frontend/dist/simple-chores-history-card.js"
+CARD_URL = f"/api/{DOMAIN}/history-card.js"
+
 # Singleton entity publishing integration-wide settings (see SettingsConfig
 # in models.py) for the admin panel to read - lives under the same
 # `..._meta_` prefix as the per-assignee summary sensors so it's already

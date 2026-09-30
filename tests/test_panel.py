@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from custom_components.simple_chores import panel
-from custom_components.simple_chores.const import DOMAIN, PANEL_URL
+from custom_components.simple_chores.const import CARD_URL, DOMAIN, PANEL_URL
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -164,3 +164,66 @@ class TestAsyncUnregisterPanel:
             panel.async_unregister_panel(hass)
 
         mock_remove.assert_called_once_with(hass, DOMAIN, warn_if_unknown=False)
+
+
+class TestAsyncRegisterHistoryCard:
+    """Tests for async_register_history_card."""
+
+    @pytest.mark.asyncio
+    async def test_missing_bundle_skips_registration(
+        self, hass: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When the built JS bundle is absent, registration is skipped."""
+        monkeypatch.setattr(panel, "CARD_FILENAME", "frontend/dist/does-not-exist.js")
+
+        with patch.object(panel.frontend, "add_extra_js_url") as mock_add:
+            await panel.async_register_history_card(hass)
+
+        hass.http.async_register_static_paths.assert_not_called()
+        mock_add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_registers_static_path_and_extra_js_url(
+        self, hass: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A present bundle is served statically and injected into every page."""
+        bundle = tmp_path / "simple-chores-history-card.js"
+        bundle.write_text("export {};")
+        monkeypatch.setattr(panel, "Path", lambda _file: _FakePath(bundle))
+
+        with patch.object(panel.frontend, "add_extra_js_url") as mock_add:
+            await panel.async_register_history_card(hass)
+
+        hass.http.async_register_static_paths.assert_called_once()
+        static_configs = hass.http.async_register_static_paths.call_args[0][0]
+        assert static_configs[0].url_path == CARD_URL
+        assert static_configs[0].path == str(bundle)
+
+        mock_add.assert_called_once_with(hass, CARD_URL)
+        assert hass.data[panel._CARD_STATIC_REGISTERED] is True
+
+    @pytest.mark.asyncio
+    async def test_does_not_reregister_static_path_twice(
+        self, hass: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A second call (e.g. reload) must not re-register the static path."""
+        bundle = tmp_path / "simple-chores-history-card.js"
+        bundle.write_text("export {};")
+        monkeypatch.setattr(panel, "Path", lambda _file: _FakePath(bundle))
+        hass.data[panel._CARD_STATIC_REGISTERED] = True
+
+        with patch.object(panel.frontend, "add_extra_js_url"):
+            await panel.async_register_history_card(hass)
+
+        hass.http.async_register_static_paths.assert_not_called()
+
+
+class TestAsyncUnregisterHistoryCard:
+    """Tests for async_unregister_history_card."""
+
+    def test_removes_extra_js_url(self, hass: MagicMock) -> None:
+        """Unregistering stops injecting the card bundle into page loads."""
+        with patch.object(panel.frontend, "remove_extra_js_url") as mock_remove:
+            panel.async_unregister_history_card(hass)
+
+        mock_remove.assert_called_once_with(hass, CARD_URL)

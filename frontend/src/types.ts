@@ -539,3 +539,11 @@ export function historyActionLabel(action: HistoryAction): string {
       return action;
   }
 }
+
+/** state-chip CSS modifier class for a HistoryAction, matching the History tab. */
+export function historyActionClass(action: HistoryAction): string {
+  if (action === "completed") return "state-good";
+  if (action === "uncompleted") return "state-bad";
+  if (action === "missed") return "state-warn";
+  return "state-neutral";
+}

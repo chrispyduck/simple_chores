@@ -41,6 +41,12 @@ def mock_panel(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "custom_components.simple_chores.async_unregister_panel", Mock()
     )
+    monkeypatch.setattr(
+        "custom_components.simple_chores.async_register_history_card", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "custom_components.simple_chores.async_unregister_history_card", Mock()
+    )
 
 
 @pytest.fixture
