@@ -14,6 +14,7 @@ import {
   HaUserInfo,
   HistoryAction,
   HistoryEntry,
+  HISTORY_ACTIONS,
   HomeAssistant,
   PrivilegeBehavior,
   PrivilegeDefinition,
@@ -104,6 +105,8 @@ export class SimpleChoresPanel extends LitElement {
   @state() private _historyUserFilter = "";
   @state() private _historyCategoryFilter = "";
   @state() private _historyChoreFilter = "";
+  /** Empty means no event-type filter is applied (all actions shown). */
+  @state() private _historyActionFilter: HistoryAction[] = [];
   private _loadedUserDisplayNames = false;
 
   protected updated(changed: PropertyValues): void {
@@ -1152,6 +1155,12 @@ export class SimpleChoresPanel extends LitElement {
       if (this._historyChoreFilter && entry.choreSlug !== this._historyChoreFilter) {
         return false;
       }
+      if (
+        this._historyActionFilter.length > 0 &&
+        !this._historyActionFilter.includes(entry.action)
+      ) {
+        return false;
+      }
       return true;
     });
 
@@ -1195,6 +1204,27 @@ export class SimpleChoresPanel extends LitElement {
           <option value="">All chores</option>
           ${choreOptions.map((c) => html`<option value=${c.slug}>${c.name}</option>`)}
         </select>
+        <div
+          class="chip-toggle-group"
+          role="group"
+          aria-label="Filter history by event type"
+        >
+          ${HISTORY_ACTIONS.map((action) => {
+            const selected = this._historyActionFilter.includes(action);
+            return html`
+              <button
+                type="button"
+                class="chip-toggle ${this._historyActionClass(action)} ${selected
+                  ? "selected"
+                  : ""}"
+                aria-pressed=${selected}
+                @click=${() => this._toggleHistoryActionFilter(action)}
+              >
+                ${historyActionLabel(action)}
+              </button>
+            `;
+          })}
+        </div>
         <div class="spacer"></div>
         <button ?disabled=${this._historyLoading} @click=${() => this._loadHistory()}>
           ${this._historyLoading ? "Refreshing…" : "Refresh"}
@@ -1216,8 +1246,7 @@ export class SimpleChoresPanel extends LitElement {
                   <div class="history-cell history-chore">Chore</div>
                   <div class="history-cell history-assignee">Assignee</div>
                   <div class="history-cell history-action">Action</div>
-                  <div class="history-cell history-points">Points</div>
-                  <div class="history-cell history-balance">Balance</div>
+                  <div class="history-cell history-earned">Earned</div>
                   <div class="history-cell history-missed">Missed</div>
                 </div>
                 ${sorted.map((entry) => this._renderHistoryRow(entry, categories))}
@@ -1255,11 +1284,11 @@ export class SimpleChoresPanel extends LitElement {
             ${historyActionLabel(entry.action)}
           </span>
         </div>
-        <div class="history-cell history-points ${pointsClass}">
-          ${entry.pointsDelta === 0 ? "—" : pointsLabel}
-        </div>
-        <div class="history-cell history-balance" title="Points balance after this entry">
+        <div class="history-cell history-earned" title="Points balance after this entry">
           ${entry.pointsTotal}
+          ${entry.pointsDelta !== 0
+            ? html`<div class="meta ${pointsClass}">${pointsLabel}</div>`
+            : nothing}
         </div>
         <div
           class="history-cell history-missed"
@@ -1272,6 +1301,12 @@ export class SimpleChoresPanel extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  private _toggleHistoryActionFilter(action: HistoryAction): void {
+    this._historyActionFilter = this._historyActionFilter.includes(action)
+      ? this._historyActionFilter.filter((a) => a !== action)
+      : [...this._historyActionFilter, action];
   }
 
   private _historyActionClass(action: HistoryAction): string {
@@ -2390,6 +2425,41 @@ export class SimpleChoresPanel extends LitElement {
       color: var(--secondary-text-color, #727272);
     }
 
+    .chip-toggle-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .actions-row button.chip-toggle {
+      border: 1px solid transparent;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      opacity: 0.45;
+    }
+    .actions-row button.chip-toggle.selected {
+      border-color: currentColor;
+      opacity: 1;
+    }
+    .actions-row button.chip-toggle.state-good {
+      background: rgba(76, 175, 80, 0.15);
+      color: #2e7d32;
+    }
+    .actions-row button.chip-toggle.state-warn {
+      background: rgba(255, 152, 0, 0.15);
+      color: #ef6c00;
+    }
+    .actions-row button.chip-toggle.state-bad {
+      background: rgba(219, 68, 55, 0.12);
+      color: var(--error-color, #db4437);
+    }
+    .actions-row button.chip-toggle.state-neutral {
+      background: rgba(0, 0, 0, 0.06);
+      color: var(--secondary-text-color, #727272);
+    }
+
     .overlay {
       position: fixed;
       inset: 0;
@@ -2581,7 +2651,7 @@ export class SimpleChoresPanel extends LitElement {
     }
     .history-row {
       display: grid;
-      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.7fr 0.8fr 0.8fr;
+      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.9fr 0.8fr;
       gap: 8px;
       align-items: center;
       padding: 10px 14px;
@@ -2606,8 +2676,7 @@ export class SimpleChoresPanel extends LitElement {
       font-size: 11px;
       color: var(--secondary-text-color, #727272);
     }
-    .history-points,
-    .history-balance,
+    .history-earned,
     .history-missed {
       text-align: right;
       font-variant-numeric: tabular-nums;

@@ -1,6 +1,11 @@
 {
     "name": "chrispyduck/simple_chores",
     "image": "mcr.microsoft.com/devcontainers/python:3.14",
+    "initializeCommand": "mkdir -p \"$HOME/.cache/devcontainer\" && (umask 077; printf 'GH_TOKEN=%s\\n' \"$(PATH=/opt/homebrew/bin:/usr/local/bin:$PATH gh auth token 2>/dev/null)\" > \"$HOME/.cache/devcontainer/gh.env\")",
+    "runArgs": [
+        "--env-file",
+        "${localEnv:HOME}/.cache/devcontainer/gh.env"
+    ],
     "postCreateCommand": "scripts/setup",
     "forwardPorts": [
         8123
@@ -51,12 +56,9 @@
         "ghcr.io/devcontainers/features/github-cli:1": {}
     },
     "mounts": [
-        "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind",
-        "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind",
-        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind"
+        "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
     ],
     "containerEnv": {
-        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
-        "SSH_AUTH_SOCK": "/ssh-agent.sock"
+        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
     }
 }
