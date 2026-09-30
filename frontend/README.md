@@ -74,5 +74,5 @@ custom element against a stubbed `hass` object and asserts on its rendered
 shadow DOM (tabs, the admin gate, chore cards, the Settings danger zone,
 the Users tab). `src/simple-chores-history-card.test.ts` does the same for
 `<simple-chores-history-card>` (config validation, assignee/action-type
-filtering, the points delta, the row limit). CI runs type checking, tests,
+filtering, the points delta, the day-range cutoff). CI runs type checking, tests,
 and the build on every push and PR (see `.github/workflows/lint.yml`).
