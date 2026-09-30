@@ -45,7 +45,7 @@ const ct = (i) => new rt(typeof i == "string" ? i : i + "", void 0, I), dt = (i,
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const { is: ut, defineProperty: $t, getOwnPropertyDescriptor: _t, getOwnPropertyNames: ft, getOwnPropertySymbols: mt, getPrototypeOf: gt } = Object, R = globalThis, F = R.trustedTypes, vt = F ? F.emptyScript : "", yt = R.reactiveElementPolyfillSupport, C = (i, t) => i, D = { toAttribute(i, t) {
+const { is: ut, defineProperty: ft, getOwnPropertyDescriptor: $t, getOwnPropertyNames: _t, getOwnPropertySymbols: mt, getPrototypeOf: gt } = Object, R = globalThis, F = R.trustedTypes, vt = F ? F.emptyScript : "", yt = R.reactiveElementPolyfillSupport, C = (i, t) => i, D = { toAttribute(i, t) {
   switch (t) {
     case Boolean:
       i = i ? vt : null;
@@ -85,11 +85,11 @@ let A = class extends HTMLElement {
   static createProperty(t, e = J) {
     if (e.state && (e.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(t) && ((e = Object.create(e)).wrapped = !0), this.elementProperties.set(t, e), !e.noAccessor) {
       const s = Symbol(), r = this.getPropertyDescriptor(t, s, e);
-      r !== void 0 && $t(this.prototype, t, r);
+      r !== void 0 && ft(this.prototype, t, r);
     }
   }
   static getPropertyDescriptor(t, e, s) {
-    const { get: r, set: o } = _t(this.prototype, t) ?? { get() {
+    const { get: r, set: o } = $t(this.prototype, t) ?? { get() {
       return this[e];
     }, set(n) {
       this[e] = n;
@@ -110,7 +110,7 @@ let A = class extends HTMLElement {
   static finalize() {
     if (this.hasOwnProperty(C("finalized"))) return;
     if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(C("properties"))) {
-      const e = this.properties, s = [...ft(e), ...mt(e)];
+      const e = this.properties, s = [..._t(e), ...mt(e)];
       for (const r of s) this.createProperty(r, e[r]);
     }
     const t = this[Symbol.metadata];
@@ -262,9 +262,9 @@ A.elementStyles = [], A.shadowRootOptions = { mode: "open" }, A[C("elementProper
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const q = globalThis, Y = (i) => i, H = q.trustedTypes, G = H ? H.createPolicy("lit-html", { createHTML: (i) => i }) : void 0, ot = "$lit$", _ = `lit$${Math.random().toFixed(9).slice(2)}$`, nt = "?" + _, At = `<${nt}>`, y = document, P = () => y.createComment(""), T = (i) => i === null || typeof i != "object" && typeof i != "function", W = Array.isArray, bt = (i) => W(i) || typeof i?.[Symbol.iterator] == "function", k = `[ 	
-\f\r]`, S = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, Q = /-->/g, X = />/g, m = RegExp(`>|${k}(?:([^\\s"'>=/]+)(${k}*=${k}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), tt = /'/g, et = /"/g, at = /^(?:script|style|textarea|title)$/i, wt = (i) => (t, ...e) => ({ _$litType$: i, strings: t, values: e }), g = wt(1), b = Symbol.for("lit-noChange"), c = Symbol.for("lit-nothing"), st = /* @__PURE__ */ new WeakMap(), v = y.createTreeWalker(y, 129);
+const q = globalThis, Y = (i) => i, H = q.trustedTypes, G = H ? H.createPolicy("lit-html", { createHTML: (i) => i }) : void 0, ot = "$lit$", $ = `lit$${Math.random().toFixed(9).slice(2)}$`, nt = "?" + $, At = `<${nt}>`, y = document, P = () => y.createComment(""), T = (i) => i === null || typeof i != "object" && typeof i != "function", W = Array.isArray, wt = (i) => W(i) || typeof i?.[Symbol.iterator] == "function", L = `[ 	
+\f\r]`, S = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, Q = /-->/g, X = />/g, m = RegExp(`>|${L}(?:([^\\s"'>=/]+)(${L}*=${L}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`, "g"), tt = /'/g, et = /"/g, at = /^(?:script|style|textarea|title)$/i, bt = (i) => (t, ...e) => ({ _$litType$: i, strings: t, values: e }), g = bt(1), w = Symbol.for("lit-noChange"), c = Symbol.for("lit-nothing"), st = /* @__PURE__ */ new WeakMap(), v = y.createTreeWalker(y, 129);
 function lt(i, t) {
   if (!W(i) || !i.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return G !== void 0 ? G.createHTML(t) : t;
@@ -276,8 +276,8 @@ const Et = (i, t) => {
     const a = i[l];
     let d, p, h = -1, u = 0;
     for (; u < a.length && (n.lastIndex = u, p = n.exec(a), p !== null); ) u = n.lastIndex, n === S ? p[1] === "!--" ? n = Q : p[1] !== void 0 ? n = X : p[2] !== void 0 ? (at.test(p[2]) && (r = RegExp("</" + p[2], "g")), n = m) : p[3] !== void 0 && (n = m) : n === m ? p[0] === ">" ? (n = r ?? S, h = -1) : p[1] === void 0 ? h = -2 : (h = n.lastIndex - p[2].length, d = p[1], n = p[3] === void 0 ? m : p[3] === '"' ? et : tt) : n === et || n === tt ? n = m : n === Q || n === X ? n = S : (n = m, r = void 0);
-    const $ = n === m && i[l + 1].startsWith("/>") ? " " : "";
-    o += n === S ? a + At : h >= 0 ? (s.push(d), a.slice(0, h) + ot + a.slice(h) + _ + $) : a + _ + (h === -2 ? l : $);
+    const f = n === m && i[l + 1].startsWith("/>") ? " " : "";
+    o += n === S ? a + At : h >= 0 ? (s.push(d), a.slice(0, h) + ot + a.slice(h) + $ + f) : a + $ + (h === -2 ? l : f);
   }
   return [lt(i, o + (i[e] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), s];
 };
@@ -294,21 +294,21 @@ class U {
     for (; (r = v.nextNode()) !== null && a.length < l; ) {
       if (r.nodeType === 1) {
         if (r.hasAttributes()) for (const h of r.getAttributeNames()) if (h.endsWith(ot)) {
-          const u = p[n++], $ = r.getAttribute(h).split(_), O = /([.?@])?(.*)/.exec(u);
-          a.push({ type: 1, index: o, name: O[2], strings: $, ctor: O[1] === "." ? Ct : O[1] === "?" ? xt : O[1] === "@" ? Pt : z }), r.removeAttribute(h);
-        } else h.startsWith(_) && (a.push({ type: 6, index: o }), r.removeAttribute(h));
+          const u = p[n++], f = r.getAttribute(h).split($), O = /([.?@])?(.*)/.exec(u);
+          a.push({ type: 1, index: o, name: O[2], strings: f, ctor: O[1] === "." ? Ct : O[1] === "?" ? xt : O[1] === "@" ? Pt : k }), r.removeAttribute(h);
+        } else h.startsWith($) && (a.push({ type: 6, index: o }), r.removeAttribute(h));
         if (at.test(r.tagName)) {
-          const h = r.textContent.split(_), u = h.length - 1;
+          const h = r.textContent.split($), u = h.length - 1;
           if (u > 0) {
             r.textContent = H ? H.emptyScript : "";
-            for (let $ = 0; $ < u; $++) r.append(h[$], P()), v.nextNode(), a.push({ type: 2, index: ++o });
+            for (let f = 0; f < u; f++) r.append(h[f], P()), v.nextNode(), a.push({ type: 2, index: ++o });
             r.append(h[u], P());
           }
         }
       } else if (r.nodeType === 8) if (r.data === nt) a.push({ type: 2, index: o });
       else {
         let h = -1;
-        for (; (h = r.data.indexOf(_, h + 1)) !== -1; ) a.push({ type: 7, index: o }), h += _.length - 1;
+        for (; (h = r.data.indexOf($, h + 1)) !== -1; ) a.push({ type: 7, index: o }), h += $.length - 1;
       }
       o++;
     }
@@ -318,11 +318,11 @@ class U {
     return s.innerHTML = t, s;
   }
 }
-function w(i, t, e = i, s) {
-  if (t === b) return t;
+function b(i, t, e = i, s) {
+  if (t === w) return t;
   let r = s !== void 0 ? e._$Co?.[s] : e._$Cl;
   const o = T(t) ? void 0 : t._$litDirective$;
-  return r?.constructor !== o && (r?._$AO?.(!1), o === void 0 ? r = void 0 : (r = new o(i), r._$AT(i, e, s)), s !== void 0 ? (e._$Co ??= [])[s] = r : e._$Cl = r), r !== void 0 && (t = w(i, r._$AS(i, t.values), r, s)), t;
+  return r?.constructor !== o && (r?._$AO?.(!1), o === void 0 ? r = void 0 : (r = new o(i), r._$AT(i, e, s)), s !== void 0 ? (e._$Co ??= [])[s] = r : e._$Cl = r), r !== void 0 && (t = b(i, r._$AS(i, t.values), r, s)), t;
 }
 class St {
   constructor(t, e) {
@@ -371,7 +371,7 @@ class N {
     return this._$AB;
   }
   _$AI(t, e = this) {
-    t = w(this, t, e), T(t) ? t === c || t == null || t === "" ? (this._$AH !== c && this._$AR(), this._$AH = c) : t !== this._$AH && t !== b && this._(t) : t._$litType$ !== void 0 ? this.$(t) : t.nodeType !== void 0 ? this.T(t) : bt(t) ? this.k(t) : this._(t);
+    t = b(this, t, e), T(t) ? t === c || t == null || t === "" ? (this._$AH !== c && this._$AR(), this._$AH = c) : t !== this._$AH && t !== w && this._(t) : t._$litType$ !== void 0 ? this.$(t) : t.nodeType !== void 0 ? this.T(t) : wt(t) ? this.k(t) : this._(t);
   }
   O(t) {
     return this._$AA.parentNode.insertBefore(t, this._$AB);
@@ -411,7 +411,7 @@ class N {
     this._$AM === void 0 && (this._$Cv = t, this._$AP?.(t));
   }
 }
-class z {
+class k {
   get tagName() {
     return this.element.tagName;
   }
@@ -424,11 +424,11 @@ class z {
   _$AI(t, e = this, s, r) {
     const o = this.strings;
     let n = !1;
-    if (o === void 0) t = w(this, t, e, 0), n = !T(t) || t !== this._$AH && t !== b, n && (this._$AH = t);
+    if (o === void 0) t = b(this, t, e, 0), n = !T(t) || t !== this._$AH && t !== w, n && (this._$AH = t);
     else {
       const l = t;
       let a, d;
-      for (t = o[0], a = 0; a < o.length - 1; a++) d = w(this, l[s + a], e, a), d === b && (d = this._$AH[a]), n ||= !T(d) || d !== this._$AH[a], d === c ? t = c : t !== c && (t += (d ?? "") + o[a + 1]), this._$AH[a] = d;
+      for (t = o[0], a = 0; a < o.length - 1; a++) d = b(this, l[s + a], e, a), d === w && (d = this._$AH[a]), n ||= !T(d) || d !== this._$AH[a], d === c ? t = c : t !== c && (t += (d ?? "") + o[a + 1]), this._$AH[a] = d;
     }
     n && !r && this.j(t);
   }
@@ -436,7 +436,7 @@ class z {
     t === c ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, t ?? "");
   }
 }
-class Ct extends z {
+class Ct extends k {
   constructor() {
     super(...arguments), this.type = 3;
   }
@@ -444,7 +444,7 @@ class Ct extends z {
     this.element[this.name] = t === c ? void 0 : t;
   }
 }
-class xt extends z {
+class xt extends k {
   constructor() {
     super(...arguments), this.type = 4;
   }
@@ -452,12 +452,12 @@ class xt extends z {
     this.element.toggleAttribute(this.name, !!t && t !== c);
   }
 }
-class Pt extends z {
+class Pt extends k {
   constructor(t, e, s, r, o) {
     super(t, e, s, r, o), this.type = 5;
   }
   _$AI(t, e = this) {
-    if ((t = w(this, t, e, 0) ?? c) === b) return;
+    if ((t = b(this, t, e, 0) ?? c) === w) return;
     const s = this._$AH, r = t === c && s !== c || t.capture !== s.capture || t.once !== s.once || t.passive !== s.passive, o = t !== c && (s === c || r);
     r && this.element.removeEventListener(this.name, this, s), o && this.element.addEventListener(this.name, this, t), this._$AH = t;
   }
@@ -473,7 +473,7 @@ class Tt {
     return this._$AM._$AU;
   }
   _$AI(t) {
-    w(this, t);
+    b(this, t);
   }
 }
 const Ut = q.litHtmlPolyfillSupport;
@@ -512,7 +512,7 @@ class x extends A {
     super.disconnectedCallback(), this._$Do?.setConnected(!1);
   }
   render() {
-    return b;
+    return w;
   }
 }
 x._$litElement$ = !0, x.finalized = !0, V.litElementHydrateSupport?.({ LitElement: x });
@@ -566,11 +566,11 @@ function ht(i) {
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-function L(i) {
+function z(i) {
   return ht({ ...i, state: !0, attribute: !1 });
 }
 const Rt = "simple_chores";
-function zt(i) {
+function kt(i) {
   return i ? i.map((t) => ({
     id: t.id,
     timestamp: t.timestamp,
@@ -585,7 +585,7 @@ function zt(i) {
     missedTotal: t.missed_total ?? null
   })) : [];
 }
-function Lt(i) {
+function zt(i) {
   switch (i) {
     case "completed":
       return "Completed";
@@ -599,7 +599,7 @@ function Lt(i) {
       return i;
   }
 }
-function kt(i) {
+function Lt(i) {
   return i === "completed" ? "state-good" : i === "uncompleted" ? "state-bad" : i === "missed" ? "state-warn" : "state-neutral";
 }
 var jt = Object.defineProperty, It = Object.getOwnPropertyDescriptor, E = (i, t, e, s) => {
@@ -608,7 +608,7 @@ var jt = Object.defineProperty, It = Object.getOwnPropertyDescriptor, E = (i, t,
   return s && r && jt(t, e, r), r;
 };
 const it = 7, Bt = 1440 * 60 * 1e3;
-let f = class extends x {
+let _ = class extends x {
   constructor() {
     super(...arguments), this._entries = null, this._error = null, this._loading = !1;
   }
@@ -636,7 +636,7 @@ let f = class extends x {
         service_data: {},
         return_response: !0
       });
-      this._entries = zt(i?.response?.entries);
+      this._entries = kt(i?.response?.entries);
     } catch (i) {
       this._error = i instanceof Error ? i.message : String(i);
     } finally {
@@ -685,10 +685,10 @@ let f = class extends x {
           <div class="cell time">Time</div>
           <div class="cell event">Event</div>
           <div class="cell chore">Chore</div>
+          <div class="cell delta"></div>
           <div class="cell earned">Earned</div>
           <div class="cell delta"></div>
           <div class="cell missed">Missed</div>
-          <div class="cell delta"></div>
         </div>
         ${t}
       </div>
@@ -700,19 +700,19 @@ let f = class extends x {
       <div class="row">
         <div class="cell time">${this._formatTime(i.timestamp)}</div>
         <div class="cell event">
-          <span class="state-chip ${kt(i.action)}">
-            ${Lt(i.action)}
+          <span class="state-chip ${Lt(i.action)}">
+            ${zt(i.action)}
           </span>
         </div>
         <div class="cell chore">${i.choreName}</div>
-        <div class="cell earned">${i.pointsTotal}</div>
         <div class="cell delta ${t}">
           ${i.pointsDelta !== 0 ? e : c}
         </div>
-        <div class="cell missed">${i.missedTotal ?? "—"}</div>
+        <div class="cell earned">${i.pointsTotal}</div>
         <div class="cell delta points-negative">
           ${i.pointsMissed > 0 ? `+${i.pointsMissed}` : c}
         </div>
+        <div class="cell missed">${i.missedTotal ?? "—"}</div>
       </div>
     `;
   }
@@ -735,7 +735,7 @@ let f = class extends x {
     return Number.isNaN(t.getTime()) ? i : t.toLocaleTimeString(void 0, { hour: "numeric", minute: "2-digit" });
   }
 };
-f.styles = dt`
+_.styles = dt`
     .card-content {
       padding: 4px 16px 16px;
     }
@@ -761,13 +761,21 @@ f.styles = dt`
     }
     .row {
       display: grid;
-      grid-template-columns: 0.8fr 1fr 1.3fr 0.6fr 0.5fr 0.6fr 0.5fr;
+      grid-template-columns: 0.8fr 1fr 1.3fr 0.5fr 0.6fr 0.5fr 0.6fr;
       gap: 6px;
       align-items: center;
       padding: 4px 0;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
       font-size: 13px;
       min-width: 460px;
+    }
+    /* Each .row is its own grid, so fr-tracks only line up across rows if
+       no cell's content can force its track wider than its fr share - the
+       default min-width:auto on grid items sizes to content otherwise
+       (most visibly .chore, where a long name ignores its white-space:
+       nowrap + ellipsis and just widens the track instead of truncating). */
+    .cell {
+      min-width: 0;
     }
     .row:last-child {
       border-bottom: none;
@@ -824,22 +832,22 @@ f.styles = dt`
   `;
 E([
   ht({ attribute: !1 })
-], f.prototype, "hass", 2);
+], _.prototype, "hass", 2);
 E([
-  L()
-], f.prototype, "_config", 2);
+  z()
+], _.prototype, "_config", 2);
 E([
-  L()
-], f.prototype, "_entries", 2);
+  z()
+], _.prototype, "_entries", 2);
 E([
-  L()
-], f.prototype, "_error", 2);
+  z()
+], _.prototype, "_error", 2);
 E([
-  L()
-], f.prototype, "_loading", 2);
-f = E([
+  z()
+], _.prototype, "_loading", 2);
+_ = E([
   Mt("simple-chores-history-card")
-], f);
+], _);
 window.customCards = window.customCards ?? [];
 window.customCards.push({
   type: "simple-chores-history-card",
