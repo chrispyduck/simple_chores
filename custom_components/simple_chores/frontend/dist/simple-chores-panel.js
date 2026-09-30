@@ -783,10 +783,13 @@ function pt(t) {
       return t;
   }
 }
-var ht = Object.defineProperty, ut = Object.getOwnPropertyDescriptor, m = (t, e, s, i) => {
-  for (var o = i > 1 ? void 0 : i ? ut(e, s) : e, r = t.length - 1, a; r >= 0; r--)
+function ht(t) {
+  return t === "completed" ? "state-good" : t === "uncompleted" ? "state-bad" : t === "missed" ? "state-warn" : "state-neutral";
+}
+var ut = Object.defineProperty, gt = Object.getOwnPropertyDescriptor, m = (t, e, s, i) => {
+  for (var o = i > 1 ? void 0 : i ? gt(e, s) : e, r = t.length - 1, a; r >= 0; r--)
     (a = t[r]) && (o = (i ? a(e, s, o) : a(o)) || o);
-  return i && o && ht(e, s, o), o;
+  return i && o && ut(e, s, o), o;
 };
 const p = "simple_chores", z = "__uncategorized__";
 let u = class extends T {
@@ -1712,7 +1715,7 @@ let u = class extends T {
           ${this._displayName(t.assignee)}
         </div>
         <div class="history-cell history-action">
-          <span class="state-chip ${this._historyActionClass(t.action)}">
+          <span class="state-chip ${ht(t.action)}">
             ${pt(t.action)}
           </span>
         </div>
@@ -1731,9 +1734,6 @@ let u = class extends T {
         </div>
       </div>
     `;
-  }
-  _historyActionClass(t) {
-    return t === "completed" ? "state-good" : t === "uncompleted" ? "state-bad" : t === "missed" ? "state-warn" : "state-neutral";
   }
   _formatHistoryTimestamp(t) {
     const e = new Date(t);

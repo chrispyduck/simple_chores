@@ -9,6 +9,8 @@ from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 
 from .const import (
+    CARD_FILENAME,
+    CARD_URL,
     DOMAIN,
     LOGGER,
     PANEL_FILENAME,
@@ -22,6 +24,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _STATIC_REGISTERED = f"{DOMAIN}_panel_static_registered"
+_CARD_STATIC_REGISTERED = f"{DOMAIN}_history_card_static_registered"
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
@@ -88,3 +91,49 @@ def async_unregister_panel(hass: HomeAssistant) -> None:
 
     """
     frontend.async_remove_panel(hass, DOMAIN, warn_if_unknown=False)
+
+
+async def async_register_history_card(hass: HomeAssistant) -> None:
+    """
+    Serve the read-only chore-history Lovelace card bundle.
+
+    Unlike the admin panel, this card is meant to be usable by non-admin
+    users on their own dashboards (`type: custom:simple-chores-history-card`),
+    so it's registered as an extra frontend module (frontend.add_extra_js_url)
+    rather than a lazily-loaded panel - that's what makes the custom element
+    available on any dashboard without the user having to add a Lovelace
+    resource by hand.
+
+    Args:
+        hass: Home Assistant instance
+
+    """
+    view_path = Path(__file__).parent / CARD_FILENAME
+
+    if not view_path.exists():
+        LOGGER.error(
+            "History card bundle missing at %s - the Lovelace history card "
+            "will not be available. Run 'npm run build' in frontend/ before "
+            "deploying this integration",
+            view_path,
+        )
+        return
+
+    if not hass.data.get(_CARD_STATIC_REGISTERED):
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(CARD_URL, str(view_path), cache_headers=False)]
+        )
+        hass.data[_CARD_STATIC_REGISTERED] = True
+
+    frontend.add_extra_js_url(hass, CARD_URL)
+
+
+def async_unregister_history_card(hass: HomeAssistant) -> None:
+    """
+    Stop injecting the history card bundle into frontend page loads.
+
+    Args:
+        hass: Home Assistant instance
+
+    """
+    frontend.remove_extra_js_url(hass, CARD_URL)
