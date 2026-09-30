@@ -2895,10 +2895,13 @@ u.styles = we`
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
-    .points-positive {
+    /* .meta prefix matches ".history-cell .meta"'s specificity so these
+       actually win (a delta is always rendered as class="meta
+       points-positive" or "meta points-negative" - see _renderHistoryRow). */
+    .meta.points-positive {
       color: #2e7d32;
     }
-    .points-negative {
+    .meta.points-negative {
       color: var(--error-color, #db4437);
     }
 
