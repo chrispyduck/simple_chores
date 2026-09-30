@@ -45,7 +45,7 @@ const ct = (i) => new rt(typeof i == "string" ? i : i + "", void 0, I), dt = (i,
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const { is: ut, defineProperty: $t, getOwnPropertyDescriptor: _t, getOwnPropertyNames: ft, getOwnPropertySymbols: mt, getPrototypeOf: gt } = Object, R = globalThis, F = R.trustedTypes, vt = F ? F.emptyScript : "", yt = R.reactiveElementPolyfillSupport, C = (i, t) => i, H = { toAttribute(i, t) {
+const { is: ut, defineProperty: $t, getOwnPropertyDescriptor: _t, getOwnPropertyNames: ft, getOwnPropertySymbols: mt, getPrototypeOf: gt } = Object, R = globalThis, F = R.trustedTypes, vt = F ? F.emptyScript : "", yt = R.reactiveElementPolyfillSupport, x = (i, t) => i, H = { toAttribute(i, t) {
   switch (t) {
     case Boolean:
       i = i ? vt : null;
@@ -103,13 +103,13 @@ let A = class extends HTMLElement {
     return this.elementProperties.get(t) ?? J;
   }
   static _$Ei() {
-    if (this.hasOwnProperty(C("elementProperties"))) return;
+    if (this.hasOwnProperty(x("elementProperties"))) return;
     const t = gt(this);
     t.finalize(), t.l !== void 0 && (this.l = [...t.l]), this.elementProperties = new Map(t.elementProperties);
   }
   static finalize() {
-    if (this.hasOwnProperty(C("finalized"))) return;
-    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(C("properties"))) {
+    if (this.hasOwnProperty(x("finalized"))) return;
+    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(x("properties"))) {
       const e = this.properties, s = [...ft(e), ...mt(e)];
       for (const r of s) this.createProperty(r, e[r]);
     }
@@ -256,7 +256,7 @@ let A = class extends HTMLElement {
   firstUpdated(t) {
   }
 };
-A.elementStyles = [], A.shadowRootOptions = { mode: "open" }, A[C("elementProperties")] = /* @__PURE__ */ new Map(), A[C("finalized")] = /* @__PURE__ */ new Map(), yt?.({ ReactiveElement: A }), (R.reactiveElementVersions ??= []).push("2.1.2");
+A.elementStyles = [], A.shadowRootOptions = { mode: "open" }, A[x("elementProperties")] = /* @__PURE__ */ new Map(), A[x("finalized")] = /* @__PURE__ */ new Map(), yt?.({ ReactiveElement: A }), (R.reactiveElementVersions ??= []).push("2.1.2");
 /**
  * @license
  * Copyright 2017 Google LLC
@@ -295,7 +295,7 @@ class U {
       if (r.nodeType === 1) {
         if (r.hasAttributes()) for (const h of r.getAttributeNames()) if (h.endsWith(ot)) {
           const u = p[n++], _ = r.getAttribute(h).split(f), O = /([.?@])?(.*)/.exec(u);
-          a.push({ type: 1, index: o, name: O[2], strings: _, ctor: O[1] === "." ? Ct : O[1] === "?" ? xt : O[1] === "@" ? Pt : L }), r.removeAttribute(h);
+          a.push({ type: 1, index: o, name: O[2], strings: _, ctor: O[1] === "." ? xt : O[1] === "?" ? Ct : O[1] === "@" ? Pt : L }), r.removeAttribute(h);
         } else h.startsWith(f) && (a.push({ type: 6, index: o }), r.removeAttribute(h));
         if (at.test(r.tagName)) {
           const h = r.textContent.split(f), u = h.length - 1;
@@ -436,7 +436,7 @@ class L {
     t === c ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, t ?? "");
   }
 }
-class Ct extends L {
+class xt extends L {
   constructor() {
     super(...arguments), this.type = 3;
   }
@@ -444,7 +444,7 @@ class Ct extends L {
     this.element[this.name] = t === c ? void 0 : t;
   }
 }
-class xt extends L {
+class Ct extends L {
   constructor() {
     super(...arguments), this.type = 4;
   }
@@ -493,7 +493,7 @@ const Nt = (i, t, e) => {
  * SPDX-License-Identifier: BSD-3-Clause
  */
 const V = globalThis;
-class x extends A {
+class C extends A {
   constructor() {
     super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
   }
@@ -515,9 +515,9 @@ class x extends A {
     return b;
   }
 }
-x._$litElement$ = !0, x.finalized = !0, V.litElementHydrateSupport?.({ LitElement: x });
+C._$litElement$ = !0, C.finalized = !0, V.litElementHydrateSupport?.({ LitElement: C });
 const Ot = V.litElementPolyfillSupport;
-Ot?.({ LitElement: x });
+Ot?.({ LitElement: C });
 (V.litElementVersions ??= []).push("4.2.2");
 /**
  * @license
@@ -608,7 +608,7 @@ var jt = Object.defineProperty, It = Object.getOwnPropertyDescriptor, E = (i, t,
   return s && r && jt(t, e, r), r;
 };
 const it = 15;
-let m = class extends x {
+let m = class extends C {
   constructor() {
     super(...arguments), this._entries = null, this._error = null, this._loading = !1;
   }
@@ -791,10 +791,13 @@ m.styles = dt`
       font-size: 11px;
       color: var(--secondary-text-color, #727272);
     }
-    .points-positive {
+    /* .meta prefix matches ".cell .meta"'s specificity so these actually
+       win (a delta is always rendered as class="meta points-positive" or
+       "meta points-negative" - see _renderRow). */
+    .meta.points-positive {
       color: #2e7d32;
     }
-    .points-negative {
+    .meta.points-negative {
       color: var(--error-color, #db4437);
     }
     .state-chip {

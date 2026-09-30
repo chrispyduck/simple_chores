@@ -274,10 +274,13 @@ export class SimpleChoresHistoryCard extends LitElement {
       font-size: 11px;
       color: var(--secondary-text-color, #727272);
     }
-    .points-positive {
+    /* .meta prefix matches ".cell .meta"'s specificity so these actually
+       win (a delta is always rendered as class="meta points-positive" or
+       "meta points-negative" - see _renderRow). */
+    .meta.points-positive {
       color: #2e7d32;
     }
-    .points-negative {
+    .meta.points-negative {
       color: var(--error-color, #db4437);
     }
     .state-chip {
