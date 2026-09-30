@@ -245,8 +245,8 @@ describe("simple-chores-panel", () => {
     );
 
     expect(row.querySelector(".history-chore .name")?.textContent).toBe("Dishes");
-    expect(row.querySelector(".history-points")?.textContent?.trim()).toBe("+10");
-    expect(row.querySelector(".history-balance")?.textContent?.trim()).toBe("10");
+    expect(row.querySelector(".history-earned")?.textContent).toContain("10");
+    expect(row.querySelector(".history-earned .meta")?.textContent?.trim()).toBe("+10");
     expect(row.querySelector(".history-missed")?.textContent?.trim()).toBe("3");
     expect(row.querySelector(".history-missed .meta")).toBeNull();
   });

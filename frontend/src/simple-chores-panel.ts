@@ -1246,8 +1246,7 @@ export class SimpleChoresPanel extends LitElement {
                   <div class="history-cell history-chore">Chore</div>
                   <div class="history-cell history-assignee">Assignee</div>
                   <div class="history-cell history-action">Action</div>
-                  <div class="history-cell history-points">Points</div>
-                  <div class="history-cell history-balance">Balance</div>
+                  <div class="history-cell history-earned">Earned</div>
                   <div class="history-cell history-missed">Missed</div>
                 </div>
                 ${sorted.map((entry) => this._renderHistoryRow(entry, categories))}
@@ -1285,11 +1284,11 @@ export class SimpleChoresPanel extends LitElement {
             ${historyActionLabel(entry.action)}
           </span>
         </div>
-        <div class="history-cell history-points ${pointsClass}">
-          ${entry.pointsDelta === 0 ? "—" : pointsLabel}
-        </div>
-        <div class="history-cell history-balance" title="Points balance after this entry">
+        <div class="history-cell history-earned" title="Points balance after this entry">
           ${entry.pointsTotal}
+          ${entry.pointsDelta !== 0
+            ? html`<div class="meta ${pointsClass}">${pointsLabel}</div>`
+            : nothing}
         </div>
         <div
           class="history-cell history-missed"
@@ -2652,7 +2651,7 @@ export class SimpleChoresPanel extends LitElement {
     }
     .history-row {
       display: grid;
-      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.7fr 0.8fr 0.8fr;
+      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.9fr 0.8fr;
       gap: 8px;
       align-items: center;
       padding: 10px 14px;
@@ -2677,8 +2676,7 @@ export class SimpleChoresPanel extends LitElement {
       font-size: 11px;
       color: var(--secondary-text-color, #727272);
     }
-    .history-points,
-    .history-balance,
+    .history-earned,
     .history-missed {
       text-align: right;
       font-variant-numeric: tabular-nums;

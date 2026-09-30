@@ -1713,8 +1713,7 @@ let u = class extends T {
                   <div class="history-cell history-chore">Chore</div>
                   <div class="history-cell history-assignee">Assignee</div>
                   <div class="history-cell history-action">Action</div>
-                  <div class="history-cell history-points">Points</div>
-                  <div class="history-cell history-balance">Balance</div>
+                  <div class="history-cell history-earned">Earned</div>
                   <div class="history-cell history-missed">Missed</div>
                 </div>
                 ${r.map((l) => this._renderHistoryRow(l, e))}
@@ -1741,11 +1740,9 @@ let u = class extends T {
             ${he(t.action)}
           </span>
         </div>
-        <div class="history-cell history-points ${s}">
-          ${t.pointsDelta === 0 ? "—" : o}
-        </div>
-        <div class="history-cell history-balance" title="Points balance after this entry">
+        <div class="history-cell history-earned" title="Points balance after this entry">
           ${t.pointsTotal}
+          ${t.pointsDelta !== 0 ? n`<div class="meta ${s}">${o}</div>` : d}
         </div>
         <div
           class="history-cell history-missed"
@@ -2868,7 +2865,7 @@ u.styles = we`
     }
     .history-row {
       display: grid;
-      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.7fr 0.8fr 0.8fr;
+      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.9fr 0.8fr;
       gap: 8px;
       align-items: center;
       padding: 10px 14px;
@@ -2893,8 +2890,7 @@ u.styles = we`
       font-size: 11px;
       color: var(--secondary-text-color, #727272);
     }
-    .history-points,
-    .history-balance,
+    .history-earned,
     .history-missed {
       text-align: right;
       font-variant-numeric: tabular-nums;
