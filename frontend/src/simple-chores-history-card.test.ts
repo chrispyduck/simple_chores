@@ -91,7 +91,13 @@ async function mountCard(
 }
 
 function rows(el: SimpleChoresHistoryCard): Element[] {
-  return [...el.shadowRoot!.querySelectorAll(".row")];
+  return [...el.shadowRoot!.querySelectorAll(".row:not(.col-header)")];
+}
+
+function dateHeaders(el: SimpleChoresHistoryCard): string[] {
+  return [...el.shadowRoot!.querySelectorAll(".date-header")].map(
+    (h) => h.textContent?.trim() ?? ""
+  );
 }
 
 describe("simple-chores-history-card", () => {
@@ -132,7 +138,7 @@ describe("simple-chores-history-card", () => {
       assignee: "alice",
     });
 
-    const names = rows(el).map((r) => r.querySelector(".name")?.textContent);
+    const names = rows(el).map((r) => r.querySelector(".cell.chore")?.textContent);
     // Newest first: "missed" (13:00) before "completed" (12:00). The
     // "reset" entry (14:00) and bob's "completed" entry are both excluded.
     expect(names).toEqual(["Trash", "Dishes"]);
@@ -157,20 +163,52 @@ describe("simple-chores-history-card", () => {
       show_missed: false,
     });
 
-    const names = rows(el).map((r) => r.querySelector(".name")?.textContent);
+    const names = rows(el).map((r) => r.querySelector(".cell.chore")?.textContent);
     expect(names).toEqual(["Dishes"]);
   });
 
-  it("shows the points delta only when non-zero", async () => {
+  it("shows earned/missed totals with an inline delta only when non-zero", async () => {
     const callWS = vi.fn().mockResolvedValue({ response: { entries: ENTRIES } });
     const el = await mountCard(makeHass({ callWS }), {
       type: "custom:simple-chores-history-card",
       assignee: "alice",
     });
 
+    // Newest first: the "missed" entry (13:00, +5 missed) then "completed"
+    // (12:00, +10 earned).
     const [missedRow, completedRow] = rows(el);
-    expect(missedRow.querySelector(".points")).toBeNull();
-    expect(completedRow.querySelector(".points")?.textContent?.trim()).toBe("+10");
+
+    expect(missedRow.querySelector(".cell.earned")?.textContent).toContain("10");
+    expect(missedRow.querySelector(".cell.earned .meta")).toBeNull();
+    expect(missedRow.querySelector(".cell.missed")?.textContent).toContain("5");
+    expect(missedRow.querySelector(".cell.missed .meta")?.textContent?.trim()).toBe("+5");
+
+    expect(completedRow.querySelector(".cell.earned")?.textContent).toContain("10");
+    expect(completedRow.querySelector(".cell.earned .meta")?.textContent?.trim()).toBe(
+      "+10"
+    );
+    expect(completedRow.querySelector(".cell.missed .meta")).toBeNull();
+  });
+
+  it("groups rows under a date header, one per distinct day", async () => {
+    const otherDay = {
+      ...ENTRIES[0],
+      id: "5",
+      timestamp: "2026-01-02T09:00:00+00:00",
+      chore_name: "Vacuuming",
+    };
+    const callWS = vi
+      .fn()
+      .mockResolvedValue({ response: { entries: [...ENTRIES, otherDay] } });
+    const el = await mountCard(makeHass({ callWS }), {
+      type: "custom:simple-chores-history-card",
+      assignee: "alice",
+    });
+
+    // Three alice entries survive the default filters (reset excluded),
+    // spanning two calendar days - one header per day, newest first.
+    expect(rows(el)).toHaveLength(3);
+    expect(dateHeaders(el)).toHaveLength(2);
   });
 
   it("caps the number of rows to the configured limit", async () => {

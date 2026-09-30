@@ -123,9 +123,37 @@ export class SimpleChoresHistoryCard extends LitElement {
               ? html`<p class="empty">Loading&hellip;</p>`
               : entries.length === 0
                 ? html`<p class="empty">Nothing to show yet.</p>`
-                : entries.map((entry) => this._renderRow(entry))}
+                : this._renderTable(entries)}
         </div>
       </ha-card>
+    `;
+  }
+
+  private _renderTable(entries: HistoryEntry[]) {
+    const rows = [];
+    let lastDateKey: string | null = null;
+    for (const entry of entries) {
+      const dateKey = this._dateKey(entry.timestamp);
+      if (dateKey !== lastDateKey) {
+        rows.push(
+          html`<div class="date-header">${this._formatDate(entry.timestamp)}</div>`
+        );
+        lastDateKey = dateKey;
+      }
+      rows.push(this._renderRow(entry));
+    }
+
+    return html`
+      <div class="table">
+        <div class="row col-header">
+          <div class="cell time">Time</div>
+          <div class="cell event">Event</div>
+          <div class="cell chore">Chore</div>
+          <div class="cell earned">Earned</div>
+          <div class="cell missed">Missed</div>
+        </div>
+        ${rows}
+      </div>
     `;
   }
 
@@ -140,23 +168,52 @@ export class SimpleChoresHistoryCard extends LitElement {
 
     return html`
       <div class="row">
-        <span class="state-chip ${historyActionClass(entry.action)}">
-          ${historyActionLabel(entry.action)}
-        </span>
-        <div class="main">
-          <div class="name">${entry.choreName}</div>
-          <div class="meta">${this._formatTimestamp(entry.timestamp)}</div>
+        <div class="cell time">${this._formatTime(entry.timestamp)}</div>
+        <div class="cell event">
+          <span class="state-chip ${historyActionClass(entry.action)}">
+            ${historyActionLabel(entry.action)}
+          </span>
         </div>
-        ${entry.pointsDelta !== 0
-          ? html`<div class="points ${pointsClass}">${pointsLabel}</div>`
-          : nothing}
+        <div class="cell chore">${entry.choreName}</div>
+        <div class="cell earned">
+          ${entry.pointsTotal}
+          ${entry.pointsDelta !== 0
+            ? html`<div class="meta ${pointsClass}">${pointsLabel}</div>`
+            : nothing}
+        </div>
+        <div class="cell missed">
+          ${entry.missedTotal ?? "—"}
+          ${entry.pointsMissed > 0
+            ? html`<div class="meta points-negative">+${entry.pointsMissed}</div>`
+            : nothing}
+        </div>
       </div>
     `;
   }
 
-  private _formatTimestamp(iso: string): string {
+  /** Grouping key only - not for display, so locale/format changes can't split a day. */
+  private _dateKey(iso: string): string {
     const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+    return Number.isNaN(date.getTime()) ? iso : date.toDateString();
+  }
+
+  private _formatDate(iso: string): string {
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime())
+      ? iso
+      : date.toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+  }
+
+  private _formatTime(iso: string): string {
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime())
+      ? iso
+      : date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   }
 
   static styles = css`
@@ -171,35 +228,51 @@ export class SimpleChoresHistoryCard extends LitElement {
     .error {
       color: var(--error-color, #db4437);
     }
+    .table {
+      overflow-x: auto;
+    }
+    .date-header {
+      padding: 12px 0 4px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--secondary-text-color, #727272);
+    }
+    .date-header:first-of-type {
+      padding-top: 0;
+    }
     .row {
-      display: flex;
+      display: grid;
+      grid-template-columns: 0.8fr 1fr 1.4fr 0.8fr 0.8fr;
+      gap: 8px;
       align-items: center;
-      gap: 10px;
       padding: 8px 0;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
-      font-size: 14px;
+      font-size: 13px;
+      min-width: 420px;
     }
     .row:last-child {
       border-bottom: none;
     }
-    .main {
-      flex: 1;
-      min-width: 0;
-    }
-    .name {
+    .col-header {
+      font-size: 12px;
       font-weight: 500;
-      color: var(--primary-text-color, #212121);
+      color: var(--secondary-text-color, #727272);
+      border-bottom: 1px solid var(--divider-color, #e0e0e0);
+    }
+    .cell.chore {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      color: var(--primary-text-color, #212121);
     }
-    .meta {
-      font-size: 12px;
-      color: var(--secondary-text-color, #727272);
-    }
-    .points {
+    .cell.earned,
+    .cell.missed {
+      text-align: right;
       font-variant-numeric: tabular-nums;
-      font-weight: 500;
+    }
+    .cell .meta {
+      font-size: 11px;
+      color: var(--secondary-text-color, #727272);
     }
     .points-positive {
       color: #2e7d32;
