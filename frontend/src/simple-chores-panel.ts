@@ -23,6 +23,8 @@ import {
   SettingsDefinition,
   SummaryDefinition,
   UNCATEGORIZED,
+  Weekday,
+  WEEKDAYS,
   categoryToDraft,
   choreToDraft,
   displayName,
@@ -64,6 +66,9 @@ interface DialogState {
 interface SettingsDraft {
   autoFinalizeEnabled: boolean;
   autoFinalizeDelayMinutes: number;
+  newDayTime: string;
+  newWeekDay: Weekday;
+  newWeekTime: string;
 }
 
 /** Draft backing the Settings tab's "reset points" danger-zone dialog. */
@@ -820,6 +825,9 @@ export class SimpleChoresPanel extends LitElement {
       this._settingsDraft = {
         autoFinalizeEnabled: settings.autoFinalizeEnabled,
         autoFinalizeDelayMinutes: settings.autoFinalizeDelayMinutes,
+        newDayTime: settings.newDayTime,
+        newWeekDay: settings.newWeekDay,
+        newWeekTime: settings.newWeekTime,
       };
     }
     const draft = this._settingsDraft;
@@ -856,6 +864,58 @@ export class SimpleChoresPanel extends LitElement {
             @input=${(e: Event) => {
               draft.autoFinalizeDelayMinutes =
                 Number((e.target as HTMLInputElement).value) || 1;
+              this.requestUpdate();
+            }}
+          />
+        </label>
+      </div>
+
+      <div class="settings-section">
+        <h3>Chore reset schedule</h3>
+        <p class="hint">
+          Completed daily chores automatically reset to Pending at the time
+          below, starting a new day. Weekly chores work the same way, but
+          only reset on the chosen day of the week.
+        </p>
+
+        <label>
+          New day start time
+          <input
+            type="time"
+            step="1"
+            .value=${draft.newDayTime}
+            @input=${(e: Event) => {
+              draft.newDayTime = (e.target as HTMLInputElement).value;
+              this.requestUpdate();
+            }}
+          />
+        </label>
+
+        <label>
+          New week day
+          <select
+            .value=${draft.newWeekDay}
+            @change=${(e: Event) => {
+              draft.newWeekDay = (e.target as HTMLSelectElement).value as Weekday;
+              this.requestUpdate();
+            }}
+          >
+            ${WEEKDAYS.map(
+              (day) => html`<option value=${day} ?selected=${day === draft.newWeekDay}>
+                ${day[0].toUpperCase()}${day.slice(1)}
+              </option>`
+            )}
+          </select>
+        </label>
+
+        <label>
+          New week start time
+          <input
+            type="time"
+            step="1"
+            .value=${draft.newWeekTime}
+            @input=${(e: Event) => {
+              draft.newWeekTime = (e.target as HTMLInputElement).value;
               this.requestUpdate();
             }}
           />
@@ -912,6 +972,9 @@ export class SimpleChoresPanel extends LitElement {
     const ok = await this._call(SERVICE_DOMAIN, "update_settings", {
       auto_finalize_enabled: draft.autoFinalizeEnabled,
       auto_finalize_delay_minutes: draft.autoFinalizeDelayMinutes,
+      new_day_time: draft.newDayTime,
+      new_week_day: draft.newWeekDay,
+      new_week_time: draft.newWeekTime,
     });
 
     if (ok) this._settingsDraft = null;

@@ -48,13 +48,30 @@ export const CATEGORY_ENTITY_PREFIX = "sensor.simple_chore_category_";
 // already excluded from chore scans since it falls under SUMMARY_ENTITY_PREFIX.
 export const SETTINGS_ENTITY_ID = "sensor.simple_chore_meta_settings";
 
-export type ChoreFrequency = "daily" | "manual" | "once";
+export type ChoreFrequency = "daily" | "weekly" | "manual" | "once";
 export type ChoreStateValue = "Pending" | "Complete" | "Not Requested";
 export type PrivilegeBehavior = "automatic" | "manual";
 export type PrivilegeStateValue = "Enabled" | "Disabled" | "Temporarily Disabled";
+export type Weekday =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
 
-export const CHORE_FREQUENCIES: ChoreFrequency[] = ["daily", "manual", "once"];
+export const CHORE_FREQUENCIES: ChoreFrequency[] = ["daily", "weekly", "manual", "once"];
 export const PRIVILEGE_BEHAVIORS: PrivilegeBehavior[] = ["automatic", "manual"];
+export const WEEKDAYS: Weekday[] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
 
 export const DEFAULT_CHORE_ICON = "mdi:clipboard-list-outline";
 export const DEFAULT_PRIVILEGE_ICON = "mdi:star";
@@ -95,6 +112,12 @@ export interface CategoryDefinition {
 export interface SettingsDefinition {
   autoFinalizeEnabled: boolean;
   autoFinalizeDelayMinutes: number;
+  /** Local time ("HH:MM:SS") at which completed daily chores reset to Pending. */
+  newDayTime: string;
+  /** Day of the week on which completed weekly chores reset to Pending. */
+  newWeekDay: Weekday;
+  /** Local time ("HH:MM:SS") on newWeekDay at which weekly chores reset. */
+  newWeekTime: string;
 }
 
 /** One assignee's points summary, published on their `..._meta_{assignee}_summary` sensor. */
@@ -371,6 +394,9 @@ export function parseCategories(
 const DEFAULT_SETTINGS: SettingsDefinition = {
   autoFinalizeEnabled: true,
   autoFinalizeDelayMinutes: 60,
+  newDayTime: "02:00:00",
+  newWeekDay: "monday",
+  newWeekTime: "02:00:00",
 };
 
 /**
@@ -387,6 +413,9 @@ export function parseSettings(states: Record<string, HassEntity>): SettingsDefin
     autoFinalizeEnabled: attrs.auto_finalize_enabled ?? DEFAULT_SETTINGS.autoFinalizeEnabled,
     autoFinalizeDelayMinutes:
       attrs.auto_finalize_delay_minutes ?? DEFAULT_SETTINGS.autoFinalizeDelayMinutes,
+    newDayTime: attrs.new_day_time ?? DEFAULT_SETTINGS.newDayTime,
+    newWeekDay: attrs.new_week_day ?? DEFAULT_SETTINGS.newWeekDay,
+    newWeekTime: attrs.new_week_time ?? DEFAULT_SETTINGS.newWeekTime,
   };
 }
 

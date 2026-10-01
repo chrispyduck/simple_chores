@@ -1,6 +1,6 @@
 """Tests for simple_chores services."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, time, timedelta
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -14,6 +14,7 @@ from custom_components.simple_chores.const import (
     ATTR_AUTO_FINALIZE_ENABLED,
     ATTR_CATEGORY_SLUG,
     ATTR_CHORE_SLUG,
+    ATTR_NEW_DAY_TIME,
     ATTR_PRIVILEGE_SLUG,
     ATTR_RESET_TOTAL,
     ATTR_USER,
@@ -46,7 +47,9 @@ from custom_components.simple_chores.models import (
     PrivilegeBehavior,
     PrivilegeConfig,
     PrivilegeState,
+    SettingsConfig,
     SimpleChoresConfig,
+    Weekday,
 )
 from custom_components.simple_chores.sensor import (
     ChoreSensor,
@@ -54,7 +57,9 @@ from custom_components.simple_chores.sensor import (
     PrivilegeSensor,
 )
 from custom_components.simple_chores.services import (
+    _apply_frequency_reset,
     async_catch_up_auto_finalize,
+    async_setup_frequency_schedules,
     async_setup_services,
 )
 
@@ -1570,7 +1575,7 @@ class TestStartNewDayService:
 
     @pytest.mark.asyncio
     async def test_start_new_day_manual_and_daily(self, hass) -> None:
-        """Test that manual chores go to NOT_REQUESTED and daily to PENDING."""
+        """Manual chores go to NOT_REQUESTED; daily chores are left untouched."""
         # Create sensors with different frequencies
         chore_manual = ChoreConfig(
             name="Manual Task",
@@ -1617,11 +1622,11 @@ class TestStartNewDayService:
 
         # Manual should be reset to NOT_REQUESTED
         assert sensor_manual.native_value == ChoreState.NOT_REQUESTED.value
-        # Daily should be reset to PENDING
-        assert sensor_daily.native_value == ChoreState.PENDING.value
-        # Both sensors should have been updated
         sensor_manual.async_update_ha_state.assert_called()
-        sensor_daily.async_update_ha_state.assert_called()
+        # Daily is left untouched - it resets on its own schedule instead,
+        # see TestFrequencyResetSchedule.
+        assert sensor_daily.native_value == ChoreState.COMPLETE.value
+        sensor_daily.async_update_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_start_new_day_specific_user(self, hass) -> None:
@@ -1765,13 +1770,13 @@ class TestStartNewDayService:
         # Manual pending should not be touched
         assert sensor2.native_value == ChoreState.PENDING.value
         sensor2.async_update_ha_state.assert_not_called()
-        # Daily complete should be reset to PENDING
-        assert sensor3.native_value == ChoreState.PENDING.value
-        sensor3.async_update_ha_state.assert_called()
+        # Daily complete is left untouched by start_new_day
+        assert sensor3.native_value == ChoreState.COMPLETE.value
+        sensor3.async_update_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_start_new_day_updates_summary_attributes(self, hass) -> None:
-        """Test that start_new_day properly updates summary sensor attributes."""
+        """start_new_day updates manual chores' summary attrs; daily is untouched."""
         from custom_components.simple_chores.sensor import (
             ChoreSensorManager,
             ChoreSummarySensor,
@@ -1840,12 +1845,12 @@ class TestStartNewDayService:
             blocking=True,
         )
 
-        # Verify attributes updated - manual to NOT_REQUESTED, daily to PENDING
+        # Verify attributes updated - manual to NOT_REQUESTED, daily untouched
         attrs_after = summary_sensor.extra_state_attributes
-        assert len(attrs_after["complete_chores"]) == 0
-        assert len(attrs_after["pending_chores"]) == 1
+        assert len(attrs_after["complete_chores"]) == 1
+        assert len(attrs_after["pending_chores"]) == 0
         assert len(attrs_after["not_requested_chores"]) == 1
-        assert "sensor.simple_chore_alice_daily_task" in attrs_after["pending_chores"]
+        assert "sensor.simple_chore_alice_daily_task" in attrs_after["complete_chores"]
         assert (
             "sensor.simple_chore_alice_manual_task"
             in attrs_after["not_requested_chores"]
@@ -1860,21 +1865,21 @@ class TestStartNewDayService:
         chore1 = ChoreConfig(
             name="Chore 1",
             slug="chore1",
-            frequency=ChoreFrequency.DAILY,
+            frequency=ChoreFrequency.MANUAL,
             assignees=["alice"],
             points=10,
         )
         chore2 = ChoreConfig(
             name="Chore 2",
             slug="chore2",
-            frequency=ChoreFrequency.DAILY,
+            frequency=ChoreFrequency.MANUAL,
             assignees=["alice"],
             points=20,
         )
         chore3 = ChoreConfig(
             name="Chore 3",
             slug="chore3",
-            frequency=ChoreFrequency.DAILY,
+            frequency=ChoreFrequency.MANUAL,
             assignees=["alice"],
             points=5,
         )
@@ -1933,21 +1938,21 @@ class TestStartNewDayService:
         chore1 = ChoreConfig(
             name="Chore 1",
             slug="chore1",
-            frequency=ChoreFrequency.DAILY,
+            frequency=ChoreFrequency.MANUAL,
             assignees=["alice"],
             points=10,
         )
         chore2 = ChoreConfig(
             name="Chore 2",
             slug="chore2",
-            frequency=ChoreFrequency.DAILY,
+            frequency=ChoreFrequency.MANUAL,
             assignees=["alice"],
             points=20,
         )
         chore3 = ChoreConfig(
             name="Chore 3",
             slug="chore3",
-            frequency=ChoreFrequency.DAILY,
+            frequency=ChoreFrequency.MANUAL,
             assignees=["alice"],
             points=5,
         )
@@ -1992,83 +1997,6 @@ class TestStartNewDayService:
         assert points_storage.get_points_missed("alice") == 15
 
     @pytest.mark.asyncio
-    async def test_start_new_day_points_relationship(self, hass) -> None:
-        """Test cumulative points_missed and dynamic points_possible."""
-        from custom_components.simple_chores.data import PointsStorage
-        from custom_components.simple_chores.sensor import (
-            ChoreSensorManager,
-            ChoreSummarySensor,
-        )
-
-        # Create chores
-        chore1 = ChoreConfig(
-            name="Chore 1",
-            slug="chore1",
-            frequency=ChoreFrequency.DAILY,
-            assignees=["alice"],
-            points=15,
-        )
-        chore2 = ChoreConfig(
-            name="Chore 2",
-            slug="chore2",
-            frequency=ChoreFrequency.DAILY,
-            assignees=["alice"],
-            points=25,
-        )
-
-        points_storage = PointsStorage(hass)
-        await points_storage.async_load()
-        # Simulate alice completing chore2 earlier (points awarded on mark_complete)
-        await points_storage.add_points("alice", 25)
-        await points_storage.add_points_earned("alice", 25)
-
-        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            sensor1 = ChoreSensor(hass, chore1, "alice")
-            sensor1.async_update_ha_state = AsyncMock()
-            sensor1.set_state(ChoreState.PENDING.value)  # Will add 15 to missed
-
-            sensor2 = ChoreSensor(hass, chore2, "alice")
-            sensor2.async_update_ha_state = AsyncMock()
-            sensor2.set_state(ChoreState.COMPLETE.value)  # Earned 25
-
-        manager = MagicMock(spec=ChoreSensorManager)
-        manager.sensors = {
-            "alice_chore1": sensor1,
-            "alice_chore2": sensor2,
-        }
-        manager.privilege_sensors = {}
-        manager.points_storage = points_storage
-
-        hass.data[DOMAIN] = {
-            "sensors": manager.sensors,
-            "summary_sensors": {},
-            "points_storage": points_storage,
-        }
-
-        await async_setup_services(hass)
-
-        # Call start_new_day
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_START_NEW_DAY,
-            {},
-            blocking=True,
-        )
-
-        # Verify cumulative points_missed
-        assert points_storage.get_points_missed("alice") == 15
-
-        # Verify dynamic points_possible calculation after reset. After
-        # start_new_day, chore2 (complete) is reset to pending, so the
-        # expected total is earned (25) plus missed (15) plus pending
-        # (both chores: 15 + 25), i.e. 40.
-        summary_sensor = ChoreSummarySensor(hass, "alice", manager)
-        summary_sensor.async_update_ha_state = make_summary_update_mock(summary_sensor)
-        await summary_sensor.async_update()
-        attrs = summary_sensor.extra_state_attributes
-        assert attrs["points_possible"] == 80  # 25 earned + 15 missed + 40 pending
-
-    @pytest.mark.asyncio
     async def test_start_new_day_ignores_not_requested_chores(self, hass) -> None:
         """Test that start_new_day ignores NOT_REQUESTED chores in calculations."""
         from custom_components.simple_chores.data import PointsStorage
@@ -2077,7 +2005,7 @@ class TestStartNewDayService:
         chore1 = ChoreConfig(
             name="Chore 1",
             slug="chore1",
-            frequency=ChoreFrequency.DAILY,
+            frequency=ChoreFrequency.MANUAL,
             assignees=["alice"],
             points=10,
         )
@@ -2132,7 +2060,7 @@ class TestStartNewDayService:
         chore1 = ChoreConfig(
             name="Chore 1",
             slug="chore1",
-            frequency=ChoreFrequency.DAILY,
+            frequency=ChoreFrequency.MANUAL,
             assignees=["alice", "bob"],
             points=10,
         )
@@ -2173,118 +2101,8 @@ class TestStartNewDayService:
         assert points_storage.get_points_missed("bob") == 0
 
     @pytest.mark.asyncio
-    async def test_start_new_day_updates_summary_sensor_point_attributes(
-        self, hass
-    ) -> None:
-        """Test that start_new_day updates summary sensor point attributes correctly."""
-        from custom_components.simple_chores.data import PointsStorage
-        from custom_components.simple_chores.sensor import ChoreSensorManager
-
-        # Create chores
-        chore1 = ChoreConfig(
-            name="Chore 1",
-            slug="chore1",
-            frequency=ChoreFrequency.DAILY,
-            assignees=["alice"],
-            points=10,
-        )
-        chore2 = ChoreConfig(
-            name="Chore 2",
-            slug="chore2",
-            frequency=ChoreFrequency.DAILY,
-            assignees=["alice"],
-            points=5,
-        )
-
-        points_storage = PointsStorage(hass)
-        await points_storage.async_load()
-
-        # Create manager
-        manager = MagicMock(spec=ChoreSensorManager)
-        manager.points_storage = points_storage
-        manager.privilege_sensors = {}
-
-        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
-            # One complete, one pending
-            sensor1 = ChoreSensor(hass, chore1, "alice")
-            sensor1.async_update_ha_state = AsyncMock()
-            sensor1.set_state(ChoreState.COMPLETE.value)
-
-            sensor2 = ChoreSensor(hass, chore2, "alice")
-            sensor2.async_update_ha_state = AsyncMock()
-            sensor2.set_state(ChoreState.PENDING.value)
-
-        manager.sensors = {
-            "alice_chore1": sensor1,
-            "alice_chore2": sensor2,
-        }
-
-        # Create summary sensor
-        summary_sensor = ChoreSummarySensor(hass, "alice", manager)
-        summary_sensor.async_update_ha_state = make_summary_update_mock(summary_sensor)
-        await summary_sensor.async_update()
-        summary_sensor.async_update_ha_state = make_summary_update_mock(summary_sensor)
-
-        hass.data[DOMAIN] = {
-            "sensors": manager.sensors,
-            "summary_sensors": {"alice": summary_sensor},
-            "points_storage": points_storage,
-        }
-
-        await async_setup_services(hass)
-
-        # Get initial attributes
-        initial_attrs = summary_sensor.extra_state_attributes
-        assert initial_attrs["total_points"] == 0
-        assert initial_attrs["points_earned"] == 0
-        assert initial_attrs["points_missed"] == 0
-        # points_possible = earned + missed + pending = 0 + 0 + 5 (chore2 is pending)
-        assert initial_attrs["points_possible"] == 5
-
-        # Simulate points awarded when chore1 was marked complete
-        # (In new behavior, points are awarded immediately on mark_complete)
-        await points_storage.add_points("alice", 10)
-        await points_storage.add_points_earned("alice", 10)
-
-        # Update cache after modifying storage
-        await summary_sensor.async_update()
-
-        # Verify points were awarded
-        mid_attrs = summary_sensor.extra_state_attributes
-        assert mid_attrs["total_points"] == 10
-        assert mid_attrs["points_earned"] == 10
-        # points_possible is earned plus missed plus pending: 10 + 0 + 5
-        # (chore2 still pending)
-        assert mid_attrs["points_possible"] == 15
-
-        # Call start_new_day (should update missed points, reset chore states)
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_START_NEW_DAY,
-            {ATTR_USER: "alice"},
-            blocking=True,
-        )
-
-        # Verify summary sensor was updated
-        assert summary_sensor.async_update_ha_state.called
-
-        # Get updated attributes
-        updated_attrs = summary_sensor.extra_state_attributes
-        assert updated_attrs["total_points"] == 10  # Unchanged (already awarded)
-        assert updated_attrs["points_earned"] == 10  # Unchanged
-        assert updated_attrs["points_missed"] == 5  # Missed from pending chore2
-        # points_possible is earned plus missed plus pending: 10 + 5 + 15
-        # (both chores now pending)
-        assert updated_attrs["points_possible"] == 30
-
-        # CRITICAL: Verify that complete_chores list is empty after reset
-        # This is the bug reported by the user
-        assert updated_attrs["complete_chores"] == []
-        assert len(updated_attrs["pending_chores"]) == 2  # Both chores now pending
-
-    @pytest.mark.asyncio
     async def test_start_new_day_clears_complete_chores_list(self, hass) -> None:
-        """Test that start_new_day clears complete_chores in the summary sensor."""
+        """start_new_day clears complete manual chores; daily is left alone."""
         from custom_components.simple_chores.data import PointsStorage
         from custom_components.simple_chores.sensor import ChoreSensorManager
 
@@ -2373,20 +2191,19 @@ class TestStartNewDayService:
         # Get updated attributes - THIS IS THE CRITICAL CHECK
         updated_attrs = summary_sensor.extra_state_attributes
 
-        # CRITICAL: complete_chores should be EMPTY
-        assert updated_attrs["complete_chores"] == [], (
-            f"Expected complete_chores to be empty after start_new_day, "
-            f"but got: {updated_attrs['complete_chores']}"
-        )
+        # Daily chore stays complete - start_new_day doesn't touch it.
+        assert updated_attrs["complete_chores"] == [
+            "sensor.simple_chore_alice_complete1"
+        ]
 
-        # Daily chore should now be pending (was complete, now reset to pending)
-        assert len(updated_attrs["pending_chores"]) == 2  # pending1 + complete1 (daily)
+        # Only the already-pending daily chore is pending.
+        assert len(updated_attrs["pending_chores"]) == 1
 
         # Manual chore should be not_requested (was complete, now reset)
         assert len(updated_attrs["not_requested_chores"]) == 1  # complete2 (manual)
 
         # Verify the actual sensor states were updated
-        assert sensor1.get_state() == ChoreState.PENDING.value  # daily -> pending
+        assert sensor1.get_state() == ChoreState.COMPLETE.value  # daily untouched
         assert (
             sensor2.get_state() == ChoreState.NOT_REQUESTED.value
         )  # manual -> not_requested
@@ -2459,9 +2276,299 @@ class TestStartNewDayService:
         # Pending once chore should NOT be deleted
         assert mock_config_loader.async_delete_chore.call_count == 1
 
-        # Daily chore should be reset to pending (not deleted)
+        # Daily chore is left untouched by start_new_day (not deleted, not reset)
+        assert sensor_daily.get_state() == ChoreState.COMPLETE.value
+        sensor_daily.async_update_ha_state.assert_not_called()
+
+
+class TestFrequencyResetSchedule:
+    """Tests for the automatic daily/weekly chore reset (new_day_time etc)."""
+
+    @pytest.mark.asyncio
+    async def test_apply_frequency_reset_resets_matching_frequency_only(
+        self, hass
+    ) -> None:
+        """_apply_frequency_reset only resets Complete chores of that frequency."""
+        chore_daily = ChoreConfig(
+            name="Daily Task",
+            slug="daily_task",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+        chore_manual = ChoreConfig(
+            name="Manual Task",
+            slug="manual_task",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["alice"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_daily = ChoreSensor(hass, chore_daily, "alice")
+            sensor_daily.async_update_ha_state = AsyncMock()
+            sensor_daily.set_state(ChoreState.COMPLETE.value)
+
+            sensor_manual = ChoreSensor(hass, chore_manual, "alice")
+            sensor_manual.async_update_ha_state = AsyncMock()
+            sensor_manual.set_state(ChoreState.COMPLETE.value)
+
+        hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_daily_task": sensor_daily,
+                "alice_manual_task": sensor_manual,
+            }
+        }
+        await async_setup_services(hass)
+
+        await _apply_frequency_reset(hass, ChoreFrequency.DAILY)
+
         assert sensor_daily.get_state() == ChoreState.PENDING.value
         sensor_daily.async_update_ha_state.assert_called()
+        assert sensor_manual.get_state() == ChoreState.COMPLETE.value
+        sensor_manual.async_update_ha_state.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_apply_frequency_reset_weekly(self, hass) -> None:
+        """_apply_frequency_reset resets weekly chores the same way as daily."""
+        chore_weekly = ChoreConfig(
+            name="Weekly Task",
+            slug="weekly_task",
+            frequency=ChoreFrequency.WEEKLY,
+            assignees=["alice"],
+        )
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_weekly = ChoreSensor(hass, chore_weekly, "alice")
+            sensor_weekly.async_update_ha_state = AsyncMock()
+            sensor_weekly.set_state(ChoreState.COMPLETE.value)
+
+        hass.data[DOMAIN] = {"sensors": {"alice_weekly_task": sensor_weekly}}
+        await async_setup_services(hass)
+
+        await _apply_frequency_reset(hass, ChoreFrequency.WEEKLY)
+
+        assert sensor_weekly.get_state() == ChoreState.PENDING.value
+        sensor_weekly.async_update_ha_state.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_apply_frequency_reset_tallies_missed_points(self, hass) -> None:
+        """Pending chores of the target frequency count towards points_missed."""
+        from custom_components.simple_chores.data import PointsStorage
+
+        chore_daily = ChoreConfig(
+            name="Daily Task",
+            slug="daily_task",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            points=10,
+        )
+        chore_manual = ChoreConfig(
+            name="Manual Task",
+            slug="manual_task",
+            frequency=ChoreFrequency.MANUAL,
+            assignees=["alice"],
+            points=20,
+        )
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_daily = ChoreSensor(hass, chore_daily, "alice")
+            sensor_daily.async_update_ha_state = AsyncMock()
+            sensor_daily.set_state(ChoreState.PENDING.value)
+
+            sensor_manual = ChoreSensor(hass, chore_manual, "alice")
+            sensor_manual.async_update_ha_state = AsyncMock()
+            sensor_manual.set_state(ChoreState.PENDING.value)
+
+        hass.data[DOMAIN] = {
+            "sensors": {
+                "alice_daily_task": sensor_daily,
+                "alice_manual_task": sensor_manual,
+            },
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await _apply_frequency_reset(hass, ChoreFrequency.DAILY)
+
+        # Only the pending daily chore's points are tallied as missed - the
+        # manual one is start_new_day's concern, not the daily schedule's.
+        assert points_storage.get_points_missed("alice") == 10
+
+    @pytest.mark.asyncio
+    async def test_apply_frequency_reset_updates_summary_sensor(self, hass) -> None:
+        """A daily reset is reflected in the summary sensor's point totals."""
+        from custom_components.simple_chores.data import PointsStorage
+        from custom_components.simple_chores.sensor import (
+            ChoreSensorManager,
+            ChoreSummarySensor,
+        )
+
+        chore1 = ChoreConfig(
+            name="Chore 1",
+            slug="chore1",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            points=15,
+        )
+        chore2 = ChoreConfig(
+            name="Chore 2",
+            slug="chore2",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            points=25,
+        )
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+        # Simulate alice completing chore2 earlier (points awarded on mark_complete)
+        await points_storage.add_points("alice", 25)
+        await points_storage.add_points_earned("alice", 25)
+
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor1 = ChoreSensor(hass, chore1, "alice")
+            sensor1.async_update_ha_state = AsyncMock()
+            sensor1.set_state(ChoreState.PENDING.value)  # Will add 15 to missed
+
+            sensor2 = ChoreSensor(hass, chore2, "alice")
+            sensor2.async_update_ha_state = AsyncMock()
+            sensor2.set_state(ChoreState.COMPLETE.value)  # Earned 25
+
+        manager = MagicMock(spec=ChoreSensorManager)
+        manager.sensors = {
+            "alice_chore1": sensor1,
+            "alice_chore2": sensor2,
+        }
+        manager.privilege_sensors = {}
+        manager.points_storage = points_storage
+
+        hass.data[DOMAIN] = {
+            "sensors": manager.sensors,
+            "summary_sensors": {},
+            "points_storage": points_storage,
+        }
+        await async_setup_services(hass)
+
+        await _apply_frequency_reset(hass, ChoreFrequency.DAILY)
+
+        assert points_storage.get_points_missed("alice") == 15
+
+        # After the reset, chore2 (was complete) is pending too, so the
+        # expected total is earned (25) plus missed (15) plus pending
+        # (both chores: 15 + 25), i.e. 80.
+        summary_sensor = ChoreSummarySensor(hass, "alice", manager)
+        summary_sensor.async_update_ha_state = make_summary_update_mock(summary_sensor)
+        await summary_sensor.async_update()
+        attrs = summary_sensor.extra_state_attributes
+        assert attrs["points_possible"] == 80
+
+    @pytest.mark.asyncio
+    async def test_on_daily_reset_calls_apply_frequency_reset(self, hass) -> None:
+        """The daily scheduled callback resets daily chores, ignoring the time arg."""
+        chore_daily = ChoreConfig(
+            name="Daily Task",
+            slug="daily_task",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_daily = ChoreSensor(hass, chore_daily, "alice")
+            sensor_daily.async_update_ha_state = AsyncMock()
+            sensor_daily.set_state(ChoreState.COMPLETE.value)
+
+        hass.data[DOMAIN] = {"sensors": {"alice_daily_task": sensor_daily}}
+        await async_setup_services(hass)
+
+        from custom_components.simple_chores.services import _on_daily_reset
+
+        await _on_daily_reset(hass, dt_util.utcnow())
+
+        assert sensor_daily.get_state() == ChoreState.PENDING.value
+
+    @pytest.mark.asyncio
+    async def test_on_weekly_reset_only_fires_on_configured_day(self, hass) -> None:
+        """The weekly scheduled callback is a no-op except on new_week_day."""
+        from custom_components.simple_chores.services import _on_weekly_reset
+
+        chore_weekly = ChoreConfig(
+            name="Weekly Task",
+            slug="weekly_task",
+            frequency=ChoreFrequency.WEEKLY,
+            assignees=["alice"],
+        )
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor_weekly = ChoreSensor(hass, chore_weekly, "alice")
+            sensor_weekly.async_update_ha_state = AsyncMock()
+            sensor_weekly.set_state(ChoreState.COMPLETE.value)
+
+        hass.data[DOMAIN] = {"sensors": {"alice_weekly_task": sensor_weekly}}
+        await async_setup_services(hass)
+
+        settings = SettingsConfig(new_week_day=Weekday.MONDAY)
+
+        # A Tuesday - not the configured day, so nothing happens.
+        a_tuesday = datetime(2026, 1, 6, 2, 0, 0, tzinfo=UTC)
+        await _on_weekly_reset(hass, settings, a_tuesday)
+        assert sensor_weekly.get_state() == ChoreState.COMPLETE.value
+        sensor_weekly.async_update_ha_state.assert_not_called()
+
+        # A Monday - the configured day, so the chore resets.
+        a_monday = datetime(2026, 1, 5, 2, 0, 0, tzinfo=UTC)
+        await _on_weekly_reset(hass, settings, a_monday)
+        assert sensor_weekly.get_state() == ChoreState.PENDING.value
+        sensor_weekly.async_update_ha_state.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_async_setup_frequency_schedules_registers_timers(self, hass) -> None:
+        """async_setup_frequency_schedules schedules both timers and a stop hook."""
+        hass.data[DOMAIN] = {}
+        await async_setup_frequency_schedules(hass)
+
+        unsubs = hass.data[DOMAIN]["frequency_reset_unsubs"]
+        assert set(unsubs) == {"daily", "weekly", "stop_listener"}
+
+        # Calling it again (e.g. after update_settings) cancels the old
+        # timers and schedules fresh ones instead of stacking them.
+        await async_setup_frequency_schedules(hass)
+        assert set(hass.data[DOMAIN]["frequency_reset_unsubs"]) == {
+            "daily",
+            "weekly",
+            "stop_listener",
+        }
+
+    @pytest.mark.asyncio
+    async def test_update_settings_reschedules_frequency_timers(self, hass) -> None:
+        """Changing new_day_time via update_settings reschedules the daily timer."""
+        from custom_components.simple_chores.config_loader import ConfigLoader
+
+        config_loader = MagicMock(spec=ConfigLoader)
+        config_loader.async_update_settings = AsyncMock()
+        config_loader.get_settings = Mock(
+            return_value=SettingsConfig(new_day_time=time(6, 30))
+        )
+        hass.data[DOMAIN] = {"config_loader": config_loader}
+        await async_setup_services(hass)
+        await async_setup_frequency_schedules(hass)
+
+        unsub_before = hass.data[DOMAIN]["frequency_reset_unsubs"]["daily"]
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_UPDATE_SETTINGS,
+            {ATTR_NEW_DAY_TIME: "07:00:00"},
+            blocking=True,
+        )
+
+        config_loader.async_update_settings.assert_called_once_with(
+            auto_finalize_enabled=None,
+            auto_finalize_delay_minutes=None,
+            new_day_time=time(7, 0, 0),
+            new_week_day=None,
+            new_week_time=None,
+        )
+        # The timer was replaced with a freshly scheduled one.
+        assert hass.data[DOMAIN]["frequency_reset_unsubs"]["daily"] is not unsub_before
 
 
 class TestSummarySensorUpdates:
@@ -3668,6 +3775,7 @@ class TestUpdateSettingsService:
 
         mock_config_loader = MagicMock(spec=ConfigLoader)
         mock_config_loader.async_update_settings = AsyncMock()
+        mock_config_loader.get_settings = Mock(return_value=SettingsConfig())
         hass.data[DOMAIN] = {"config_loader": mock_config_loader}
         await async_setup_services(hass)
 
@@ -3679,7 +3787,11 @@ class TestUpdateSettingsService:
         )
 
         mock_config_loader.async_update_settings.assert_called_once_with(
-            auto_finalize_enabled=False, auto_finalize_delay_minutes=30
+            auto_finalize_enabled=False,
+            auto_finalize_delay_minutes=30,
+            new_day_time=None,
+            new_week_day=None,
+            new_week_time=None,
         )
 
     @pytest.mark.asyncio
@@ -4436,7 +4548,7 @@ class TestHistoryService:
     @pytest.mark.asyncio
     async def test_start_new_day_records_reset_entry(self, hass) -> None:
         """start_new_day appends a 'reset' entry for each completed chore it clears."""
-        sensor = self._make_sensor(hass, points=10)
+        sensor = self._make_sensor(hass, points=10, frequency=ChoreFrequency.MANUAL)
         history_storage = await self._setup(hass, sensor)
 
         await hass.services.async_call(
@@ -4459,9 +4571,15 @@ class TestHistoryService:
     @pytest.mark.asyncio
     async def test_start_new_day_records_missed_entries(self, hass) -> None:
         """start_new_day logs a 'missed' entry per pending chore, with a tally."""
-        pending1 = self._make_sensor(hass, slug="dishes", points=10)
-        pending2 = self._make_sensor(hass, slug="trash", points=5)
-        untouched = self._make_sensor(hass, slug="laundry", points=7)
+        pending1 = self._make_sensor(
+            hass, slug="dishes", points=10, frequency=ChoreFrequency.MANUAL
+        )
+        pending2 = self._make_sensor(
+            hass, slug="trash", points=5, frequency=ChoreFrequency.MANUAL
+        )
+        untouched = self._make_sensor(
+            hass, slug="laundry", points=7, frequency=ChoreFrequency.MANUAL
+        )
         pending1.set_state(ChoreState.PENDING.value)
         pending2.set_state(ChoreState.PENDING.value)
         untouched.set_state(ChoreState.NOT_REQUESTED.value)

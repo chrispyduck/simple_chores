@@ -83,6 +83,9 @@ ATTR_NEW_SLUG = "new_slug"
 # Settings service parameters
 ATTR_AUTO_FINALIZE_ENABLED = "auto_finalize_enabled"
 ATTR_AUTO_FINALIZE_DELAY_MINUTES = "auto_finalize_delay_minutes"
+ATTR_NEW_DAY_TIME = "new_day_time"
+ATTR_NEW_WEEK_DAY = "new_week_day"
+ATTR_NEW_WEEK_TIME = "new_week_time"
 
 # Privilege service parameters
 ATTR_PRIVILEGE_SLUG = "privilege_slug"

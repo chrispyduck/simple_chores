@@ -9,9 +9,10 @@ from typing import TYPE_CHECKING
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HassJob, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.event import async_call_later, async_track_time_change
 
 from .const import (
     ATTR_ADJUSTMENT,
@@ -28,7 +29,10 @@ from .const import (
     ATTR_ICON,
     ATTR_LINKED_CHORES,
     ATTR_NAME,
+    ATTR_NEW_DAY_TIME,
     ATTR_NEW_SLUG,
+    ATTR_NEW_WEEK_DAY,
+    ATTR_NEW_WEEK_TIME,
     ATTR_POINTS,
     ATTR_POINTS_BY_ASSIGNEE,
     ATTR_PRIVILEGE_SLUG,
@@ -77,6 +81,7 @@ from .models import (
     PrivilegeBehavior,
     PrivilegeConfig,
     SettingsConfig,
+    Weekday,
 )
 
 if TYPE_CHECKING:
@@ -419,7 +424,7 @@ CREATE_CHORE_SCHEMA = vol.Schema(
         vol.Required(ATTR_NAME): cv.string,
         vol.Required(ATTR_SLUG): cv.string,
         vol.Optional(ATTR_DESCRIPTION, default=""): cv.string,
-        vol.Required(ATTR_FREQUENCY): vol.In(["daily", "manual", "once"]),
+        vol.Required(ATTR_FREQUENCY): vol.In(["daily", "weekly", "manual", "once"]),
         vol.Required(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON, default="mdi:clipboard-list-outline"): cv.string,
         vol.Optional(ATTR_POINTS, default=1): vol.All(
@@ -435,7 +440,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Required(ATTR_SLUG): cv.string,
         vol.Optional(ATTR_NAME): cv.string,
         vol.Optional(ATTR_DESCRIPTION): cv.string,
-        vol.Optional(ATTR_FREQUENCY): vol.In(["daily", "manual", "once"]),
+        vol.Optional(ATTR_FREQUENCY): vol.In(["daily", "weekly", "manual", "once"]),
         vol.Optional(ATTR_ASSIGNEES): cv.string,
         vol.Optional(ATTR_ICON): cv.string,
         vol.Optional(ATTR_POINTS): vol.All(vol.Coerce(int), vol.Range(min=0)),
@@ -563,6 +568,9 @@ UPDATE_SETTINGS_SCHEMA = vol.Schema(
         vol.Optional(ATTR_AUTO_FINALIZE_DELAY_MINUTES): vol.All(
             vol.Coerce(int), vol.Range(min=1)
         ),
+        vol.Optional(ATTR_NEW_DAY_TIME): cv.time,
+        vol.Optional(ATTR_NEW_WEEK_DAY): vol.In([day.value for day in Weekday]),
+        vol.Optional(ATTR_NEW_WEEK_TIME): cv.time,
     }
 )
 
@@ -943,19 +951,29 @@ async def handle_reset_completed(hass: HomeAssistant, call: ServiceCall) -> None
             await _update_summary_sensors(hass, affected_user)
 
 
+# start_new_day resets manual chores (Complete -> Not Requested) and deletes
+# once chores - daily and weekly chores are no longer its concern, see
+# _apply_frequency_reset and async_setup_frequency_schedules below.
+_START_NEW_DAY_FREQUENCIES = frozenset({ChoreFrequency.MANUAL, ChoreFrequency.ONCE})
+
+
 async def _apply_start_new_day_points_missed(
     hass: HomeAssistant, sensors: dict, sanitized_user: str | None
 ) -> None:
     """
-    Add each PENDING chore's points to its assignee's cumulative points_missed.
+    Add each PENDING manual/once chore's points to its assignee's points_missed.
 
     Must run before start_new_day resets any sensor's state, since it counts
     chores that are still PENDING (points are already awarded on complete,
     so completed chores need no adjustment here). Each missed chore also
-    gets its own "missed" history entry.
+    gets its own "missed" history entry. Daily and weekly chores are excluded
+    here - their missed points are tallied by their own scheduled reset, see
+    _apply_frequency_reset.
     """
     for sensor_id, sensor in sensors.items():
         if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
+            continue
+        if sensor.chore.frequency not in _START_NEW_DAY_FREQUENCIES:
             continue
 
         if sensor.get_state() == ChoreState.PENDING.value:
@@ -975,8 +993,11 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
     Resets completed chores based on their frequency:
     - manual: Reset to NOT_REQUESTED
-    - daily: Reset to PENDING
     - once: Delete the chore entirely
+
+    Daily and weekly chores are reset automatically on their own schedule
+    (see new_day_time/new_week_day/new_week_time in settings) and are left
+    untouched here.
     """
     user = call.data.get(ATTR_USER)
 
@@ -997,12 +1018,9 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
 
     reset_count = 0
     manual_count = 0
-    daily_count = 0
     once_count = 0
 
     # Collect all state changes first, then apply them
-    # Track affected users to update only their summary sensors
-    affected_users = set()
     state_changes = []
     once_chores_to_delete = []  # Track once chores to delete
 
@@ -1010,12 +1028,13 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         # If user specified, only reset their chores
         if sanitized_user and not sensor_id.startswith(f"{sanitized_user}_"):
             continue
+        if sensor.chore.frequency not in _START_NEW_DAY_FREQUENCIES:
+            continue
 
         # Only reset sensors that are currently COMPLETE
         # Read current state using public accessor
         if sensor.get_state() == ChoreState.COMPLETE.value:
             chore_frequency = sensor.chore.frequency
-            affected_users.add(sensor.assignee)
             await _clear_completion_tracking(hass, sensor)
             await _record_history(hass, sensor, "reset")
 
@@ -1028,10 +1047,6 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
                 state_changes.append((sensor, ChoreState.NOT_REQUESTED))
                 reset_count += 1
                 manual_count += 1
-            elif chore_frequency == ChoreFrequency.DAILY:
-                state_changes.append((sensor, ChoreState.PENDING))
-                reset_count += 1
-                daily_count += 1
 
     # Apply all state changes without triggering individual summary updates
     update_tasks = []
@@ -1040,12 +1055,10 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
 
         # Audit log: chore reset for new day
-        action = "reset to pending" if new_state == ChoreState.PENDING else "unmarked"
         LOGGER.info(
-            "New day: %s's chore '%s' %s",
+            "New day: %s's chore '%s' unmarked",
             sensor.assignee,
             sensor.chore.name,
-            action,
         )
 
     # Await all sensor updates to complete before deleting one-time chores
@@ -1068,20 +1081,18 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     if user:
         LOGGER.info(
             "Reset %d completed chore(s) for user '%s' "
-            "(%d manual to not_requested, %d daily to pending, %d once deleted)",
+            "(%d manual to not_requested, %d once deleted)",
             reset_count,
             user,
             manual_count,
-            daily_count,
             once_count,
         )
     else:
         LOGGER.info(
             "Reset %d completed chore(s) for all users "
-            "(%d manual to not_requested, %d daily to pending, %d once deleted)",
+            "(%d manual to not_requested, %d once deleted)",
             reset_count,
             manual_count,
-            daily_count,
             once_count,
         )
 
@@ -1091,6 +1102,150 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     await _update_summary_sensors(hass, user)
     # Update privilege sensors based on chore state changes
     await _update_privilege_sensors_from_chores(hass, user)
+
+
+async def _apply_frequency_reset(
+    hass: HomeAssistant, frequency: ChoreFrequency
+) -> None:
+    """
+    Reset every Complete chore of `frequency` back to Pending.
+
+    Tallies missed points for any chore of that frequency still Pending
+    first (points are already awarded on complete, so completed chores need
+    no adjustment). Shared by the scheduled daily and weekly reset timers -
+    see async_setup_frequency_schedules. Unlike start_new_day this always
+    covers every assignee: per-user scoping only makes sense for an
+    admin-triggered manual reset.
+    """
+    sensors = hass.data[DOMAIN].get("sensors", {})
+
+    for sensor in sensors.values():
+        if sensor.chore.frequency != frequency:
+            continue
+        if sensor.get_state() == ChoreState.PENDING.value:
+            missed = await _record_missed_points(hass, sensor)
+            if missed:
+                LOGGER.debug(
+                    "Missed %d point(s) for %s's pending chore '%s'",
+                    missed,
+                    sensor.assignee,
+                    sensor.chore.name,
+                )
+
+    to_reset = [
+        sensor
+        for sensor in sensors.values()
+        if sensor.chore.frequency == frequency
+        and sensor.get_state() == ChoreState.COMPLETE.value
+    ]
+    for sensor in to_reset:
+        await _clear_completion_tracking(hass, sensor)
+        await _record_history(hass, sensor, "reset")
+        sensor.set_state(ChoreState.PENDING.value)
+        LOGGER.info(
+            "New %s: %s's chore '%s' reset to pending",
+            frequency.value,
+            sensor.assignee,
+            sensor.chore.name,
+        )
+
+    if to_reset:
+        await asyncio.gather(
+            *(sensor.async_update_ha_state(force_refresh=True) for sensor in to_reset)
+        )
+
+    LOGGER.info(
+        "%s reset: %d completed chore(s) reset to pending",
+        frequency.value.capitalize(),
+        len(to_reset),
+    )
+
+    # Update sensors for all users - points_missed may have changed above
+    # even if nothing was reset.
+    await _update_summary_sensors(hass)
+    await _update_privilege_sensors_from_chores(hass)
+
+
+def _frequency_reset_unsubs(hass: HomeAssistant) -> dict:
+    """Return the {schedule_key: cancel_callback} map of frequency-reset timers."""
+    return hass.data[DOMAIN].setdefault("frequency_reset_unsubs", {})
+
+
+def _cancel_frequency_reset_timers(hass: HomeAssistant) -> None:
+    """Cancel every scheduled daily/weekly reset timer."""
+    unsubs = _frequency_reset_unsubs(hass)
+    for unsub in unsubs.values():
+        unsub()
+    unsubs.clear()
+
+
+async def _on_daily_reset(hass: HomeAssistant, _now: datetime) -> None:
+    """Scheduled callback: reset completed daily chores to Pending."""
+    LOGGER.info("Running scheduled daily chore reset")
+    await _apply_frequency_reset(hass, ChoreFrequency.DAILY)
+
+
+async def _on_weekly_reset(
+    hass: HomeAssistant, settings: SettingsConfig, now: datetime
+) -> None:
+    """
+    Scheduled callback: reset completed weekly chores to Pending.
+
+    Fires daily at new_week_time (same as the daily reset's time pattern),
+    but only actually resets anything on new_week_day - any other day it's a
+    no-op.
+    """
+    if now.strftime("%A").lower() != settings.new_week_day.value:
+        return
+    LOGGER.info("Running scheduled weekly chore reset")
+    await _apply_frequency_reset(hass, ChoreFrequency.WEEKLY)
+
+
+async def async_setup_frequency_schedules(hass: HomeAssistant) -> None:
+    """
+    (Re)schedule the automatic daily and weekly chore-reset timers.
+
+    Reads new_day_time/new_week_day/new_week_time from settings and
+    schedules listeners that fire at those times, resetting Complete chores
+    of the matching frequency back to Pending (see _apply_frequency_reset).
+    Called once at integration startup and again whenever update_settings
+    changes the schedule - any previously scheduled timers are cancelled
+    first, so this is safe to call repeatedly.
+    """
+    _cancel_frequency_reset_timers(hass)
+    settings = _get_settings(hass)
+    unsubs = _frequency_reset_unsubs(hass)
+
+    unsubs["daily"] = async_track_time_change(
+        hass,
+        partial(_on_daily_reset, hass),
+        hour=settings.new_day_time.hour,
+        minute=settings.new_day_time.minute,
+        second=settings.new_day_time.second,
+    )
+
+    unsubs["weekly"] = async_track_time_change(
+        hass,
+        partial(_on_weekly_reset, hass, settings),
+        hour=settings.new_week_time.hour,
+        minute=settings.new_week_time.minute,
+        second=settings.new_week_time.second,
+    )
+
+    def _on_stop(_event: object) -> None:
+        # async_track_time_change's listeners re-arm themselves every day,
+        # so (unlike the cancel_on_shutdown auto-finalize timers) they need
+        # to be dropped explicitly on shutdown instead of lapsing on their
+        # own. The listener itself already self-removed after firing once.
+        unsubs.pop("stop_listener", None)
+        for key in ("daily", "weekly"):
+            unsub = unsubs.pop(key, None)
+            if unsub:
+                unsub()
+
+    unsubs["stop_listener"] = hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STOP, _on_stop
+    )
 
 
 def _parse_points_by_assignee(value: str) -> dict[str, int]:
@@ -1475,7 +1630,7 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
     - manual chores that are still pending count towards cumulative
       points_missed, same as start_new_day does before it resets
 
-    Daily and once chores in the category are left untouched - use
+    Daily, weekly, and once chores in the category are left untouched - use
     start_new_day (or the other by-category actions) for those.
     """
     user = call.data.get(ATTR_USER)
@@ -1627,11 +1782,17 @@ async def handle_update_settings(hass: HomeAssistant, call: ServiceCall) -> None
 
     auto_finalize_enabled = call.data.get(ATTR_AUTO_FINALIZE_ENABLED)
     auto_finalize_delay_minutes = call.data.get(ATTR_AUTO_FINALIZE_DELAY_MINUTES)
+    new_day_time = call.data.get(ATTR_NEW_DAY_TIME)
+    new_week_day = call.data.get(ATTR_NEW_WEEK_DAY)
+    new_week_time = call.data.get(ATTR_NEW_WEEK_TIME)
 
     try:
         await config_loader.async_update_settings(
             auto_finalize_enabled=auto_finalize_enabled,
             auto_finalize_delay_minutes=auto_finalize_delay_minutes,
+            new_day_time=new_day_time,
+            new_week_day=new_week_day,
+            new_week_time=new_week_time,
         )
     except Exception as err:
         msg = f"Failed to update settings: {err}"
@@ -1646,6 +1807,9 @@ async def handle_update_settings(hass: HomeAssistant, call: ServiceCall) -> None
         await async_catch_up_auto_finalize(hass)
     else:
         _cancel_all_auto_finalize_timers(hass)
+
+    # Reschedule the daily/weekly reset timers in case their time or day changed.
+    await async_setup_frequency_schedules(hass)
 
     LOGGER.info("Updated settings")
 

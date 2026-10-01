@@ -24,7 +24,11 @@ from .panel import (
     async_unregister_panel,
 )
 from .sensor import async_setup_platform
-from .services import async_catch_up_auto_finalize, async_setup_services
+from .services import (
+    async_catch_up_auto_finalize,
+    async_setup_frequency_schedules,
+    async_setup_services,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -106,6 +110,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:  # noqa: ARG00
     # rest for whatever time remains.
     await async_catch_up_auto_finalize(hass)
 
+    # Start the recurring timers that automatically reset daily/weekly
+    # chores at their configured time (see SettingsConfig.new_day_time etc).
+    await async_setup_frequency_schedules(hass)
+
     # Add the admin-only "Chores" panel to the sidebar
     await async_register_panel(hass)
 
@@ -161,6 +169,10 @@ async def async_setup_entry(
     # any whose auto-finalize delay has already elapsed, and reschedule the
     # rest for whatever time remains.
     await async_catch_up_auto_finalize(hass)
+
+    # Start the recurring timers that automatically reset daily/weekly
+    # chores at their configured time (see SettingsConfig.new_day_time etc).
+    await async_setup_frequency_schedules(hass)
 
     # Add the admin-only "Chores" panel to the sidebar
     await async_register_panel(hass)

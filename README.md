@@ -11,20 +11,21 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
 ## Basics
 
 * All configuration is file-based, in a single yaml file. State is maintained within Home Assistant.
-* Chores consist of a name, description, frequency (daily, manual, once), list of assignees, and slug (used to identify the chore in code).
+* Chores consist of a name, description, frequency (daily, weekly, manual, once), list of assignees, and slug (used to identify the chore in code).
 * Assignees are Home Assistant users and are identified by name, not ID, in the config file.
 * Each chore is represented in Home Assistant as a sensor following the format `sensor.simple_chore_{assignee}_{slug}`.
   * Attributes: the sensor includes all configured chore information (full name, description, frequency, points) as sensor attributes.
   * State: chore state is one of: `Pending`, `Complete`, `Not Requested`
-  * **Note**: A daily chore must be requested at least once (marked as Pending or Complete) before it becomes a daily chore. Until then, it behaves like a manual chore.
+  * **Note**: A daily or weekly chore must be requested at least once (marked as Pending or Complete) before it starts resetting on its schedule. Until then, it behaves like a manual chore.
 * Each assignee has a summary sensor at `sensor.simple_chore_summary_{assignee}` that tracks:
   * Count of pending/complete/not requested chores (`total_pending`, `total_complete`, `total_chores_today`)
   * Lists of chores in each state (`pending_chores`, `complete_chores`, `not_requested_chores`)
   * **Points tracking**:
     * `total_points`: Lifetime earned points (cumulative)
-    * `points_missed`: Cumulative total of all missed opportunities (updated by start_new_day)
+    * `points_missed`: Cumulative total of all missed opportunities (updated by `start_new_day` for manual/once chores, and automatically for daily/weekly chores at their own scheduled reset - see "Automatic daily/weekly reset" below)
     * `points_possible`: Current sum of points from pending + complete chores (calculated in real-time)
-* **Points System**: Each chore can have a point value (default: 1). When a chore is marked complete, the assignee earns those points. Points can be set when creating/updating chores. The `start_new_day` service adds pending chore points to the cumulative `points_missed` total before resetting states. The summary sensor calculates `points_possible` in real-time based on current chore states.
+* **Points System**: Each chore can have a point value (default: 1). When a chore is marked complete, the assignee earns those points immediately. Points can be set when creating/updating chores. Before a pending chore is reset, its points are added to the cumulative `points_missed` total. The summary sensor calculates `points_possible` in real-time based on current chore states.
+* **Automatic daily/weekly reset**: Completed `daily` chores are automatically reset to Pending at `new_day_time` (local time, default `02:00:00`) every day - no automation needed. Completed `weekly` chores work the same way, resetting at `new_week_time` on `new_week_day` (default Monday). Either pending chore's points are counted towards `points_missed` first, same as `start_new_day` does for manual/once chores. All three settings are configurable via the admin panel's Settings tab, or the `simple_chores.update_settings` service, and persist in `simple_chores.yaml` under a `settings:` section.
 * **Auto-finalize**: A chore left in the `Complete` state is automatically reset to `Not Requested` after a delay (the same reset `reset_completed` performs; 60 minutes by default), so completed chores don't keep piling up on dashboards throughout the day. Points were already awarded at completion time, so nothing about them changes. Marking the chore pending, not requested, or otherwise resetting it before the delay is up cancels the pending auto-finalize. Both whether this runs at all (`auto_finalize_enabled`) and its delay (`auto_finalize_delay_minutes`) are configurable - via the admin panel's Settings tab, or the `simple_chores.update_settings` service - and persist in `simple_chores.yaml` under a `settings:` section.
   * Each chore's completion time is persisted, so auto-finalize survives a Home Assistant restart: on startup, any chore whose delay already elapsed while HA was down is finalized immediately, and any still within its delay gets a fresh timer for whatever time is left. A chore that was already `Complete` before this feature existed (no tracked completion time) is left alone until it's next completed.
 * The following actions are defined for interacting with chores:
@@ -33,15 +34,15 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
   * `simple_chores.mark_not_requested` - Marks a chore as not requested. Takes a chore slug and optional user as parameters. If user is not specified, marks not requested for all assignees.
   * `simple_chores.finalize_one` - Immediately finalizes one completed chore (the same reset auto-finalize performs, on demand instead of waiting out the delay). Takes a chore slug and optional user; chores that aren't currently complete are left alone.
   * `simple_chores.reset_completed` - Resets all completed chores to not requested. Takes an optional user parameter to reset only that user's chores.
-  * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, daily chores reset to pending, once chores are deleted entirely. Calculates daily points statistics before resetting. Takes an optional user parameter.
-  * `simple_chores.finalize_by_category` - Like `start_new_day`, but scoped to a single category and only for `manual` chores: completed manual chores in the category reset to not requested, and pending ones count towards missed points. Daily and once chores in the category are left untouched. Takes a category slug and optional user parameter.
+  * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, once chores are deleted entirely. Calculates missed-points statistics for those chores before resetting. Daily and weekly chores are not touched here - they reset automatically on their own schedule (see "Automatic daily/weekly reset" above). Takes an optional user parameter.
+  * `simple_chores.finalize_by_category` - Like `start_new_day`, but scoped to a single category and only for `manual` chores: completed manual chores in the category reset to not requested, and pending ones count towards missed points. Daily, weekly, and once chores in the category are left untouched. Takes a category slug and optional user parameter.
   * `simple_chores.create_chore` - Dynamically create a new chore at runtime with specified properties including points.
   * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon. Pass `new_slug` to rename it; any privilege linking to it by slug is updated to match. Pass `points_by_assignee` (`"user:points,..."`) to set or clear per-assignee point overrides.
   * `simple_chores.delete_chore` - Remove a chore from the system.
   * `simple_chores.refresh_summary` - Force refresh of summary sensor attributes for one or all assignees.
   * `simple_chores.adjust_points` - Manually adjusts an assignee's earned points by a specified amount (positive or negative). Useful for bonuses, penalties, or corrections.
   * `simple_chores.reset_points` - Reset points tracking for one or all assignees. Always resets daily stats (points_missed, points_possible). Optionally resets total_points with `reset_total: true`.
-  * `simple_chores.update_settings` - Update integration-wide settings: `auto_finalize_enabled` and `auto_finalize_delay_minutes` (see Auto-finalize below).
+  * `simple_chores.update_settings` - Update integration-wide settings: `auto_finalize_enabled`, `auto_finalize_delay_minutes` (see Auto-finalize above), and `new_day_time`, `new_week_day`, `new_week_time` (see Automatic daily/weekly reset above).
 
 ## Installation
 
@@ -100,10 +101,11 @@ chores:
 - `name`: Display name of the chore (required)
 - `slug`: Unique identifier for the chore, used in entity IDs (required, lowercase alphanumeric with hyphens/underscores)
 - `description`: Description of what the chore involves (optional)
-- `frequency`: How often the chore should be done - `daily`, `manual`, or `once` (required)
-  - `daily`: Chore will be reset to Pending each day after being completed (must be requested at least once first)
-  - `manual`: Chore will be reset to Not Requested each day after being completed
-  - `once`: One-off chore that is deleted entirely after completion when start_new_day is called (useful for temporary or ad-hoc tasks)
+- `frequency`: How often the chore should be done - `daily`, `weekly`, `manual`, or `once` (required)
+  - `daily`: Chore is automatically reset to Pending each day at `new_day_time` after being completed (must be requested at least once first)
+  - `weekly`: Chore is automatically reset to Pending on `new_week_day` at `new_week_time` after being completed (must be requested at least once first)
+  - `manual`: Chore is reset to Not Requested when `start_new_day` is called
+  - `once`: One-off chore that is deleted entirely after completion when `start_new_day` is called (useful for temporary or ad-hoc tasks)
 - `assignees`: List of Home Assistant usernames who can be assigned this chore (required, at least one)
 - `points`: Default number of points awarded when the chore is completed (optional, default: 1, must be >= 0)
 - `points_by_assignee`: Per-assignee point overrides, e.g. `{alice: 10, bob: 5}` (optional). An assignee not listed here earns `points` instead - useful for giving an older or younger kid a different reward for the same chore.
@@ -158,8 +160,8 @@ renaming, and deleting any of them, marking chores complete/pending,
 enabling/disabling or temporarily blocking privileges, running
 `reset_completed`/`start_new_day`/`finalize_by_category`, finalizing one
 completed chore on demand, and tuning the Settings tab's auto-finalize
-behavior - without needing to call services by hand or edit the YAML file
-directly. The panel is registered with `require_admin=True`, so it's only
+behavior and daily/weekly reset schedule - without needing to call services
+by hand or edit the YAML file directly. The panel is registered with `require_admin=True`, so it's only
 visible to, and only reachable by, Home Assistant administrators; everyone
 else sees no change.
 
@@ -168,9 +170,13 @@ The panel's source lives in [frontend/](frontend/); see
 
 ## Automation Examples
 
-An example automation for daily chore reset is provided in `automations/start_new_day.yaml`. This automation calls the `start_new_day` service at 2:00 AM each day to:
-- Reset manual chores from Complete to Not Requested
-- Reset daily chores from Complete to Pending (only if they were previously requested)
+Daily and weekly chores reset themselves automatically (see "Automatic
+daily/weekly reset" above) - no automation needed for those. Manual and
+once chores still need something to call `start_new_day` on whatever
+schedule you want. An example automation for this is provided in
+`automations/start_new_day.yaml`, which calls the `start_new_day` service
+at 2:00 AM each day to reset manual chores from Complete to Not Requested
+and delete completed once chores.
 
 You can copy this to your Home Assistant automations directory or use it as a reference for creating your own automations.
 
