@@ -740,9 +740,7 @@ class TestSettingsConfig:
 
     def test_model_dump_json_mode_serializes_schedule_fields(self) -> None:
         """model_dump(mode="json") - what config_loader saves - round-trips cleanly."""
-        settings = SettingsConfig(
-            new_day_time=time(6, 30), new_week_day=Weekday.FRIDAY
-        )
+        settings = SettingsConfig(new_day_time=time(6, 30), new_week_day=Weekday.FRIDAY)
         dumped = settings.model_dump(mode="json")
         assert dumped["new_day_time"] == "06:30:00"
         assert dumped["new_week_day"] == "friday"

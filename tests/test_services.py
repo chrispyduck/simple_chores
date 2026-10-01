@@ -2520,9 +2520,7 @@ class TestFrequencyResetSchedule:
         sensor_weekly.async_update_ha_state.assert_called()
 
     @pytest.mark.asyncio
-    async def test_async_setup_frequency_schedules_registers_timers(
-        self, hass
-    ) -> None:
+    async def test_async_setup_frequency_schedules_registers_timers(self, hass) -> None:
         """async_setup_frequency_schedules schedules both timers and a stop hook."""
         hass.data[DOMAIN] = {}
         await async_setup_frequency_schedules(hass)
