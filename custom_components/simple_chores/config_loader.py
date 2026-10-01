@@ -17,10 +17,12 @@ from .models import (
     PrivilegeConfig,
     SettingsConfig,
     SimpleChoresConfig,
+    Weekday,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from datetime import time
     from pathlib import Path
 
     from homeassistant.core import HomeAssistant
@@ -793,6 +795,9 @@ class ConfigLoader:
         *,
         auto_finalize_enabled: bool | None = None,
         auto_finalize_delay_minutes: int | None = None,
+        new_day_time: time | None = None,
+        new_week_day: Weekday | str | None = None,
+        new_week_time: time | None = None,
     ) -> None:
         """
         Update integration-wide settings and save to YAML.
@@ -800,6 +805,9 @@ class ConfigLoader:
         Args:
             auto_finalize_enabled: New value (None to keep current)
             auto_finalize_delay_minutes: New value (None to keep current)
+            new_day_time: New daily chore reset time (None to keep current)
+            new_week_day: New weekly chore reset day (None to keep current)
+            new_week_time: New weekly chore reset time (None to keep current)
 
         Raises:
             ConfigLoadError: If save fails
@@ -814,6 +822,12 @@ class ConfigLoader:
             updated_data["auto_finalize_enabled"] = auto_finalize_enabled
         if auto_finalize_delay_minutes is not None:
             updated_data["auto_finalize_delay_minutes"] = auto_finalize_delay_minutes
+        if new_day_time is not None:
+            updated_data["new_day_time"] = new_day_time
+        if new_week_day is not None:
+            updated_data["new_week_day"] = new_week_day
+        if new_week_time is not None:
+            updated_data["new_week_time"] = new_week_time
 
         new_config = SimpleChoresConfig(
             chores=self._config.chores,

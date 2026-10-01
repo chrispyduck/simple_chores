@@ -14,6 +14,7 @@ from custom_components.simple_chores import (
     async_unload_entry,
 )
 from custom_components.simple_chores.config_loader import ConfigLoadError
+from custom_components.simple_chores.models import SettingsConfig
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +62,7 @@ def mock_config_loader() -> MagicMock:
     loader.async_load = AsyncMock()
     loader.async_start_watching = AsyncMock()
     loader.async_stop_watching = AsyncMock()
+    loader.get_settings = Mock(return_value=SettingsConfig())
     return loader
 
 

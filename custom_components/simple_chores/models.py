@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import time
 from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -13,8 +14,21 @@ class ChoreFrequency(StrEnum):
     """Frequency for chores."""
 
     DAILY = "daily"
+    WEEKLY = "weekly"
     MANUAL = "manual"
     ONCE = "once"
+
+
+class Weekday(StrEnum):
+    """Day of the week, used to schedule the weekly chore reset."""
+
+    MONDAY = "monday"
+    TUESDAY = "tuesday"
+    WEDNESDAY = "wednesday"
+    THURSDAY = "thursday"
+    FRIDAY = "friday"
+    SATURDAY = "saturday"
+    SUNDAY = "sunday"
 
 
 class ChoreState(StrEnum):
@@ -214,6 +228,24 @@ class SettingsConfig(BaseModel):
         default=60,
         description="Minutes a chore stays Complete before auto-finalizing.",
         ge=1,
+    )
+    new_day_time: time = Field(
+        default=time(2, 0),
+        description=(
+            "Local time at which completed 'daily' chores are automatically "
+            "reset back to Pending, starting a new day."
+        ),
+    )
+    new_week_day: Weekday = Field(
+        default=Weekday.MONDAY,
+        description="Day of the week on which completed 'weekly' chores reset.",
+    )
+    new_week_time: time = Field(
+        default=time(2, 0),
+        description=(
+            "Local time on new_week_day at which completed 'weekly' chores "
+            "are automatically reset back to Pending."
+        ),
     )
 
     model_config = {"frozen": False, "extra": "forbid"}

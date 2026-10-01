@@ -13,7 +13,7 @@ Service actions have been implemented to allow external automation and scripts t
 3. `simple_chores.mark_not_requested` - Mark a chore as not requested for a specific user or all assignees
 4. `simple_chores.finalize_one` - Immediately finalize one completed chore (the same reset auto-finalize performs, on demand); chores that aren't currently complete are left alone
 5. `simple_chores.reset_completed` - Reset all completed chores to not requested (optionally for a specific user)
-6. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, daily chores to pending, once chores are deleted entirely (calculates missed points for pending chores)
+6. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, once chores are deleted entirely (calculates missed points for pending manual/once chores). Daily and weekly chores reset themselves automatically on their own schedule instead (see `update_settings` below) and are left untouched here.
 7. `simple_chores.create_chore` - Dynamically create a new chore at runtime
 8. `simple_chores.update_chore` - Update an existing chore's properties (including points)
 9. `simple_chores.delete_chore` - Delete a chore
@@ -102,6 +102,14 @@ it.
   automatically resets to Not Requested after `auto_finalize_delay_minutes`
 - `auto_finalize_delay_minutes` (optional, integer, >= 1): Minutes a chore
   stays Complete before auto-finalizing
+- `new_day_time` (optional, time "HH:MM:SS"): Local time at which completed
+  `daily` chores automatically reset to Pending. Default: `02:00:00`
+- `new_week_day` (optional, string): Day of the week (`monday`-`sunday`) on
+  which completed `weekly` chores automatically reset to Pending. Default:
+  `monday`
+- `new_week_time` (optional, time "HH:MM:SS"): Local time on `new_week_day`
+  at which completed `weekly` chores automatically reset to Pending.
+  Default: `02:00:00`
 
 ### delete_privilege
 
@@ -214,8 +222,8 @@ The integration includes a comprehensive points system to gamify chore completio
 - Points can be manually adjusted using the `adjust_points` service for bonuses, penalties, or corrections
 - The `start_new_day` service:
   - Awards points for all completed chores (updates `total_points` and `points_earned`)
-  - Adds pending chore points to cumulative `points_missed` total
-  - Then resets chore states based on frequency (manual → Not Requested, daily → Pending, once → deleted)
+  - Adds pending manual/once chore points to cumulative `points_missed` total
+  - Then resets those chore states based on frequency (manual → Not Requested, once → deleted). Daily and weekly chores reset themselves automatically instead - see `update_settings`.
 - Points tracking can be reset using the `reset_points` service:
   - By default, resets points_earned and cumulative points_missed to zero
   - With `reset_total: true`, also resets lifetime total_points to zero
@@ -482,7 +490,7 @@ Comprehensive test coverage (161 tests, 84% coverage) includes:
 - **Error Cases**: Tests behavior when sensor not found or integration not loaded
 - **Integration**: Tests with multiple sensors, different users, and special characters in slugs
 - **All Assignees**: Tests marking all assignees when user parameter is omitted
-- **Frequency-Based Reset**: Tests start_new_day correctly handles manual vs daily chores
+- **Frequency-Based Reset**: Tests start_new_day correctly handles manual vs once chores, and that the automatic daily/weekly reset schedule only touches its own frequency
 
 ### Test Coverage Summary
 

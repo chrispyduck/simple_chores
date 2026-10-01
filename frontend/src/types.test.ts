@@ -251,18 +251,33 @@ describe("parseCategories", () => {
 describe("parseSettings", () => {
   it("returns backend defaults when the settings entity is missing", () => {
     const settings = parseSettings({});
-    expect(settings).toEqual({ autoFinalizeEnabled: true, autoFinalizeDelayMinutes: 60 });
+    expect(settings).toEqual({
+      autoFinalizeEnabled: true,
+      autoFinalizeDelayMinutes: 60,
+      newDayTime: "02:00:00",
+      newWeekDay: "monday",
+      newWeekTime: "02:00:00",
+    });
   });
 
   it("reads values from the settings entity when present", () => {
     const states = statesOf([
       SETTINGS_ENTITY_ID,
       "Disabled",
-      { auto_finalize_enabled: false, auto_finalize_delay_minutes: 15 },
+      {
+        auto_finalize_enabled: false,
+        auto_finalize_delay_minutes: 15,
+        new_day_time: "06:30:00",
+        new_week_day: "friday",
+        new_week_time: "07:00:00",
+      },
     ]);
     expect(parseSettings(states)).toEqual({
       autoFinalizeEnabled: false,
       autoFinalizeDelayMinutes: 15,
+      newDayTime: "06:30:00",
+      newWeekDay: "friday",
+      newWeekTime: "07:00:00",
     });
   });
 });

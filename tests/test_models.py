@@ -1,5 +1,7 @@
 """Tests for simple_chores models."""
 
+from datetime import time
+
 import pytest
 from pydantic import ValidationError
 
@@ -11,7 +13,9 @@ from custom_components.simple_chores.models import (
     PrivilegeBehavior,
     PrivilegeConfig,
     PrivilegeState,
+    SettingsConfig,
     SimpleChoresConfig,
+    Weekday,
 )
 
 
@@ -21,7 +25,27 @@ class TestChoreFrequency:
     def test_frequency_values(self) -> None:
         """Test that frequency enum has expected values."""
         assert ChoreFrequency.DAILY.value == "daily"
+        assert ChoreFrequency.WEEKLY.value == "weekly"
         assert ChoreFrequency.MANUAL.value == "manual"
+        assert ChoreFrequency.ONCE.value == "once"
+
+
+class TestWeekday:
+    """Tests for Weekday enum."""
+
+    def test_weekday_values(self) -> None:
+        """Test that weekday enum has expected lowercase day names."""
+        assert Weekday.MONDAY.value == "monday"
+        assert Weekday.SUNDAY.value == "sunday"
+        assert [day.value for day in Weekday] == [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ]
 
 
 class TestChoreState:
@@ -682,3 +706,44 @@ class TestSimpleChoresConfigWithPrivileges:
         """Test that privileges list defaults to empty."""
         config = SimpleChoresConfig()
         assert config.privileges == []
+
+
+class TestSettingsConfig:
+    """Tests for SettingsConfig, including the daily/weekly reset schedule."""
+
+    def test_defaults(self) -> None:
+        """Test the out-of-the-box schedule: 2am daily, Monday 2am weekly."""
+        settings = SettingsConfig()
+        assert settings.new_day_time == time(2, 0)
+        assert settings.new_week_day == Weekday.MONDAY
+        assert settings.new_week_time == time(2, 0)
+
+    def test_new_day_time_parses_from_string(self) -> None:
+        """Test that new_day_time accepts an 'HH:MM:SS' string, as YAML gives it."""
+        settings = SettingsConfig(new_day_time="06:30:00")
+        assert settings.new_day_time == time(6, 30, 0)
+
+    def test_new_week_day_parses_from_string(self) -> None:
+        """Test that new_week_day accepts a plain weekday string, as YAML gives it."""
+        settings = SettingsConfig(new_week_day="friday")
+        assert settings.new_week_day == Weekday.FRIDAY
+
+    def test_new_week_day_rejects_invalid_value(self) -> None:
+        """Test that an unrecognized weekday string is rejected."""
+        with pytest.raises(ValidationError):
+            SettingsConfig(new_week_day="someday")
+
+    def test_settings_config_forbids_extra_fields(self) -> None:
+        """Test that unknown settings fields are rejected."""
+        with pytest.raises(ValidationError):
+            SettingsConfig(unknown_field="value")
+
+    def test_model_dump_json_mode_serializes_schedule_fields(self) -> None:
+        """model_dump(mode="json") - what config_loader saves - round-trips cleanly."""
+        settings = SettingsConfig(
+            new_day_time=time(6, 30), new_week_day=Weekday.FRIDAY
+        )
+        dumped = settings.model_dump(mode="json")
+        assert dumped["new_day_time"] == "06:30:00"
+        assert dumped["new_week_day"] == "friday"
+        assert SettingsConfig(**dumped) == settings

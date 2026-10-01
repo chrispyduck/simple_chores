@@ -90,7 +90,7 @@ reset_completed:
 
 start_new_day:
   name: Start New Day
-  description: Reset completed chores based on their frequency. Manual chores are reset to Not Requested, daily chores are reset to Pending, and one-time chores are deleted entirely (note that a daily chore must be requested at least once before it becomes daily).
+  description: Reset completed chores based on their frequency. Manual chores are reset to Not Requested and one-time chores are deleted entirely. Daily and weekly chores are not touched here - they reset automatically on their own schedule (see the new_day_time/new_week_day/new_week_time settings).
   fields:
     user:
       name: User
@@ -134,6 +134,7 @@ create_chore:
         select:
           options:
             - "daily"
+            - "weekly"
             - "manual"
             - "once"
     assignees:
@@ -211,6 +212,7 @@ update_chore:
         select:
           options:
             - "daily"
+            - "weekly"
             - "manual"
             - "once"
     assignees:
@@ -393,7 +395,7 @@ mark_not_requested_by_category:
 
 finalize_by_category:
   name: Finalize by Category
-  description: Like Start New Day, but scoped to a category and only for manual chores. Manual chores that are complete are reset to Not Requested; manual chores still pending count towards missed points. Daily and once chores in the category are left untouched.
+  description: Like Start New Day, but scoped to a category and only for manual chores. Manual chores that are complete are reset to Not Requested; manual chores still pending count towards missed points. Daily, weekly, and once chores in the category are left untouched.
   fields:
     user:
       name: User
@@ -743,3 +745,32 @@ update_settings:
           min: 1
           max: 1440
           mode: box
+    new_day_time:
+      name: New day start time
+      description: Local time at which completed daily chores are automatically reset back to Pending (leave unset to keep current)
+      required: false
+      example: "02:00:00"
+      selector:
+        time:
+    new_week_day:
+      name: New week day
+      description: Day of the week on which completed weekly chores are automatically reset back to Pending (leave unset to keep current)
+      required: false
+      example: "monday"
+      selector:
+        select:
+          options:
+            - "monday"
+            - "tuesday"
+            - "wednesday"
+            - "thursday"
+            - "friday"
+            - "saturday"
+            - "sunday"
+    new_week_time:
+      name: New week start time
+      description: Local time on new_week_day at which completed weekly chores are automatically reset back to Pending (leave unset to keep current)
+      required: false
+      example: "02:00:00"
+      selector:
+        time:

@@ -1432,6 +1432,9 @@ class SettingsSensor(SensorEntity):
         return {
             "auto_finalize_enabled": self._settings.auto_finalize_enabled,
             "auto_finalize_delay_minutes": self._settings.auto_finalize_delay_minutes,
+            "new_day_time": self._settings.new_day_time.isoformat(),
+            "new_week_day": self._settings.new_week_day.value,
+            "new_week_time": self._settings.new_week_time.isoformat(),
         }
 
     def update_settings(self, settings: SettingsConfig) -> None:
