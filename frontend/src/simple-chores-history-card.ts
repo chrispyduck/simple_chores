@@ -10,6 +10,10 @@ import {
   historyActionLabel,
   parseHistoryEntries,
 } from "./types";
+// Registers <simple-chores-history-card-editor>, returned below by
+// getConfigElement() - imported for its side effect of defining the
+// custom element, not used directly in this file.
+import "./simple-chores-history-card-editor";
 
 export interface HistoryCardConfig {
   type: string;
@@ -64,6 +68,10 @@ export class SimpleChoresHistoryCard extends LitElement {
 
   static getStubConfig(): Partial<HistoryCardConfig> {
     return { assignee: "" };
+  }
+
+  static async getConfigElement(): Promise<HTMLElement> {
+    return document.createElement("simple-chores-history-card-editor");
   }
 
   private async _loadHistory(): Promise<void> {
