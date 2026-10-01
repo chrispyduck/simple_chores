@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import "./simple-chores-history-card";
-import type {
-  HistoryCardConfig,
-  SimpleChoresHistoryCard,
-} from "./simple-chores-history-card";
+import { SimpleChoresHistoryCard } from "./simple-chores-history-card";
+import type { HistoryCardConfig } from "./simple-chores-history-card";
 import type { HomeAssistant } from "./types";
 
 function makeHass(overrides: Partial<HomeAssistant> = {}): HomeAssistant {
@@ -294,5 +291,10 @@ describe("simple-chores-history-card", () => {
     expect(window.customCards).toContainEqual(
       expect.objectContaining({ type: "simple-chores-history-card" })
     );
+  });
+
+  it("exposes a GUI config editor via getConfigElement", async () => {
+    const editor = await SimpleChoresHistoryCard.getConfigElement();
+    expect(editor.tagName.toLowerCase()).toBe("simple-chores-history-card-editor");
   });
 });

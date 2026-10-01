@@ -16,6 +16,13 @@ dedicated backend API beyond the integration's existing services:
   kid's own dashboard. Unlike the panel, it needs no admin access and is
   injected into every frontend page load rather than lazily loaded (see
   [src/simple-chores-history-card.ts](src/simple-chores-history-card.ts)).
+  It ships its own GUI config editor
+  (`simple-chores-history-card-editor`, see
+  [src/simple-chores-history-card-editor.ts](src/simple-chores-history-card-editor.ts)),
+  so Lovelace's "Add Card" flow doesn't force hand-written YAML - pick the
+  assignee from a suggestion list built from live chore sensors (no admin
+  API needed) and toggle everything else with checkboxes/number inputs.
+  Editing a card's YAML directly still works exactly the same.
 
 ## Building
 
@@ -74,5 +81,8 @@ custom element against a stubbed `hass` object and asserts on its rendered
 shadow DOM (tabs, the admin gate, chore cards, the Settings danger zone,
 the Users tab). `src/simple-chores-history-card.test.ts` does the same for
 `<simple-chores-history-card>` (config validation, assignee/action-type
-filtering, the points delta, the day-range cutoff). CI runs type checking, tests,
-and the build on every push and PR (see `.github/workflows/lint.yml`).
+filtering, the points delta, the day-range cutoff), and
+`src/simple-chores-history-card-editor.test.ts` covers its GUI config
+editor (assignee suggestions from live sensors, and that every field emits
+a `config-changed` event with the right shape). CI runs type checking,
+tests, and the build on every push and PR (see `.github/workflows/lint.yml`).
