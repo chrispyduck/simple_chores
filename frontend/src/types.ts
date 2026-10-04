@@ -42,6 +42,9 @@ export const CHORE_ENTITY_PREFIX = "sensor.simple_chore_";
 export const PRIVILEGE_ENTITY_PREFIX = "sensor.simple_chore_privilege_";
 export const SUMMARY_ENTITY_PREFIX = "sensor.simple_chore_meta_";
 export const CATEGORY_ENTITY_PREFIX = "sensor.simple_chore_category_";
+// Lives in the number.* domain (see custom_components/simple_chores/number.py),
+// not sensor.*, so it needs no exclusion from the sensor-prefix scans above.
+export const POINT_GOAL_ENTITY_PREFIX = "number.simple_chore_meta_";
 
 // Singleton entity publishing integration-wide settings - see
 // SETTINGS_ENTITY_ID in custom_components/simple_chores/const.py. It's
@@ -132,11 +135,19 @@ export interface SummaryDefinition {
   totalComplete: number;
 }
 
+/** One assignee's point goal, published on their `..._meta_{assignee}_point_goal` number. */
+export interface PointGoalDefinition {
+  assignee: string;
+  entityId: string;
+  value: number;
+}
+
 export interface PrivilegeAssigneeStatus {
   assignee: string;
   entityId: string;
   state: PrivilegeStateValue;
   disableUntil?: string;
+  disableReason?: string;
 }
 
 export interface PrivilegeDefinition {
@@ -352,6 +363,7 @@ export function parsePrivileges(
       entityId,
       state: entity.state as PrivilegeStateValue,
       disableUntil: attrs.disable_until,
+      disableReason: attrs.disable_reason,
     });
   }
 
@@ -451,6 +463,31 @@ export function parseSummaries(states: Record<string, HassEntity>): SummaryDefin
   return summaries.sort((a, b) => a.assignee.localeCompare(b.assignee));
 }
 
+/**
+ * Rebuild each assignee's point goal from their
+ * `number.simple_chore_meta_{assignee}_point_goal` entity.
+ */
+export function parsePointGoals(
+  states: Record<string, HassEntity>
+): PointGoalDefinition[] {
+  const goals: PointGoalDefinition[] = [];
+
+  for (const [entityId, entity] of Object.entries(states)) {
+    if (!entityId.startsWith(POINT_GOAL_ENTITY_PREFIX)) continue;
+
+    const assignee: string | undefined = entity.attributes.assignee;
+    if (!assignee) continue;
+
+    goals.push({
+      assignee,
+      entityId,
+      value: Number(entity.state) || 0,
+    });
+  }
+
+  return goals.sort((a, b) => a.assignee.localeCompare(b.assignee));
+}
+
 /** Every assignee name seen across any chore or privilege, for suggestions. */
 export function knownAssignees(
   chores: ChoreDefinition[],
@@ -499,8 +536,18 @@ export function displayName(
  * since points were already awarded when it was completed. "missed" is
  * logged when start_new_day / finalize_by_category counts a chore that
  * wasn't completed towards the assignee's cumulative points_missed.
+ * "adjusted" is a manual adjust_points call (not tied to any chore).
+ * "points_reset" is a reset_points call clearing earned/missed and
+ * optionally the lifetime total - its points_delta is the negative of the
+ * pre-reset lifetime total when that was cleared, or 0 otherwise.
  */
-export type HistoryAction = "completed" | "uncompleted" | "reset" | "missed";
+export type HistoryAction =
+  | "completed"
+  | "uncompleted"
+  | "reset"
+  | "missed"
+  | "adjusted"
+  | "points_reset";
 
 /** Every HistoryAction value, for building the History tab's event-type filter. */
 export const HISTORY_ACTIONS: HistoryAction[] = [
@@ -508,6 +555,8 @@ export const HISTORY_ACTIONS: HistoryAction[] = [
   "uncompleted",
   "reset",
   "missed",
+  "adjusted",
+  "points_reset",
 ];
 
 export interface HistoryEntry {
@@ -564,6 +613,10 @@ export function historyActionLabel(action: HistoryAction): string {
       return "Reset";
     case "missed":
       return "Missed";
+    case "adjusted":
+      return "Adjusted";
+    case "points_reset":
+      return "Points reset";
     default:
       return action;
   }
@@ -574,5 +627,6 @@ export function historyActionClass(action: HistoryAction): string {
   if (action === "completed") return "state-good";
   if (action === "uncompleted") return "state-bad";
   if (action === "missed") return "state-warn";
+  if (action === "adjusted") return "state-warn";
   return "state-neutral";
 }

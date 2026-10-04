@@ -16,6 +16,7 @@ import {
   HistoryEntry,
   HISTORY_ACTIONS,
   HomeAssistant,
+  PointGoalDefinition,
   PrivilegeBehavior,
   PrivilegeDefinition,
   PrivilegeDraft,
@@ -37,6 +38,7 @@ import {
   parseCategories,
   parseChores,
   parseHistoryEntries,
+  parsePointGoals,
   parsePrivileges,
   parseSettings,
   parseSummaries,
@@ -106,6 +108,8 @@ export class SimpleChoresPanel extends LitElement {
   @state() private _settingsDraft: SettingsDraft | null = null;
   @state() private _resetPointsDialog: ResetPointsDraft | null = null;
   @state() private _userAdjustInput: Record<string, string> = {};
+  /** Draft "reason" text per privilege block row, keyed by `${slug}:${assignee}`. */
+  @state() private _disableReasonInput: Record<string, string> = {};
   @state() private _historyEntries: HistoryEntry[] | null = null;
   @state() private _historyLoading = false;
   @state() private _historyUserFilter = "";
@@ -157,6 +161,7 @@ export class SimpleChoresPanel extends LitElement {
     const categories = parseCategories(this.hass.states);
     const settings = parseSettings(this.hass.states);
     const summaries = parseSummaries(this.hass.states);
+    const pointGoals = parsePointGoals(this.hass.states);
     const assignees = knownAssignees(chores, privileges);
 
     return html`
@@ -226,7 +231,7 @@ export class SimpleChoresPanel extends LitElement {
             : this._tab === "categories"
               ? this._renderCategoriesTab(categories, assignees)
               : this._tab === "users"
-                ? this._renderUsersTab(assignees, summaries)
+                ? this._renderUsersTab(assignees, summaries, pointGoals)
                 : this._tab === "history"
                   ? this._renderHistoryTab(chores, categories, assignees)
                   : this._renderSettingsTab(settings, assignees)}
@@ -591,6 +596,7 @@ export class SimpleChoresPanel extends LitElement {
         <div class="assignee-list">
           ${privilege.assignees.map((a) => {
             const isTemp = a.state === "Temporarily Disabled";
+            const reasonKey = this._disableReasonKey(privilege.slug, a.assignee);
             return html`
               <div class="assignee-row privilege-row">
                 <div class="assignee-main">
@@ -600,6 +606,9 @@ export class SimpleChoresPanel extends LitElement {
                       ? html` (${this._formatUntil(a.disableUntil)})`
                       : nothing}
                   </span>
+                  ${isTemp && a.disableReason
+                    ? html`<span class="disable-reason">"${a.disableReason}"</span>`
+                    : nothing}
                   ${privilege.behavior === "manual"
                     ? html`
                         <div class="row-actions">
@@ -635,12 +644,43 @@ export class SimpleChoresPanel extends LitElement {
                 </div>
                 <div class="block-steppers">
                   <span class="block-steppers-label">Temporary block</span>
+                  <input
+                    type="text"
+                    class="disable-reason-input"
+                    placeholder="Reason (optional)"
+                    .value=${this._disableReasonInput[reasonKey] ?? a.disableReason ?? ""}
+                    @input=${(e: Event) => {
+                      this._disableReasonInput = {
+                        ...this._disableReasonInput,
+                        [reasonKey]: (e.target as HTMLInputElement).value,
+                      };
+                    }}
+                    @keydown=${(e: KeyboardEvent) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    }}
+                    @blur=${() => {
+                      if (isTemp) {
+                        this._saveDisableReason(
+                          privilege.slug,
+                          a.assignee,
+                          a.disableReason
+                        );
+                      }
+                    }}
+                  />
                   ${this._renderBlockStepper(
                     "1h",
                     isTemp,
-                    () => this._adjustTemporaryDisable(privilege.slug, a.assignee, -60),
                     () =>
-                      this._addTemporaryDisable(privilege.slug, a.assignee, isTemp, 60)
+                      this._adjustTemporaryDisable(privilege.slug, a.assignee, -60),
+                    () =>
+                      this._addTemporaryDisable(
+                        privilege.slug,
+                        a.assignee,
+                        isTemp,
+                        60,
+                        reasonKey
+                      )
                   )}
                   ${this._renderBlockStepper(
                     "1d",
@@ -652,7 +692,8 @@ export class SimpleChoresPanel extends LitElement {
                         privilege.slug,
                         a.assignee,
                         isTemp,
-                        1440
+                        1440,
+                        reasonKey
                       )
                   )}
                   <button
@@ -1068,8 +1109,13 @@ export class SimpleChoresPanel extends LitElement {
 
   // --- Users tab -----------------------------------------------------
 
-  private _renderUsersTab(assignees: string[], summaries: SummaryDefinition[]) {
+  private _renderUsersTab(
+    assignees: string[],
+    summaries: SummaryDefinition[],
+    pointGoals: PointGoalDefinition[]
+  ) {
     const byAssignee = new Map(summaries.map((s) => [s.assignee, s]));
+    const goalByAssignee = new Map(pointGoals.map((g) => [g.assignee, g]));
 
     return html`
       ${assignees.length === 0
@@ -1077,12 +1123,18 @@ export class SimpleChoresPanel extends LitElement {
             No assignees yet. Add one to a chore or privilege to get started.
           </p>`
         : html`<div class="card-grid">
-            ${assignees.map((a) => this._renderUserCard(a, byAssignee.get(a)))}
+            ${assignees.map((a) =>
+              this._renderUserCard(a, byAssignee.get(a), goalByAssignee.get(a))
+            )}
           </div>`}
     `;
   }
 
-  private _renderUserCard(assignee: string, summary: SummaryDefinition | undefined) {
+  private _renderUserCard(
+    assignee: string,
+    summary: SummaryDefinition | undefined,
+    pointGoal: PointGoalDefinition | undefined
+  ) {
     const totalPoints = summary?.totalPoints ?? 0;
     const pointsEarned = summary?.pointsEarned ?? 0;
     const pointsMissed = summary?.pointsMissed ?? 0;
@@ -1114,6 +1166,24 @@ export class SimpleChoresPanel extends LitElement {
             <span class="points-stat-label">possible today</span>
           </div>
         </div>
+        ${pointGoal
+          ? html`
+              <div class="user-goal-row">
+                <span class="user-goal-label">Point goal</span>
+                <input
+                  type="number"
+                  min="0"
+                  class="user-goal-input"
+                  .value=${String(pointGoal.value)}
+                  @change=${(e: Event) =>
+                    this._setPointGoal(
+                      pointGoal.entityId,
+                      (e.target as HTMLInputElement).value
+                    )}
+                />
+              </div>
+            `
+          : nothing}
         <div class="user-adjust-row">
           <input
             type="number"
@@ -1133,6 +1203,12 @@ export class SimpleChoresPanel extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  /** Save an edited point goal via the standard `number.set_value` service. */
+  private async _setPointGoal(entityId: string, rawValue: string) {
+    const value = Math.max(0, Math.round(Number(rawValue) || 0));
+    await this._call("number", "set_value", { entity_id: entityId, value });
   }
 
   private async _applyPointsAdjustment(assignee: string) {
@@ -1970,23 +2046,43 @@ export class SimpleChoresPanel extends LitElement {
     await this._call(SERVICE_DOMAIN, "delete_category", { slug: category.slug });
   }
 
-  private _addTemporaryDisable(
+  /** Key into `_disableReasonInput` for a given privilege/assignee row. */
+  private _disableReasonKey(slug: string, user: string): string {
+    return `${slug}:${user}`;
+  }
+
+  /**
+   * The row's edited-but-not-yet-confirmed-saved reason text, or `undefined`
+   * if the user hasn't touched the field this render (in which case callers
+   * should leave whatever reason is already stored alone).
+   */
+  private _pendingReason(reasonKey: string): string | undefined {
+    if (!Object.hasOwn(this._disableReasonInput, reasonKey)) return undefined;
+    return this._disableReasonInput[reasonKey].trim();
+  }
+
+  private async _addTemporaryDisable(
     slug: string,
     user: string,
     alreadyTemporary: boolean,
-    minutes: number
+    minutes: number,
+    reasonKey: string
   ) {
-    return alreadyTemporary
-      ? this._call(SERVICE_DOMAIN, "adjust_temporary_disable", {
-          user,
-          privilege_slug: slug,
-          adjustment: minutes,
-        })
-      : this._call(SERVICE_DOMAIN, "temporarily_disable_privilege", {
-          user,
-          privilege_slug: slug,
-          duration: minutes,
-        });
+    const reason = this._pendingReason(reasonKey);
+    const ok = await this._call(
+      SERVICE_DOMAIN,
+      alreadyTemporary ? "adjust_temporary_disable" : "temporarily_disable_privilege",
+      {
+        user,
+        privilege_slug: slug,
+        ...(alreadyTemporary ? { adjustment: minutes } : { duration: minutes }),
+        ...(reason !== undefined ? { reason } : {}),
+      }
+    );
+    if (ok && reason !== undefined) {
+      const { [reasonKey]: _discard, ...rest } = this._disableReasonInput;
+      this._disableReasonInput = rest;
+    }
   }
 
   /**
@@ -1994,18 +2090,52 @@ export class SimpleChoresPanel extends LitElement {
    * shorten it, positive to extend it), via the existing
    * `adjust_temporary_disable` service. Only meaningful while the privilege
    * is already temporarily disabled - callers should disable the triggering
-   * button otherwise, since the service just warns and no-ops.
+   * button otherwise, since the service just warns and no-ops. Carries along
+   * any edited-but-unsaved reason, same as extending via `_addTemporaryDisable`.
    */
-  private _adjustTemporaryDisable(
+  private async _adjustTemporaryDisable(
     slug: string,
     user: string,
     adjustmentMinutes: number
   ) {
-    return this._call(SERVICE_DOMAIN, "adjust_temporary_disable", {
+    const reasonKey = this._disableReasonKey(slug, user);
+    const reason = this._pendingReason(reasonKey);
+    const ok = await this._call(SERVICE_DOMAIN, "adjust_temporary_disable", {
       user,
       privilege_slug: slug,
       adjustment: adjustmentMinutes,
+      ...(reason !== undefined ? { reason } : {}),
     });
+    if (ok && reason !== undefined) {
+      const { [reasonKey]: _discard, ...rest } = this._disableReasonInput;
+      this._disableReasonInput = rest;
+    }
+  }
+
+  /**
+   * Save an edited reason on an already-blocked privilege without changing
+   * its duration, via a zero-minute `adjust_temporary_disable` adjustment.
+   * Fired on blur/Enter so editing the reason text doesn't require also
+   * touching a stepper. No-ops if the field wasn't actually changed.
+   */
+  private async _saveDisableReason(
+    slug: string,
+    user: string,
+    originalReason: string | undefined
+  ) {
+    const reasonKey = this._disableReasonKey(slug, user);
+    const reason = this._pendingReason(reasonKey);
+    if (reason === undefined || reason === (originalReason ?? "")) return;
+    const ok = await this._call(SERVICE_DOMAIN, "adjust_temporary_disable", {
+      user,
+      privilege_slug: slug,
+      adjustment: 0,
+      reason,
+    });
+    if (ok) {
+      const { [reasonKey]: _discard, ...rest } = this._disableReasonInput;
+      this._disableReasonInput = rest;
+    }
   }
 
   /**
@@ -2013,11 +2143,16 @@ export class SimpleChoresPanel extends LitElement {
    * privilege is restored to what it was right before the block (or
    * recomputed from linked chores, for automatic-behavior privileges).
    */
-  private _clearTemporaryDisable(slug: string, user: string) {
-    return this._call(SERVICE_DOMAIN, "clear_temporary_disable", {
+  private async _clearTemporaryDisable(slug: string, user: string) {
+    const ok = await this._call(SERVICE_DOMAIN, "clear_temporary_disable", {
       user,
       privilege_slug: slug,
     });
+    if (ok) {
+      const reasonKey = this._disableReasonKey(slug, user);
+      const { [reasonKey]: _discard, ...rest } = this._disableReasonInput;
+      this._disableReasonInput = rest;
+    }
   }
 
   private async _saveChoreDialog() {
@@ -2414,6 +2549,22 @@ export class SimpleChoresPanel extends LitElement {
       font-size: 12px;
       color: var(--secondary-text-color, #727272);
       margin-right: 2px;
+    }
+    .disable-reason-input {
+      flex: 1;
+      min-width: 140px;
+      height: 32px;
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 8px;
+      padding: 0 10px;
+      font-size: 13px;
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color, #212121);
+    }
+    .disable-reason {
+      font-size: 12px;
+      font-style: italic;
+      color: var(--secondary-text-color, #727272);
     }
     .stepper {
       display: inline-flex;
@@ -2813,6 +2964,29 @@ export class SimpleChoresPanel extends LitElement {
       text-align: center;
     }
 
+    .user-goal-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--divider-color, #e0e0e0);
+    }
+    .user-goal-label {
+      font-size: 13px;
+      color: var(--secondary-text-color, #727272);
+    }
+    .user-goal-input {
+      width: 90px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--primary-text-color, #212121);
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
     .user-adjust-row {
       display: flex;
       gap: 8px;

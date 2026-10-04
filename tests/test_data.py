@@ -1,5 +1,6 @@
 """Tests for simple_chores data structures."""
 
+import asyncio
 from dataclasses import is_dataclass
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
@@ -197,6 +198,160 @@ class TestPointsStoragePrivilegePreBlockState:
         await storage.clear_privilege_data("alice", "extra_dessert")
 
         assert storage.get_privilege_pre_block_state("alice", "extra_dessert") is None
+
+
+class TestPointsStoragePrivilegeDisableReason:
+    """Tests for PointsStorage's temporary-disable justification tracking."""
+
+    @pytest.mark.asyncio
+    async def test_defaults_to_none(self, hass) -> None:
+        """Test that an assignee/privilege with nothing stored returns None."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        assert storage.get_privilege_disable_reason("alice", "extra_dessert") is None
+
+    @pytest.mark.asyncio
+    async def test_set_and_get(self, hass) -> None:
+        """Test storing and retrieving a disable reason."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        await storage.set_privilege_disable_reason(
+            "alice", "extra_dessert", "Didn't finish homework"
+        )
+
+        assert (
+            storage.get_privilege_disable_reason("alice", "extra_dessert")
+            == "Didn't finish homework"
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_none_clears_it(self, hass) -> None:
+        """Test that setting None clears a previously stored value."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        await storage.set_privilege_disable_reason("alice", "extra_dessert", "Rude")
+        await storage.set_privilege_disable_reason("alice", "extra_dessert", None)
+
+        assert storage.get_privilege_disable_reason("alice", "extra_dessert") is None
+
+    @pytest.mark.asyncio
+    async def test_persists_across_instances(self, hass) -> None:
+        """Test that the disable reason survives a reload, like other privilege data."""
+        storage1 = PointsStorage(hass)
+        await storage1.async_load()
+        await storage1.set_privilege_disable_reason("alice", "extra_dessert", "Rude")
+
+        storage2 = PointsStorage(hass)
+        await storage2.async_load()
+
+        assert storage2.get_privilege_disable_reason("alice", "extra_dessert") == "Rude"
+
+    @pytest.mark.asyncio
+    async def test_clear_privilege_data_removes_it(self, hass) -> None:
+        """Test that clear_privilege_data also clears the disable reason."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+        await storage.set_privilege_disable_reason("alice", "extra_dessert", "Rude")
+
+        await storage.clear_privilege_data("alice", "extra_dessert")
+
+        assert storage.get_privilege_disable_reason("alice", "extra_dessert") is None
+
+    @pytest.mark.asyncio
+    async def test_key_is_case_insensitive(self, hass) -> None:
+        """Test that the assignee key is normalized, same as other privilege maps."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        await storage.set_privilege_disable_reason("Alice", "extra_dessert", "Rude")
+
+        assert storage.get_privilege_disable_reason("alice", "extra_dessert") == "Rude"
+
+
+class TestPointsStoragePointGoal:
+    """Tests for PointsStorage's per-assignee point goal (see number.py)."""
+
+    @pytest.mark.asyncio
+    async def test_defaults_to_zero(self, hass) -> None:
+        """An assignee with nothing stored has a goal of 0."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        assert storage.get_point_goal("alice") == 0
+
+    @pytest.mark.asyncio
+    async def test_set_and_get(self, hass) -> None:
+        """Test storing and retrieving a point goal."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        await storage.set_point_goal("alice", 100)
+
+        assert storage.get_point_goal("alice") == 100
+
+    @pytest.mark.asyncio
+    async def test_persists_across_instances(self, hass) -> None:
+        """Test that a point goal survives a reload, like other stored data."""
+        storage1 = PointsStorage(hass)
+        await storage1.async_load()
+        await storage1.set_point_goal("alice", 100)
+
+        storage2 = PointsStorage(hass)
+        await storage2.async_load()
+
+        assert storage2.get_point_goal("alice") == 100
+
+    @pytest.mark.asyncio
+    async def test_key_is_case_insensitive(self, hass) -> None:
+        """Test the assignee key is normalized, same as the other per-assignee maps."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+
+        await storage.set_point_goal("Alice", 100)
+
+        assert storage.get_point_goal("alice") == 100
+
+
+class TestPointsStorageAsyncLoadIdempotency:
+    """
+    Tests that async_load() is safe to call more than once.
+
+    The sensor and number platforms both call it on the same shared
+    PointsStorage instance during their own setup (see __init__.py), so a
+    second call must be a no-op rather than re-reading and clobbering
+    whatever's already in memory.
+    """
+
+    @pytest.mark.asyncio
+    async def test_second_load_does_not_clobber_in_memory_changes(self, hass) -> None:
+        """A set_* call between two async_load() calls must survive the second."""
+        storage = PointsStorage(hass)
+        await storage.async_load()
+        await storage.set_points("alice", 100)
+
+        await storage.async_load()
+
+        assert storage.get_points("alice") == 100
+
+    @pytest.mark.asyncio
+    async def test_concurrent_loads_on_the_same_instance_dont_race(self, hass) -> None:
+        """
+        Two concurrent async_load() calls on one shared instance don't race.
+
+        This is exactly what happens in practice: the sensor and number
+        platforms' setup both call async_load() on the one PointsStorage
+        instance __init__.py hands them (see its async_setup_entry).
+        """
+        storage = PointsStorage(hass)
+        await storage.set_point_goal("alice", 7)  # writes + saves to disk
+
+        reloaded = PointsStorage(hass)
+        await asyncio.gather(reloaded.async_load(), reloaded.async_load())
+
+        assert reloaded.get_point_goal("alice") == 7
 
 
 class TestPointsStorageChoreCompletedAt:

@@ -76,9 +76,12 @@ async def async_setup_entry(
         return
 
     config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+    points_storage: PointsStorage | None = hass.data[DOMAIN].get("points_storage")
 
     # Create entity manager
-    manager = ChoreSensorManager(hass, async_add_entities, config_loader)
+    manager = ChoreSensorManager(
+        hass, async_add_entities, config_loader, points_storage
+    )
     await manager.async_setup()
 
     # Store sensors and points storage in hass.data for service access
@@ -87,7 +90,6 @@ async def async_setup_entry(
     hass.data[DOMAIN]["privilege_sensors"] = manager.privilege_sensors
     hass.data[DOMAIN]["category_sensors"] = manager.category_sensors
     hass.data[DOMAIN]["settings_sensor"] = manager.settings_sensor
-    hass.data[DOMAIN]["points_storage"] = manager.points_storage
     hass.data[DOMAIN]["history_storage"] = manager.history_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
@@ -124,9 +126,12 @@ async def async_setup_platform(
         return
 
     config_loader: ConfigLoader = hass.data[DOMAIN]["config_loader"]
+    points_storage: PointsStorage | None = hass.data[DOMAIN].get("points_storage")
 
     # Create entity manager
-    manager = ChoreSensorManager(hass, async_add_entities, config_loader)
+    manager = ChoreSensorManager(
+        hass, async_add_entities, config_loader, points_storage
+    )
     await manager.async_setup()
 
     # Store sensors and points storage in hass.data for service access
@@ -135,7 +140,6 @@ async def async_setup_platform(
     hass.data[DOMAIN]["privilege_sensors"] = manager.privilege_sensors
     hass.data[DOMAIN]["category_sensors"] = manager.category_sensors
     hass.data[DOMAIN]["settings_sensor"] = manager.settings_sensor
-    hass.data[DOMAIN]["points_storage"] = manager.points_storage
     hass.data[DOMAIN]["history_storage"] = manager.history_storage
     hass.data[DOMAIN]["sensor_manager"] = manager
     LOGGER.debug(
@@ -159,6 +163,7 @@ class ChoreSensorManager:
         hass: HomeAssistant,
         async_add_entities: AddEntitiesCallback,
         config_loader: ConfigLoader,
+        points_storage: PointsStorage | None = None,
     ) -> None:
         """
         Initialize the sensor manager.
@@ -167,6 +172,13 @@ class ChoreSensorManager:
             hass: Home Assistant instance
             async_add_entities: Callback to add entities
             config_loader: Configuration loader
+            points_storage: Shared points storage (see __init__.py, which
+                creates one up front so the sensor and number platforms -
+                see number.py - use the same instance instead of racing to
+                create their own). If omitted, a fresh one is created here.
+                Either way, async_setup() below loads it - safe even if
+                another platform is concurrently loading the same shared
+                instance, since PointsStorage.async_load() is idempotent.
 
         """
         self.hass = hass
@@ -177,7 +189,7 @@ class ChoreSensorManager:
         self.privilege_sensors: dict[str, PrivilegeSensor] = {}  # type: ignore[name-defined]
         self.category_sensors: dict[str, CategorySensor] = {}  # type: ignore[name-defined]
         self.settings_sensor: SettingsSensor | None = None
-        self.points_storage = PointsStorage(hass)
+        self.points_storage = points_storage or PointsStorage(hass)
         self.history_storage = HistoryStorage(hass)
 
     async def async_setup(self) -> None:
@@ -295,7 +307,9 @@ class ChoreSensorManager:
         sensors_to_add = []
         for chore in config.chores:
             for assignee in chore.assignees:
-                entity_id = f"{assignee}_{chore.slug}"
+                entity_id = (
+                    f"{sanitize_entity_id(assignee)}_{sanitize_entity_id(chore.slug)}"
+                )
 
                 if entity_id in self.sensors:
                     # Update existing sensor
@@ -827,7 +841,9 @@ class ChoreSummarySensor(SensorEntity):
         pending_points = 0
 
         for entity_id, sensor in self._manager.sensors.items():
-            if sensor.assignee == self._assignee:
+            if sanitize_entity_id(sensor.assignee) == sanitize_entity_id(
+                self._assignee
+            ):
                 full_entity_id = f"sensor.simple_chore_{entity_id}"
                 # Read from _attr_native_value directly to get the most current state.
                 # This ensures we see updates immediately, even before the state
@@ -854,7 +870,9 @@ class ChoreSummarySensor(SensorEntity):
         # Build privileges list (entity IDs only, matching chore list pattern)
         privileges_list = []
         for entity_id, priv_sensor in self._manager.privilege_sensors.items():
-            if priv_sensor.assignee == self._assignee:
+            if sanitize_entity_id(priv_sensor.assignee) == sanitize_entity_id(
+                self._assignee
+            ):
                 full_entity_id = f"sensor.simple_chore_privilege_{entity_id}"
                 privileges_list.append(full_entity_id)
 
@@ -969,6 +987,7 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         self._attr_native_value = PrivilegeState.DISABLED.value
         self._disable_until: datetime | None = None
         self._pre_block_state: str | None = None
+        self._disable_reason: str | None = None
 
     async def async_added_to_hass(self) -> None:
         """Restore previous state when entity is added to hass."""
@@ -997,6 +1016,11 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         )
         self._pre_block_state = (
             self._manager.points_storage.get_privilege_pre_block_state(
+                self._assignee, self._privilege.slug
+            )
+        )
+        self._disable_reason = (
+            self._manager.points_storage.get_privilege_disable_reason(
                 self._assignee, self._privilege.slug
             )
         )
@@ -1038,6 +1062,8 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         }
         if self._disable_until:
             attrs["disable_until"] = self._disable_until.isoformat()
+        if self._disable_reason:
+            attrs["disable_reason"] = self._disable_reason
         return attrs
 
     def get_state(self) -> str:
@@ -1067,7 +1093,9 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             # No specific chores linked - check ALL requested chores for this assignee
             has_requested_chores = False
             for sensor in self._manager.sensors.values():
-                if sensor.assignee != self._assignee:
+                if sanitize_entity_id(sensor.assignee) != sanitize_entity_id(
+                    self._assignee
+                ):
                     continue
                 state = sensor.get_state()
                 # Only consider chores that have been requested (pending or complete)
@@ -1112,9 +1140,13 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             if self._disable_until and datetime.now(UTC) < self._disable_until:
                 # Still temporarily disabled
                 return
-            # Expired, clear the disable time
+            # Expired, clear the disable time and its justification
             self._disable_until = None
             await self._manager.points_storage.set_privilege_disable_until(
+                self._assignee, self._privilege.slug, None
+            )
+            self._disable_reason = None
+            await self._manager.points_storage.set_privilege_disable_reason(
                 self._assignee, self._privilege.slug, None
             )
 
@@ -1168,6 +1200,10 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         await self._manager.points_storage.set_privilege_pre_block_state(
             self._assignee, self._privilege.slug, None
         )
+        self._disable_reason = None
+        await self._manager.points_storage.set_privilege_disable_reason(
+            self._assignee, self._privilege.slug, None
+        )
 
         self._attr_native_value = PrivilegeState.ENABLED.value
         await self._manager.points_storage.set_privilege_state(
@@ -1190,6 +1226,10 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         await self._manager.points_storage.set_privilege_pre_block_state(
             self._assignee, self._privilege.slug, None
         )
+        self._disable_reason = None
+        await self._manager.points_storage.set_privilege_disable_reason(
+            self._assignee, self._privilege.slug, None
+        )
 
         self._attr_native_value = PrivilegeState.DISABLED.value
         await self._manager.points_storage.set_privilege_state(
@@ -1201,8 +1241,10 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             self._assignee,
         )
 
-    async def async_temporarily_disable(self, duration_minutes: int) -> None:
-        """Temporarily disable the privilege for a duration."""
+    async def async_temporarily_disable(
+        self, duration_minutes: int, reason: str | None = None
+    ) -> None:
+        """Temporarily disable the privilege for a duration, with an optional reason."""
         if self._attr_native_value != PrivilegeState.TEMPORARILY_DISABLED.value:
             # First time entering a block (as opposed to extending one
             # already in progress) - remember what to restore once it ends,
@@ -1211,6 +1253,12 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             self._pre_block_state = self._attr_native_value
             await self._manager.points_storage.set_privilege_pre_block_state(
                 self._assignee, self._privilege.slug, self._pre_block_state
+            )
+
+        if reason is not None:
+            self._disable_reason = reason or None
+            await self._manager.points_storage.set_privilege_disable_reason(
+                self._assignee, self._privilege.slug, self._disable_reason
             )
 
         self._disable_until = datetime.now(UTC) + __import__("datetime").timedelta(
@@ -1227,10 +1275,11 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             PrivilegeState.TEMPORARILY_DISABLED.value,
         )
         LOGGER.info(
-            "Privilege '%s' temporarily disabled for %s until %s",
+            "Privilege '%s' temporarily disabled for %s until %s%s",
             self._privilege.name,
             self._assignee,
             self._disable_until.isoformat(),
+            f" (reason: {self._disable_reason})" if self._disable_reason else "",
         )
 
     async def async_clear_temporary_disable(self) -> None:
@@ -1248,8 +1297,15 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         self._disable_until = datetime.now(UTC) - timedelta(seconds=1)
         await self._check_and_update_state()
 
-    async def async_adjust_temporary_disable(self, adjustment_minutes: int) -> None:
-        """Adjust the temporary disable duration."""
+    async def async_adjust_temporary_disable(
+        self, adjustment_minutes: int, reason: str | None = None
+    ) -> None:
+        """
+        Adjust the temporary disable duration, and/or edit its justification.
+
+        A zero adjustment with a reason is how the UI saves an edited reason
+        without otherwise touching an in-progress block.
+        """
         if self._attr_native_value != PrivilegeState.TEMPORARILY_DISABLED.value:
             LOGGER.warning(
                 "Cannot adjust temporary disable for privilege '%s' - "
@@ -1264,6 +1320,12 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
                 self._privilege.slug,
             )
             return
+
+        if reason is not None:
+            self._disable_reason = reason or None
+            await self._manager.points_storage.set_privilege_disable_reason(
+                self._assignee, self._privilege.slug, self._disable_reason
+            )
 
         self._disable_until = self._disable_until + timedelta(
             minutes=adjustment_minutes

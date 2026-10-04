@@ -130,7 +130,11 @@ class ChoreConfig(BaseModel):
 
     def points_for(self, assignee: str) -> int:
         """Return the points this chore awards `assignee`, honoring any override."""
-        return self.points_by_assignee.get(assignee, self.points)
+        target = sanitize_entity_id(assignee)
+        for override_assignee, points in self.points_by_assignee.items():
+            if sanitize_entity_id(override_assignee) == target:
+                return points
+        return self.points
 
     model_config = {"frozen": False, "extra": "forbid"}
 
@@ -350,8 +354,13 @@ class SimpleChoresConfig(BaseModel):
         return [chore for chore in self.chores if chore.category == slug]
 
     def get_chores_for_assignee(self, assignee: str) -> list[ChoreConfig]:
-        """Get all chores assigned to a specific user."""
-        return [chore for chore in self.chores if assignee in chore.assignees]
+        """Get all chores assigned to a specific user (case-insensitive)."""
+        target = sanitize_entity_id(assignee)
+        return [
+            chore
+            for chore in self.chores
+            if target in {sanitize_entity_id(a) for a in chore.assignees}
+        ]
 
     def get_privilege_by_slug(self, slug: str) -> PrivilegeConfig | None:
         """Get a privilege by its slug."""
@@ -361,11 +370,12 @@ class SimpleChoresConfig(BaseModel):
         return None
 
     def get_privileges_for_assignee(self, assignee: str) -> list[PrivilegeConfig]:
-        """Get all privileges assigned to a specific user."""
+        """Get all privileges assigned to a specific user (case-insensitive)."""
+        target = sanitize_entity_id(assignee)
         return [
             privilege
             for privilege in self.privileges
-            if assignee in privilege.assignees
+            if target in {sanitize_entity_id(a) for a in privilege.assignees}
         ]
 
     model_config = {"frozen": False, "extra": "forbid"}

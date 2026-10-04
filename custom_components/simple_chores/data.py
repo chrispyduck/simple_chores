@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from homeassistant.helpers.storage import Store
+
+from .const import sanitize_entity_id
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -54,25 +57,48 @@ class PointsStorage:
         # temporary disable started, so ending the block can restore it
         # instead of always falling back to Disabled.
         self._privilege_pre_block_state: dict[str, dict[str, str]] = {}
+        # Justification for an in-progress temporary disable, set at the
+        # time it's first started: {assignee: {privilege_slug: reason}}.
+        self._privilege_disable_reason: dict[str, dict[str, str]] = {}
         # When each chore sensor most recently became Complete, keyed by its
         # entity_id: {entity_id: ISO timestamp}. Durable record backing
         # auto-finalize, so a HA restart (or a missed timer while HA was
         # down) can still finalize a chore at the right time instead of
         # losing track of it - see services.py's auto-finalize helpers.
         self._chore_completed_at: dict[str, str] = {}
+        # Per-assignee point goal, set via the number.simple_chore_meta_*
+        # _point_goal entity (see number.py): {assignee: goal}.
+        self._point_goals: dict[str, int] = {}
+        # Guards async_load() so the sensor and number platforms - both of
+        # which share this single instance and each call async_load() during
+        # their own setup - can't race and double-read (or one clobber the
+        # other's in-memory state with a second read) regardless of which
+        # platform's setup happens to run first.
+        self._load_lock = asyncio.Lock()
+        self._loaded = False
 
     async def async_load(self) -> None:
-        """Load points from storage."""
-        data = await self._store.async_load()
-        if data:
-            self._data = data.get("points", {})
-            self._points_earned = data.get("points_earned", {})
-            self._points_missed = data.get("points_missed", {})
-            self._points_possible = data.get("points_possible", {})
-            self._privilege_states = data.get("privilege_states", {})
-            self._privilege_disable_until = data.get("privilege_disable_until", {})
-            self._privilege_pre_block_state = data.get("privilege_pre_block_state", {})
-            self._chore_completed_at = data.get("chore_completed_at", {})
+        """Load points from storage, if it hasn't been loaded already."""
+        async with self._load_lock:
+            if self._loaded:
+                return
+            data = await self._store.async_load()
+            if data:
+                self._data = data.get("points", {})
+                self._points_earned = data.get("points_earned", {})
+                self._points_missed = data.get("points_missed", {})
+                self._points_possible = data.get("points_possible", {})
+                self._privilege_states = data.get("privilege_states", {})
+                self._privilege_disable_until = data.get("privilege_disable_until", {})
+                self._privilege_pre_block_state = data.get(
+                    "privilege_pre_block_state", {}
+                )
+                self._privilege_disable_reason = data.get(
+                    "privilege_disable_reason", {}
+                )
+                self._chore_completed_at = data.get("chore_completed_at", {})
+                self._point_goals = data.get("point_goals", {})
+            self._loaded = True
 
     async def async_save(self) -> None:
         """Save points to storage."""
@@ -85,16 +111,19 @@ class PointsStorage:
                 "privilege_states": self._privilege_states,
                 "privilege_disable_until": self._privilege_disable_until,
                 "privilege_pre_block_state": self._privilege_pre_block_state,
+                "privilege_disable_reason": self._privilege_disable_reason,
                 "chore_completed_at": self._chore_completed_at,
+                "point_goals": self._point_goals,
             }
         )
 
     def get_points(self, assignee: str) -> int:
         """Get points for an assignee."""
-        return self._data.get(assignee, 0)
+        return self._data.get(sanitize_entity_id(assignee), 0)
 
     async def add_points(self, assignee: str, points: int) -> int:
         """Add points to total_points for an assignee and return new total."""
+        assignee = sanitize_entity_id(assignee)
         current = self._data.get(assignee, 0)
         new_total = current + points
         self._data[assignee] = new_total
@@ -103,19 +132,29 @@ class PointsStorage:
 
     async def set_points(self, assignee: str, points: int) -> None:
         """Set points for an assignee."""
-        self._data[assignee] = points
+        self._data[sanitize_entity_id(assignee)] = points
         await self.async_save()
 
     def get_all_points(self) -> dict[str, int]:
         """Get all assignee points."""
         return dict(self._data)
 
+    def get_point_goal(self, assignee: str) -> int:
+        """Get the point goal for an assignee (0 if none has been set)."""
+        return self._point_goals.get(sanitize_entity_id(assignee), 0)
+
+    async def set_point_goal(self, assignee: str, goal: int) -> None:
+        """Set the point goal for an assignee."""
+        self._point_goals[sanitize_entity_id(assignee)] = goal
+        await self.async_save()
+
     def get_points_earned(self, assignee: str) -> int:
         """Get points earned for an assignee (resets with reset_points)."""
-        return self._points_earned.get(assignee, 0)
+        return self._points_earned.get(sanitize_entity_id(assignee), 0)
 
     async def add_points_earned(self, assignee: str, points: int) -> int:
         """Add points to earned total and return new total."""
+        assignee = sanitize_entity_id(assignee)
         current = self._points_earned.get(assignee, 0)
         new_total = current + points
         self._points_earned[assignee] = new_total
@@ -124,32 +163,34 @@ class PointsStorage:
 
     async def set_points_earned(self, assignee: str, points: int) -> None:
         """Set points earned for an assignee."""
-        self._points_earned[assignee] = points
+        self._points_earned[sanitize_entity_id(assignee)] = points
         await self.async_save()
 
     def get_points_missed(self, assignee: str) -> int:
         """Get cumulative points missed for an assignee."""
-        return self._points_missed.get(assignee, 0)
+        return self._points_missed.get(sanitize_entity_id(assignee), 0)
 
     def get_points_possible(self, assignee: str) -> int:
         """Get points possible for an assignee (deprecated - calculated dynamically)."""
-        return self._points_possible.get(assignee, 0)
+        return self._points_possible.get(sanitize_entity_id(assignee), 0)
 
     async def add_points_missed(self, assignee: str, points: int) -> None:
         """Add to cumulative points missed for an assignee."""
+        assignee = sanitize_entity_id(assignee)
         current = self._points_missed.get(assignee, 0)
         self._points_missed[assignee] = current + points
         await self.async_save()
 
     async def set_points_missed(self, assignee: str, points: int) -> None:
         """Set cumulative points missed for an assignee (used by reset_points)."""
-        self._points_missed[assignee] = points
+        self._points_missed[sanitize_entity_id(assignee)] = points
         await self.async_save()
 
     async def set_daily_stats(
         self, assignee: str, points_missed: int, points_possible: int
     ) -> None:
         """Set daily stats for an assignee (deprecated - use add_points_missed)."""
+        assignee = sanitize_entity_id(assignee)
         self._points_missed[assignee] = points_missed
         self._points_possible[assignee] = points_possible
         await self.async_save()
@@ -157,13 +198,14 @@ class PointsStorage:
     # Privilege state methods
     def get_privilege_state(self, assignee: str, privilege_slug: str) -> str | None:
         """Get the stored state for a privilege."""
-        user_states = self._privilege_states.get(assignee, {})
+        user_states = self._privilege_states.get(sanitize_entity_id(assignee), {})
         return user_states.get(privilege_slug)
 
     async def set_privilege_state(
         self, assignee: str, privilege_slug: str, state: str
     ) -> None:
         """Set the state for a privilege."""
+        assignee = sanitize_entity_id(assignee)
         if assignee not in self._privilege_states:
             self._privilege_states[assignee] = {}
         self._privilege_states[assignee][privilege_slug] = state
@@ -173,7 +215,7 @@ class PointsStorage:
         self, assignee: str, privilege_slug: str
     ) -> datetime | None:
         """Get the temporary disable end time for a privilege."""
-        user_times = self._privilege_disable_until.get(assignee, {})
+        user_times = self._privilege_disable_until.get(sanitize_entity_id(assignee), {})
         timestamp = user_times.get(privilege_slug)
         if timestamp:
             return datetime.fromisoformat(timestamp)
@@ -183,6 +225,7 @@ class PointsStorage:
         self, assignee: str, privilege_slug: str, until: datetime | None
     ) -> None:
         """Set the temporary disable end time for a privilege."""
+        assignee = sanitize_entity_id(assignee)
         if assignee not in self._privilege_disable_until:
             self._privilege_disable_until[assignee] = {}
         if until is None:
@@ -196,19 +239,44 @@ class PointsStorage:
         self, assignee: str, privilege_slug: str
     ) -> str | None:
         """Get the state a privilege was in before its current temporary disable."""
-        user_states = self._privilege_pre_block_state.get(assignee, {})
+        user_states = self._privilege_pre_block_state.get(
+            sanitize_entity_id(assignee), {}
+        )
         return user_states.get(privilege_slug)
 
     async def set_privilege_pre_block_state(
         self, assignee: str, privilege_slug: str, state: str | None
     ) -> None:
         """Set (or clear, if `state` is None) the pre-block state for a privilege."""
+        assignee = sanitize_entity_id(assignee)
         if assignee not in self._privilege_pre_block_state:
             self._privilege_pre_block_state[assignee] = {}
         if state is None:
             self._privilege_pre_block_state[assignee].pop(privilege_slug, None)
         else:
             self._privilege_pre_block_state[assignee][privilege_slug] = state
+        await self.async_save()
+
+    def get_privilege_disable_reason(
+        self, assignee: str, privilege_slug: str
+    ) -> str | None:
+        """Get the justification given for a privilege's current temporary disable."""
+        user_reasons = self._privilege_disable_reason.get(
+            sanitize_entity_id(assignee), {}
+        )
+        return user_reasons.get(privilege_slug)
+
+    async def set_privilege_disable_reason(
+        self, assignee: str, privilege_slug: str, reason: str | None
+    ) -> None:
+        """Set (or clear, if `reason` is None) the temporary disable's justification."""
+        assignee = sanitize_entity_id(assignee)
+        if assignee not in self._privilege_disable_reason:
+            self._privilege_disable_reason[assignee] = {}
+        if reason is None:
+            self._privilege_disable_reason[assignee].pop(privilege_slug, None)
+        else:
+            self._privilege_disable_reason[assignee][privilege_slug] = reason
         await self.async_save()
 
     # Chore auto-finalize tracking
@@ -232,12 +300,15 @@ class PointsStorage:
 
     async def clear_privilege_data(self, assignee: str, privilege_slug: str) -> None:
         """Clear all stored data for a privilege."""
+        assignee = sanitize_entity_id(assignee)
         if assignee in self._privilege_states:
             self._privilege_states[assignee].pop(privilege_slug, None)
         if assignee in self._privilege_disable_until:
             self._privilege_disable_until[assignee].pop(privilege_slug, None)
         if assignee in self._privilege_pre_block_state:
             self._privilege_pre_block_state[assignee].pop(privilege_slug, None)
+        if assignee in self._privilege_disable_reason:
+            self._privilege_disable_reason[assignee].pop(privilege_slug, None)
         await self.async_save()
 
 

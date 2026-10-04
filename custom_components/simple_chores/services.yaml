@@ -553,6 +553,13 @@ temporarily_disable_privilege:
           max: 1000000
           mode: box
           unit_of_measurement: minutes
+    reason:
+      name: Reason
+      description: Optional justification for the temporary disable, shown in the UI
+      required: false
+      example: "Didn't finish homework"
+      selector:
+        text:
 
 adjust_temporary_disable:
   name: Adjust Temporary Disable
@@ -574,7 +581,7 @@ adjust_temporary_disable:
         text:
     adjustment:
       name: Adjustment (minutes)
-      description: The number of minutes to add (positive) or subtract (negative) from the disable duration
+      description: The number of minutes to add (positive) or subtract (negative) from the disable duration. Use 0 to edit the reason without changing the duration.
       required: true
       example: 15
       selector:
@@ -583,6 +590,13 @@ adjust_temporary_disable:
           max: 1000000
           mode: box
           unit_of_measurement: minutes
+    reason:
+      name: Reason
+      description: Optional justification to set or replace on the in-progress block, shown in the UI
+      required: false
+      example: "Didn't finish homework"
+      selector:
+        text:
 
 clear_temporary_disable:
   name: Clear Temporary Disable

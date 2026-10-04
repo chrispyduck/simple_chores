@@ -114,6 +114,124 @@ class TestTemporarilyDisable:
         assert sensor._pre_block_state == PrivilegeState.ENABLED.value
 
 
+class TestDisableReason:
+    """Tests for the optional justification on a temporary disable."""
+
+    @pytest.mark.asyncio
+    async def test_reason_is_stored_and_exposed(
+        self, hass, manual_privilege, mock_manager, mock_points_storage
+    ) -> None:
+        """A reason passed to async_temporarily_disable is persisted and exposed."""
+        sensor = PrivilegeSensor(hass, manual_privilege, "alice", mock_manager)
+
+        await sensor.async_temporarily_disable(60, "Didn't finish homework")
+
+        assert sensor.extra_state_attributes["disable_reason"] == (
+            "Didn't finish homework"
+        )
+        mock_points_storage.set_privilege_disable_reason.assert_called_once_with(
+            "alice", "extra_dessert", "Didn't finish homework"
+        )
+
+    @pytest.mark.asyncio
+    async def test_omitting_reason_leaves_existing_one_untouched(
+        self, hass, manual_privilege, mock_manager, mock_points_storage
+    ) -> None:
+        """Extending a block (e.g. via the UI's stepper) without a reason keeps it."""
+        sensor = PrivilegeSensor(hass, manual_privilege, "alice", mock_manager)
+        await sensor.async_temporarily_disable(60, "Didn't finish homework")
+        mock_points_storage.set_privilege_disable_reason.reset_mock()
+
+        await sensor.async_temporarily_disable(120)
+
+        mock_points_storage.set_privilege_disable_reason.assert_not_called()
+        assert sensor.extra_state_attributes["disable_reason"] == (
+            "Didn't finish homework"
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_reason_attribute_when_none_given(
+        self, hass, manual_privilege, mock_manager
+    ) -> None:
+        """The attribute is omitted entirely rather than present-but-empty."""
+        sensor = PrivilegeSensor(hass, manual_privilege, "alice", mock_manager)
+
+        await sensor.async_temporarily_disable(60)
+
+        assert "disable_reason" not in sensor.extra_state_attributes
+
+    @pytest.mark.asyncio
+    async def test_clearing_the_block_clears_the_reason(
+        self, hass, manual_privilege, mock_manager
+    ) -> None:
+        """Ending a block (manually or via expiry) also clears its justification."""
+        sensor = PrivilegeSensor(hass, manual_privilege, "alice", mock_manager)
+        await sensor.async_temporarily_disable(60, "Didn't finish homework")
+
+        await sensor.async_clear_temporary_disable()
+
+        assert "disable_reason" not in sensor.extra_state_attributes
+
+    @pytest.mark.asyncio
+    async def test_enabling_clears_the_reason(
+        self, hass, manual_privilege, mock_manager
+    ) -> None:
+        """A manual enable/disable supersedes any in-progress block and its reason."""
+        sensor = PrivilegeSensor(hass, manual_privilege, "alice", mock_manager)
+        await sensor.async_temporarily_disable(60, "Didn't finish homework")
+
+        await sensor.async_enable()
+
+        assert "disable_reason" not in sensor.extra_state_attributes
+
+    @pytest.mark.asyncio
+    async def test_adjust_with_reason_edits_it_in_place(
+        self, hass, manual_privilege, mock_manager, mock_points_storage
+    ) -> None:
+        """A zero (or nonzero) adjustment carrying a reason overwrites the old one."""
+        sensor = PrivilegeSensor(hass, manual_privilege, "alice", mock_manager)
+        await sensor.async_temporarily_disable(60, "Didn't finish homework")
+
+        await sensor.async_adjust_temporary_disable(0, "Actually, was rude to sister")
+
+        assert sensor.extra_state_attributes["disable_reason"] == (
+            "Actually, was rude to sister"
+        )
+        mock_points_storage.set_privilege_disable_reason.assert_called_with(
+            "alice", "extra_dessert", "Actually, was rude to sister"
+        )
+        # Still blocked - editing the reason alone shouldn't end the block.
+        assert sensor.get_state() == PrivilegeState.TEMPORARILY_DISABLED.value
+
+    @pytest.mark.asyncio
+    async def test_adjust_with_empty_reason_clears_it(
+        self, hass, manual_privilege, mock_manager
+    ) -> None:
+        """Explicitly saving an empty reason clears it, same as never setting one."""
+        sensor = PrivilegeSensor(hass, manual_privilege, "alice", mock_manager)
+        await sensor.async_temporarily_disable(60, "Didn't finish homework")
+
+        await sensor.async_adjust_temporary_disable(0, "")
+
+        assert "disable_reason" not in sensor.extra_state_attributes
+
+    @pytest.mark.asyncio
+    async def test_adjust_without_reason_leaves_it_untouched(
+        self, hass, manual_privilege, mock_manager, mock_points_storage
+    ) -> None:
+        """Adjusting duration alone (the existing stepper behavior) doesn't touch it."""
+        sensor = PrivilegeSensor(hass, manual_privilege, "alice", mock_manager)
+        await sensor.async_temporarily_disable(60, "Didn't finish homework")
+        mock_points_storage.set_privilege_disable_reason.reset_mock()
+
+        await sensor.async_adjust_temporary_disable(30)
+
+        mock_points_storage.set_privilege_disable_reason.assert_not_called()
+        assert sensor.extra_state_attributes["disable_reason"] == (
+            "Didn't finish homework"
+        )
+
+
 class TestClearTemporaryDisable:
     """Tests for async_clear_temporary_disable."""
 
@@ -199,3 +317,44 @@ class TestAdjustTemporaryDisableExpiry:
 
         assert sensor.get_state() == PrivilegeState.ENABLED.value
         assert sensor.disable_until is None
+
+
+class TestCaseInsensitiveAssigneeMatching:
+    """
+    Assignee matching must not be case-sensitive.
+
+    A privilege created with a titlecased assignee (e.g. via the GUI, which
+    may autocapitalize) should still see chores created for the lowercase
+    equivalent of the same person.
+    """
+
+    def test_all_chores_done_check_ignores_assignee_casing(
+        self, hass, mock_manager
+    ) -> None:
+        """
+        A no-linked-chores privilege for "Alice" should see "alice"'s chores.
+
+        Regression test: _are_linked_chores_complete used to compare
+        self._assignee against each chore sensor's assignee with a plain
+        `!=`, so a privilege assigned to "Alice" would never see any chores
+        created for "alice", even though they're the same person.
+        """
+        privilege = PrivilegeConfig(
+            name="Screen Time",
+            slug="screen_time",
+            behavior=PrivilegeBehavior.AUTOMATIC,
+            assignees=["Alice"],
+        )
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+        chore_sensor = ChoreSensor(hass, chore, "alice")
+        chore_sensor.set_state(ChoreState.COMPLETE.value)
+        mock_manager.sensors["alice_dishes"] = chore_sensor
+
+        sensor = PrivilegeSensor(hass, privilege, "Alice", mock_manager)
+
+        assert sensor._are_linked_chores_complete() is True
