@@ -16,7 +16,9 @@ from homeassistant.const import Platform
 
 from .config_loader import ConfigLoader, ConfigLoadError
 from .const import CONFIG_FILE_NAME, DOMAIN, LOGGER
+from .data import PointsStorage
 from .data import SimpleChoresData as SimpleChoresData
+from .number import async_setup_platform as async_setup_number_platform
 from .panel import (
     async_register_history_card,
     async_register_panel,
@@ -40,6 +42,7 @@ if TYPE_CHECKING:
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
+    Platform.NUMBER,
 ]
 
 # Configuration schema - accepts empty config since we use file-based configuration
@@ -89,6 +92,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:  # noqa: ARG00
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["config_loader"] = config_loader
 
+    # Create (but don't yet load - see PointsStorage.async_load's docstring)
+    # points storage up front, so the sensor and number platforms share
+    # this single instance instead of racing to create their own - see
+    # number.py's async_setup_entry/async_setup_platform.
+    hass.data[DOMAIN]["points_storage"] = PointsStorage(hass)
+
     # Start watching for config file changes
     await config_loader.async_start_watching()
 
@@ -101,6 +110,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:  # noqa: ARG00
         """Add entities callback (no-op for YAML setup)."""
 
     await async_setup_platform(hass, {}, add_entities, None)
+    await async_setup_number_platform(hass, {}, add_entities, None)
 
     # Register services
     await async_setup_services(hass)
@@ -155,6 +165,12 @@ async def async_setup_entry(
     # Store in hass.data
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["config_loader"] = config_loader
+
+    # Create (but don't yet load - see PointsStorage.async_load's docstring)
+    # points storage up front, so the sensor and number platforms share
+    # this single instance instead of racing to create their own - see
+    # number.py's async_setup_entry/async_setup_platform.
+    hass.data[DOMAIN]["points_storage"] = PointsStorage(hass)
 
     # Start watching for config file changes
     await config_loader.async_start_watching()

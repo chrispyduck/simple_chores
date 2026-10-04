@@ -36,6 +36,7 @@ from .const import (
     ATTR_POINTS,
     ATTR_POINTS_BY_ASSIGNEE,
     ATTR_PRIVILEGE_SLUG,
+    ATTR_REASON,
     ATTR_RESET_TOTAL,
     ATTR_SLUG,
     ATTR_USER,
@@ -494,6 +495,7 @@ TEMPORARILY_DISABLE_PRIVILEGE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_USER): cv.string,
         vol.Required(ATTR_PRIVILEGE_SLUG): cv.string,
         vol.Required(ATTR_DURATION): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        vol.Optional(ATTR_REASON): cv.string,
     }
 )
 
@@ -504,6 +506,7 @@ ADJUST_TEMPORARY_DISABLE_SCHEMA = vol.Schema(
         vol.Required(ATTR_ADJUSTMENT): vol.All(
             vol.Coerce(int), vol.Range(min=-1000000, max=1000000)
         ),
+        vol.Optional(ATTR_REASON): cv.string,
     }
 )
 
@@ -1890,6 +1893,23 @@ async def handle_adjust_points(hass: HomeAssistant, call: ServiceCall) -> None:
     # Add the adjustment (can be positive or negative)
     new_total = await points_storage.add_points(user, adjustment)
 
+    # Log to history too, so a manual point adjustment doesn't silently
+    # diverge the live total from a sum of the audit log's points_delta -
+    # see _record_history, which this mirrors for the chore-tied case.
+    history_storage = hass.data[DOMAIN].get("history_storage")
+    if history_storage:
+        await history_storage.async_add_entry(
+            action="adjusted",
+            chore_slug="",
+            chore_name="Manual adjustment",
+            category=None,
+            assignee=user,
+            points_delta=adjustment,
+            points_total=new_total,
+            points_missed=0,
+            missed_total=points_storage.get_points_missed(user),
+        )
+
     LOGGER.info(
         "Adjusted points for user '%s' by %d. New total: %d",
         user,
@@ -1927,6 +1947,8 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
         LOGGER.error(msg)
         raise HomeAssistantError(msg)
 
+    history_storage = hass.data[DOMAIN].get("history_storage")
+
     # Get list of users to reset
     if user:
         users_to_reset = [user]
@@ -1942,6 +1964,11 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
 
     # Reset points for each user
     for assignee in users_to_reset:
+        # Capture the pre-reset lifetime total so the history entry below
+        # can carry a reconcilable points_delta instead of silently erasing
+        # it from a sum-of-history reconstruction (see _record_history).
+        old_total = points_storage.get_points(assignee)
+
         # Always reset points_earned and points_missed
         # (points_possible is calculated dynamically)
         await points_storage.set_points_earned(assignee, 0)
@@ -1950,6 +1977,19 @@ async def handle_reset_points(hass: HomeAssistant, call: ServiceCall) -> None:
         # Optionally reset total points
         if reset_total:
             await points_storage.set_points(assignee, 0)
+
+        if history_storage:
+            await history_storage.async_add_entry(
+                action="points_reset",
+                chore_slug="",
+                chore_name="Points reset",
+                category=None,
+                assignee=assignee,
+                points_delta=-old_total if reset_total else 0,
+                points_total=points_storage.get_points(assignee),
+                points_missed=0,
+                missed_total=points_storage.get_points_missed(assignee),
+            )
 
         LOGGER.debug(
             "Reset points for '%s': points_earned=0, points_missed=0, total_points=%s",
@@ -2182,13 +2222,15 @@ async def handle_temporarily_disable_privilege(
     user = call.data.get(ATTR_USER)
     privilege_slug = call.data[ATTR_PRIVILEGE_SLUG]
     duration = call.data[ATTR_DURATION]
+    reason = call.data.get(ATTR_REASON)
 
     LOGGER.info(
         "Service 'temporarily_disable_privilege' called with "
-        "user='%s', privilege_slug='%s', duration=%d",
+        "user='%s', privilege_slug='%s', duration=%d, reason='%s'",
         user or "all assignees",
         privilege_slug,
         duration,
+        reason or "",
     )
 
     _validate_integration_loaded(hass)
@@ -2211,7 +2253,7 @@ async def handle_temporarily_disable_privilege(
     # Temporarily disable all matching privilege sensors
     state_update_tasks = []
     for sensor in matching_sensors:
-        await sensor.async_temporarily_disable(duration)
+        await sensor.async_temporarily_disable(duration, reason)
         state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
 
     if state_update_tasks:
@@ -2240,13 +2282,15 @@ async def handle_adjust_temporary_disable(
     user = call.data.get(ATTR_USER)
     privilege_slug = call.data[ATTR_PRIVILEGE_SLUG]
     adjustment = call.data[ATTR_ADJUSTMENT]
+    reason = call.data.get(ATTR_REASON)
 
     LOGGER.info(
         "Service 'adjust_temporary_disable' called with "
-        "user='%s', privilege_slug='%s', adjustment=%d",
+        "user='%s', privilege_slug='%s', adjustment=%d, reason='%s'",
         user or "all assignees",
         privilege_slug,
         adjustment,
+        reason or "",
     )
 
     _validate_integration_loaded(hass)
@@ -2269,7 +2313,7 @@ async def handle_adjust_temporary_disable(
     # Adjust temporary disable for all matching privilege sensors
     state_update_tasks = []
     for sensor in matching_sensors:
-        await sensor.async_adjust_temporary_disable(adjustment)
+        await sensor.async_adjust_temporary_disable(adjustment, reason)
         state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
 
     if state_update_tasks:

@@ -15,6 +15,7 @@ import {
   parseCategories,
   parseChores,
   parseHistoryEntries,
+  parsePointGoals,
   parsePrivileges,
   parseSettings,
   parseSummaries,
@@ -218,6 +219,33 @@ describe("parsePrivileges", () => {
     const [privilege] = parsePrivileges(states);
     expect(privilege.assignees[0].disableUntil).toBe("2026-01-01T12:00:00+00:00");
   });
+
+  it("captures disable_reason when present", () => {
+    const states = statesOf([
+      "sensor.simple_chore_privilege_alice_tv",
+      "Temporarily Disabled",
+      {
+        privilege_slug: "tv",
+        assignee: "alice",
+        disable_until: "2026-01-01T12:00:00+00:00",
+        disable_reason: "Didn't finish homework",
+      },
+    ]);
+
+    const [privilege] = parsePrivileges(states);
+    expect(privilege.assignees[0].disableReason).toBe("Didn't finish homework");
+  });
+
+  it("leaves disableReason undefined when not blocked", () => {
+    const states = statesOf([
+      "sensor.simple_chore_privilege_alice_tv",
+      "Enabled",
+      { privilege_slug: "tv", assignee: "alice" },
+    ]);
+
+    const [privilege] = parsePrivileges(states);
+    expect(privilege.assignees[0].disableReason).toBeUndefined();
+  });
 });
 
 describe("parseCategories", () => {
@@ -321,6 +349,49 @@ describe("parseSummaries", () => {
       ["sensor.simple_chore_meta_alice_summary", "0", { assignee: "alice" }]
     );
     expect(parseSummaries(states).map((s) => s.assignee)).toEqual(["alice", "bob"]);
+  });
+});
+
+describe("parsePointGoals", () => {
+  it("parses a per-assignee point goal number entity", () => {
+    const states = statesOf([
+      "number.simple_chore_meta_alice_point_goal",
+      "100",
+      { assignee: "alice" },
+    ]);
+
+    const [goal] = parsePointGoals(states);
+    expect(goal).toMatchObject({
+      assignee: "alice",
+      entityId: "number.simple_chore_meta_alice_point_goal",
+      value: 100,
+    });
+  });
+
+  it("does not pick up summary sensors despite the shared meta_ segment", () => {
+    const states = statesOf([
+      "sensor.simple_chore_meta_alice_summary",
+      "0",
+      { assignee: "alice" },
+    ]);
+    expect(parsePointGoals(states)).toEqual([]);
+  });
+
+  it("defaults to 0 for a non-numeric state", () => {
+    const states = statesOf([
+      "number.simple_chore_meta_alice_point_goal",
+      "unavailable",
+      { assignee: "alice" },
+    ]);
+    expect(parsePointGoals(states)[0].value).toBe(0);
+  });
+
+  it("sorts goals by assignee", () => {
+    const states = statesOf(
+      ["number.simple_chore_meta_bob_point_goal", "0", { assignee: "bob" }],
+      ["number.simple_chore_meta_alice_point_goal", "0", { assignee: "alice" }]
+    );
+    expect(parsePointGoals(states).map((g) => g.assignee)).toEqual(["alice", "bob"]);
   });
 });
 
@@ -555,5 +626,7 @@ describe("historyActionLabel", () => {
     expect(historyActionLabel("uncompleted")).toBe("Un-completed");
     expect(historyActionLabel("reset")).toBe("Reset");
     expect(historyActionLabel("missed")).toBe("Missed");
+    expect(historyActionLabel("adjusted")).toBe("Adjusted");
+    expect(historyActionLabel("points_reset")).toBe("Points reset");
   });
 });

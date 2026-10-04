@@ -3,7 +3,7 @@
  * Copyright 2019 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const R = globalThis, j = R.ShadowRoot && (R.ShadyCSS === void 0 || R.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, B = Symbol(), X = /* @__PURE__ */ new WeakMap();
+const R = globalThis, L = R.ShadowRoot && (R.ShadyCSS === void 0 || R.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, B = Symbol(), X = /* @__PURE__ */ new WeakMap();
 let le = class {
   constructor(e, t, s) {
     if (this._$cssResult$ = !0, s !== B) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
@@ -12,7 +12,7 @@ let le = class {
   get styleSheet() {
     let e = this.o;
     const t = this.t;
-    if (j && e === void 0) {
+    if (L && e === void 0) {
       const s = t !== void 0 && t.length === 1;
       s && (e = X.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), s && X.set(t, e));
     }
@@ -30,12 +30,12 @@ const _e = (i) => new le(typeof i == "string" ? i : i + "", void 0, B), ce = (i,
   })(r) + i[o + 1], i[0]);
   return new le(t, i, B);
 }, me = (i, e) => {
-  if (j) i.adoptedStyleSheets = e.map((t) => t instanceof CSSStyleSheet ? t : t.styleSheet);
+  if (L) i.adoptedStyleSheets = e.map((t) => t instanceof CSSStyleSheet ? t : t.styleSheet);
   else for (const t of e) {
     const s = document.createElement("style"), r = R.litNonce;
     r !== void 0 && s.setAttribute("nonce", r), s.textContent = t.cssText, i.appendChild(s);
   }
-}, Z = j ? (i) => i : (i) => i instanceof CSSStyleSheet ? ((e) => {
+}, Z = L ? (i) => i : (i) => i instanceof CSSStyleSheet ? ((e) => {
   let t = "";
   for (const s of e.cssRules) t += s.cssText;
   return _e(t);
@@ -262,8 +262,8 @@ b.elementStyles = [], b.shadowRootOptions = { mode: "open" }, b[C("elementProper
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const q = globalThis, Q = (i) => i, k = q.trustedTypes, ee = k ? k.createPolicy("lit-html", { createHTML: (i) => i }) : void 0, he = "$lit$", m = `lit$${Math.random().toFixed(9).slice(2)}$`, de = "?" + m, xe = `<${de}>`, y = document, P = () => y.createComment(""), T = (i) => i === null || typeof i != "object" && typeof i != "function", F = Array.isArray, Se = (i) => F(i) || typeof i?.[Symbol.iterator] == "function", L = `[ 	
-\f\r]`, S = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, te = /-->/g, se = />/g, $ = RegExp(`>|${L}(?:([^\\s"'>=/]+)(${L}*=${L}*(?:[^ 	
+const q = globalThis, Q = (i) => i, k = q.trustedTypes, ee = k ? k.createPolicy("lit-html", { createHTML: (i) => i }) : void 0, he = "$lit$", m = `lit$${Math.random().toFixed(9).slice(2)}$`, de = "?" + m, xe = `<${de}>`, y = document, P = () => y.createComment(""), T = (i) => i === null || typeof i != "object" && typeof i != "function", F = Array.isArray, Se = (i) => F(i) || typeof i?.[Symbol.iterator] == "function", j = `[ 	
+\f\r]`, S = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, te = /-->/g, se = />/g, $ = RegExp(`>|${j}(?:([^\\s"'>=/]+)(${j}*=${j}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), ie = /'/g, re = /"/g, pe = /^(?:script|style|textarea|title)$/i, Ce = (i) => (e, ...t) => ({ _$litType$: i, strings: e, values: t }), f = Ce(1), w = Symbol.for("lit-noChange"), h = Symbol.for("lit-nothing"), oe = /* @__PURE__ */ new WeakMap(), v = y.createTreeWalker(y, 129);
 function ue(i, e) {
   if (!F(i) || !i.hasOwnProperty("raw")) throw Error("invalid template strings array");
@@ -569,11 +569,11 @@ function Y(i) {
 function D(i) {
   return Y({ ...i, state: !0, attribute: !1 });
 }
-const ze = "simple_chores", Le = "sensor.simple_chore_", je = "sensor.simple_chore_privilege_", Be = "sensor.simple_chore_meta_", We = "sensor.simple_chore_category_", qe = "mdi:clipboard-list-outline";
+const ze = "simple_chores", je = "sensor.simple_chore_", Le = "sensor.simple_chore_privilege_", Be = "sensor.simple_chore_meta_", We = "sensor.simple_chore_category_", qe = "mdi:clipboard-list-outline";
 function Fe(i) {
   const e = /* @__PURE__ */ new Map();
   for (const [t, s] of Object.entries(i)) {
-    if (!t.startsWith(Le) || t.startsWith(je) || t.startsWith(Be) || t.startsWith(We)) continue;
+    if (!t.startsWith(je) || t.startsWith(Le) || t.startsWith(Be) || t.startsWith(We)) continue;
     const r = s.attributes, o = r.chore_slug;
     if (!o) continue;
     let n = e.get(o);
@@ -633,12 +633,16 @@ function Ke(i) {
       return "Reset";
     case "missed":
       return "Missed";
+    case "adjusted":
+      return "Adjusted";
+    case "points_reset":
+      return "Points reset";
     default:
       return i;
   }
 }
 function Xe(i) {
-  return i === "completed" ? "state-good" : i === "uncompleted" ? "state-bad" : i === "missed" ? "state-warn" : "state-neutral";
+  return i === "completed" ? "state-good" : i === "uncompleted" ? "state-bad" : i === "missed" || i === "adjusted" ? "state-warn" : "state-neutral";
 }
 var Ze = Object.defineProperty, Ge = Object.getOwnPropertyDescriptor, K = (i, e, t, s) => {
   for (var r = s > 1 ? void 0 : s ? Ge(e, t) : e, o = i.length - 1, n; o >= 0; o--)

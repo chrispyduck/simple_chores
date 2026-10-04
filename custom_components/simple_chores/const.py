@@ -92,6 +92,7 @@ ATTR_PRIVILEGE_SLUG = "privilege_slug"
 ATTR_DURATION = "duration"
 ATTR_BEHAVIOR = "behavior"
 ATTR_LINKED_CHORES = "linked_chores"
+ATTR_REASON = "reason"
 
 # --- Admin panel -------------------------------------------------------
 # Path (relative to this package) of the built frontend bundle. The bundle

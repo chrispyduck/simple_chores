@@ -3627,9 +3627,11 @@ class TestClearTemporaryDisableService:
         manager.points_storage.get_privilege_state = Mock(return_value=None)
         manager.points_storage.get_privilege_disable_until = Mock(return_value=None)
         manager.points_storage.get_privilege_pre_block_state = Mock(return_value=None)
+        manager.points_storage.get_privilege_disable_reason = Mock(return_value=None)
         manager.points_storage.set_privilege_state = AsyncMock()
         manager.points_storage.set_privilege_disable_until = AsyncMock()
         manager.points_storage.set_privilege_pre_block_state = AsyncMock()
+        manager.points_storage.set_privilege_disable_reason = AsyncMock()
         sensor = PrivilegeSensor(hass, privilege, "alice", manager)
         sensor.async_update_ha_state = AsyncMock()
         return sensor
@@ -4713,3 +4715,81 @@ class TestHistoryService:
                 {},
                 blocking=True,
             )
+
+    @pytest.mark.asyncio
+    async def test_adjust_points_records_adjusted_entry(self, hass) -> None:
+        """
+        adjust_points appends an 'adjusted' entry.
+
+        Regression test: this service used to mutate PointsStorage with no
+        corresponding history entry at all, so summing history's
+        points_delta could never reconstruct the live total.
+        """
+        history_storage = await self._setup(hass)
+        points_storage = hass.data[DOMAIN]["points_storage"]
+        await points_storage.set_points("alice", 10)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_ADJUST_POINTS,
+            {ATTR_USER: "alice", ATTR_ADJUSTMENT: 5},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert len(entries) == 1
+        assert entries[0]["action"] == "adjusted"
+        assert entries[0]["assignee"] == "alice"
+        assert entries[0]["points_delta"] == 5
+        assert entries[0]["points_total"] == 15
+
+    @pytest.mark.asyncio
+    async def test_reset_points_records_points_reset_entry(self, hass) -> None:
+        """
+        reset_points(reset_total=True) appends a 'points_reset' entry.
+
+        Regression test: this service used to zero out the lifetime total
+        with no history entry, silently erasing it from a sum-of-history
+        reconstruction. The logged points_delta must be the negative of the
+        pre-reset total, so summing history still reconciles with the
+        (now-zero) live total.
+        """
+        history_storage = await self._setup(hass)
+        points_storage = hass.data[DOMAIN]["points_storage"]
+        await points_storage.set_points("alice", 40)
+        await points_storage.set_points_earned("alice", 12)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_POINTS,
+            {ATTR_USER: "alice", ATTR_RESET_TOTAL: True},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert len(entries) == 1
+        assert entries[0]["action"] == "points_reset"
+        assert entries[0]["assignee"] == "alice"
+        assert entries[0]["points_delta"] == -40
+        assert entries[0]["points_total"] == 0
+
+    @pytest.mark.asyncio
+    async def test_reset_points_without_reset_total_logs_zero_delta(self, hass) -> None:
+        """Resetting only earned/missed (not the lifetime total) logs a 0 delta."""
+        history_storage = await self._setup(hass)
+        points_storage = hass.data[DOMAIN]["points_storage"]
+        await points_storage.set_points("alice", 40)
+        await points_storage.set_points_earned("alice", 12)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_POINTS,
+            {ATTR_USER: "alice", ATTR_RESET_TOTAL: False},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert len(entries) == 1
+        assert entries[0]["action"] == "points_reset"
+        assert entries[0]["points_delta"] == 0
+        assert entries[0]["points_total"] == 40
