@@ -998,6 +998,10 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
     - manual: Reset to NOT_REQUESTED
     - once: Delete the chore entirely
 
+    Manual chores still pending (never completed) count towards cumulative
+    points_missed and are also reset to NOT_REQUESTED, so they stop showing
+    up as available to complete.
+
     Daily and weekly chores are reset automatically on their own schedule
     (see new_day_time/new_week_day/new_week_time in settings) and are left
     untouched here.
@@ -1034,9 +1038,9 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
         if sensor.chore.frequency not in _START_NEW_DAY_FREQUENCIES:
             continue
 
-        # Only reset sensors that are currently COMPLETE
         # Read current state using public accessor
-        if sensor.get_state() == ChoreState.COMPLETE.value:
+        current_state = sensor.get_state()
+        if current_state == ChoreState.COMPLETE.value:
             chore_frequency = sensor.chore.frequency
             await _clear_completion_tracking(hass, sensor)
             await _record_history(hass, sensor, "reset")
@@ -1050,6 +1054,17 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
                 state_changes.append((sensor, ChoreState.NOT_REQUESTED))
                 reset_count += 1
                 manual_count += 1
+        elif (
+            current_state == ChoreState.PENDING.value
+            and sensor.chore.frequency == ChoreFrequency.MANUAL
+        ):
+            # Already counted towards points_missed above - still Pending
+            # means it was never completed, so there's no completion
+            # tracking to clear. It still needs to leave Pending so it
+            # stops showing up as available to complete.
+            state_changes.append((sensor, ChoreState.NOT_REQUESTED))
+            reset_count += 1
+            manual_count += 1
 
     # Apply all state changes without triggering individual summary updates
     update_tasks = []
@@ -1631,7 +1646,8 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
     chores with a `manual` frequency:
     - manual chores that are complete are reset to NOT_REQUESTED
     - manual chores that are still pending count towards cumulative
-      points_missed, same as start_new_day does before it resets
+      points_missed, then are also reset to NOT_REQUESTED so they stop
+      showing up as available to complete
 
     Daily, weekly, and once chores in the category are left untouched - use
     start_new_day (or the other by-category actions) for those.
@@ -1664,6 +1680,7 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
 
     affected_users: set[str] = set()
     sensors_to_reset = []
+    sensors_missed = []
 
     for sensor in matching_sensors:
         current_state = sensor.get_state()
@@ -1671,6 +1688,7 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
         if current_state == ChoreState.PENDING.value:
             affected_users.add(sensor.assignee)
             await _record_missed_points(hass, sensor)
+            sensors_missed.append(sensor)
         elif current_state == ChoreState.COMPLETE.value:
             affected_users.add(sensor.assignee)
             sensors_to_reset.append(sensor)
@@ -1689,13 +1707,29 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
             sensor.chore.name,
         )
 
+    # Missed chores were still Pending - they weren't completed, so there's
+    # no completion tracking to clear and no "reset" history entry needed
+    # (the "missed" entry above already covers it), but they still need to
+    # leave Pending so they stop showing up as available to complete.
+    for sensor in sensors_missed:
+        sensor.set_state(ChoreState.NOT_REQUESTED.value)
+        update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+
+        LOGGER.info(
+            "Finalize by category: %s's chore '%s' missed and cleared",
+            sensor.assignee,
+            sensor.chore.name,
+        )
+
     if update_tasks:
         await asyncio.gather(*update_tasks)
 
     LOGGER.info(
-        "Finalized category '%s': %d manual chore(s) reset for %d assignee(s)",
+        "Finalized category '%s': %d manual chore(s) reset, %d marked missed, "
+        "for %d assignee(s)",
         category_slug,
         len(sensors_to_reset),
+        len(sensors_missed),
         len(affected_users),
     )
 

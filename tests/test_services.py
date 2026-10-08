@@ -1310,8 +1310,9 @@ class TestFinalizeByCategoryService:
             blocking=True,
         )
 
-        # Pending chores are left alone (not reset) but still counted missed
-        assert sensor_pending.get_state() == ChoreState.PENDING.value
+        # Pending chores are counted missed, then cleared to NOT_REQUESTED so
+        # they stop showing up as available to complete.
+        assert sensor_pending.get_state() == ChoreState.NOT_REQUESTED.value
         assert points_storage.get_points_missed("alice") == 10
 
     @pytest.mark.asyncio
@@ -1680,8 +1681,8 @@ class TestStartNewDayService:
         sensor_bob.async_update_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_start_new_day_ignores_non_complete(self, hass) -> None:
-        """Test start_new_day only affects completed chores."""
+    async def test_start_new_day_ignores_not_requested(self, hass) -> None:
+        """Test start_new_day leaves not-requested chores untouched."""
         chore = ChoreConfig(
             name="Manual Task",
             slug="manual_task",
@@ -1692,7 +1693,7 @@ class TestStartNewDayService:
         with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
             sensor = ChoreSensor(hass, chore, "alice")
             sensor.async_update_ha_state = AsyncMock()
-            sensor.set_state(ChoreState.PENDING.value)
+            sensor.set_state(ChoreState.NOT_REQUESTED.value)
 
         hass.data[DOMAIN] = {"sensors": {"alice_manual_task": sensor}}
 
@@ -1707,7 +1708,7 @@ class TestStartNewDayService:
             blocking=True,
         )
 
-        # Sensor should not be updated since it's not COMPLETE
+        # Sensor should not be updated since it's not COMPLETE or PENDING
         sensor.async_update_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1767,9 +1768,10 @@ class TestStartNewDayService:
         # Manual complete should be reset to NOT_REQUESTED
         assert sensor1.native_value == ChoreState.NOT_REQUESTED.value
         sensor1.async_update_ha_state.assert_called()
-        # Manual pending should not be touched
-        assert sensor2.native_value == ChoreState.PENDING.value
-        sensor2.async_update_ha_state.assert_not_called()
+        # Manual pending counts as missed and is also cleared to
+        # NOT_REQUESTED so it stops showing up as available to complete.
+        assert sensor2.native_value == ChoreState.NOT_REQUESTED.value
+        sensor2.async_update_ha_state.assert_called()
         # Daily complete is left untouched by start_new_day
         assert sensor3.native_value == ChoreState.COMPLETE.value
         sensor3.async_update_ha_state.assert_not_called()
