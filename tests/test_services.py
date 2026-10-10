@@ -3634,6 +3634,10 @@ class TestClearTemporaryDisableService:
         manager.points_storage.set_privilege_disable_until = AsyncMock()
         manager.points_storage.set_privilege_pre_block_state = AsyncMock()
         manager.points_storage.set_privilege_disable_reason = AsyncMock()
+        manager.points_storage.get_points = Mock(return_value=0)
+        manager.points_storage.get_points_missed = Mock(return_value=0)
+        manager.history_storage = Mock()
+        manager.history_storage.async_add_entry = AsyncMock()
         sensor = PrivilegeSensor(hass, privilege, "alice", manager)
         sensor.async_update_ha_state = AsyncMock()
         return sensor

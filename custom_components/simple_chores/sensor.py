@@ -1074,6 +1074,29 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         """Set the state value."""
         self._attr_native_value = state
 
+    async def _record_history(
+        self,
+        action: str,
+        *,
+        reason: str | None = None,
+        duration_minutes: int | None = None,
+    ) -> None:
+        """Append a privilege state-change entry to the audit log."""
+        points_storage = self._manager.points_storage
+        await self._manager.history_storage.async_add_entry(
+            action=action,
+            chore_slug=self._privilege.slug,
+            chore_name=self._privilege.name,
+            category=None,
+            assignee=self._assignee,
+            points_delta=0,
+            points_total=points_storage.get_points(self._assignee),
+            points_missed=0,
+            missed_total=points_storage.get_points_missed(self._assignee),
+            reason=reason,
+            duration_minutes=duration_minutes,
+        )
+
     def update_privilege_config(self, privilege: PrivilegeConfig) -> None:
         """Update the privilege configuration."""
         self._privilege = privilege
@@ -1085,28 +1108,23 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         """
         Check if all linked chores are complete for this assignee.
 
-        If linked_chores is empty, checks that ALL requested chores (pending or
-        complete) for this assignee are complete. This allows privileges to be
-        granted when "all chores are done" without listing each one explicitly.
+        If linked_chores is empty, checks that this assignee has no chore
+        currently Pending. That's true both when every chore they've been
+        asked to do today is already Complete, and when nothing has been
+        requested of them at all (or auto-finalize has since reset their
+        completed chores back to Not Requested) - in either case there's
+        nothing outstanding, so the privilege should be granted rather than
+        waiting on a chore that was never asked for.
         """
         if not self._privilege.linked_chores:
-            # No specific chores linked - check ALL requested chores for this assignee
-            has_requested_chores = False
             for sensor in self._manager.sensors.values():
                 if sanitize_entity_id(sensor.assignee) != sanitize_entity_id(
                     self._assignee
                 ):
                     continue
-                state = sensor.get_state()
-                # Only consider chores that have been requested (pending or complete)
-                if state == ChoreState.PENDING.value:
-                    # Has a pending chore - not all done
+                if sensor.get_state() == ChoreState.PENDING.value:
                     return False
-                if state == ChoreState.COMPLETE.value:
-                    has_requested_chores = True
-            # Return True only if there's at least one completed chore
-            # (prevents enabling when no chores have been requested at all)
-            return has_requested_chores
+            return True
 
         for chore_slug in self._privilege.linked_chores:
             sensor_id = (
@@ -1114,13 +1132,19 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             )
             sensor = self._manager.sensors.get(sensor_id)
             if not sensor:
-                # If sensor doesn't exist, chore is not complete
+                # Not every linked chore is assigned to every assignee of the
+                # privilege (e.g. a shared privilege listing chores split
+                # across siblings) - a chore that was never asked of this
+                # person can't count against them, so skip it rather than
+                # block the privilege on something they were never asked to
+                # do.
                 LOGGER.debug(
-                    "Linked chore sensor not found: %s for privilege %s",
-                    sensor_id,
+                    "Linked chore '%s' isn't assigned to %s - skipping for '%s'",
+                    chore_slug,
+                    self._assignee,
                     self._privilege.slug,
                 )
-                return False
+                continue
             if sensor.get_state() != ChoreState.COMPLETE.value:
                 return False
         return True
@@ -1161,6 +1185,11 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
                     await self._manager.points_storage.set_privilege_state(
                         self._assignee, self._privilege.slug, restored_state
                     )
+                    await self._record_history(
+                        "privilege_enabled"
+                        if restored_state == PrivilegeState.ENABLED.value
+                        else "privilege_disabled"
+                    )
                     LOGGER.info(
                         "Privilege '%s' temporary disable for %s ended, restored to %s",
                         self._privilege.name,
@@ -1181,6 +1210,11 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             self._attr_native_value = new_state
             await self._manager.points_storage.set_privilege_state(
                 self._assignee, self._privilege.slug, new_state
+            )
+            await self._record_history(
+                "privilege_enabled"
+                if new_state == PrivilegeState.ENABLED.value
+                else "privilege_disabled"
             )
             LOGGER.info(
                 "Privilege '%s' for %s automatically changed to %s",
@@ -1209,6 +1243,7 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         await self._manager.points_storage.set_privilege_state(
             self._assignee, self._privilege.slug, PrivilegeState.ENABLED.value
         )
+        await self._record_history("privilege_enabled")
         LOGGER.info(
             "Privilege '%s' manually enabled for %s",
             self._privilege.name,
@@ -1235,6 +1270,7 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
         await self._manager.points_storage.set_privilege_state(
             self._assignee, self._privilege.slug, PrivilegeState.DISABLED.value
         )
+        await self._record_history("privilege_disabled")
         LOGGER.info(
             "Privilege '%s' manually disabled for %s",
             self._privilege.name,
@@ -1273,6 +1309,11 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
             self._assignee,
             self._privilege.slug,
             PrivilegeState.TEMPORARILY_DISABLED.value,
+        )
+        await self._record_history(
+            "privilege_temporarily_disabled",
+            reason=self._disable_reason,
+            duration_minutes=duration_minutes,
         )
         LOGGER.info(
             "Privilege '%s' temporarily disabled for %s until %s%s",

@@ -540,6 +540,13 @@ export function displayName(
  * "points_reset" is a reset_points call clearing earned/missed and
  * optionally the lifetime total - its points_delta is the negative of the
  * pre-reset lifetime total when that was cleared, or 0 otherwise.
+ * "privilege_enabled"/"privilege_disabled" fire whenever a privilege's state
+ * actually changes to that value - whether from enable_privilege/
+ * disable_privilege, or automatically as linked chores are completed/
+ * uncompleted, or when a temporary disable expires or is cleared and the
+ * privilege falls back to its prior state. "privilege_temporarily_disabled"
+ * fires on temporarily_disable_privilege; its `reason`/`durationMinutes`
+ * carry the block's justification and length.
  */
 export type HistoryAction =
   | "completed"
@@ -547,7 +554,10 @@ export type HistoryAction =
   | "reset"
   | "missed"
   | "adjusted"
-  | "points_reset";
+  | "points_reset"
+  | "privilege_enabled"
+  | "privilege_disabled"
+  | "privilege_temporarily_disabled";
 
 /** Every HistoryAction value, for building the History tab's event-type filter. */
 export const HISTORY_ACTIONS: HistoryAction[] = [
@@ -557,6 +567,9 @@ export const HISTORY_ACTIONS: HistoryAction[] = [
   "missed",
   "adjusted",
   "points_reset",
+  "privilege_enabled",
+  "privilege_disabled",
+  "privilege_temporarily_disabled",
 ];
 
 export interface HistoryEntry {
@@ -578,6 +591,10 @@ export interface HistoryEntry {
    * entry, or null for entries logged before missed points were tracked.
    */
   missedTotal: number | null;
+  /** Justification given for a "privilege_temporarily_disabled" entry, if any. */
+  reason: string | null;
+  /** Block length in minutes for a "privilege_temporarily_disabled" entry. */
+  durationMinutes: number | null;
 }
 
 /**
@@ -599,6 +616,8 @@ export function parseHistoryEntries(raw: any[] | undefined | null): HistoryEntry
     pointsTotal: e.points_total ?? 0,
     pointsMissed: e.points_missed ?? 0,
     missedTotal: e.missed_total ?? null,
+    reason: e.reason ?? null,
+    durationMinutes: e.duration_minutes ?? null,
   }));
 }
 
@@ -617,6 +636,12 @@ export function historyActionLabel(action: HistoryAction): string {
       return "Adjusted";
     case "points_reset":
       return "Points reset";
+    case "privilege_enabled":
+      return "Privilege enabled";
+    case "privilege_disabled":
+      return "Privilege disabled";
+    case "privilege_temporarily_disabled":
+      return "Privilege temporarily disabled";
     default:
       return action;
   }
@@ -625,8 +650,11 @@ export function historyActionLabel(action: HistoryAction): string {
 /** state-chip CSS modifier class for a HistoryAction, matching the History tab. */
 export function historyActionClass(action: HistoryAction): string {
   if (action === "completed") return "state-good";
+  if (action === "privilege_enabled") return "state-good";
   if (action === "uncompleted") return "state-bad";
+  if (action === "privilege_disabled") return "state-bad";
   if (action === "missed") return "state-warn";
   if (action === "adjusted") return "state-warn";
+  if (action === "privilege_temporarily_disabled") return "state-warn";
   return "state-neutral";
 }

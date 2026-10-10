@@ -10,6 +10,7 @@ import {
   choreToDraft,
   displayName,
   emptyChoreDraft,
+  historyActionClass,
   historyActionLabel,
   knownAssignees,
   parseCategories,
@@ -578,6 +579,8 @@ describe("parseHistoryEntries", () => {
         pointsTotal: 10,
         pointsMissed: 0,
         missedTotal: null,
+        reason: null,
+        durationMinutes: null,
       },
     ]);
   });
@@ -618,6 +621,38 @@ describe("parseHistoryEntries", () => {
     expect(entry.pointsMissed).toBe(5);
     expect(entry.missedTotal).toBe(12);
   });
+
+  it("parses a privilege temporary-disable entry's reason and duration", () => {
+    const [entry] = parseHistoryEntries([
+      {
+        id: "abc123",
+        timestamp: "2026-01-01T12:00:00+00:00",
+        action: "privilege_temporarily_disabled",
+        chore_slug: "screen_time",
+        chore_name: "Screen Time",
+        assignee: "alice",
+        reason: "Sent to time-out",
+        duration_minutes: 30,
+      },
+    ]);
+    expect(entry.action).toBe("privilege_temporarily_disabled");
+    expect(entry.reason).toBe("Sent to time-out");
+    expect(entry.durationMinutes).toBe(30);
+  });
+
+  it("defaults reason and durationMinutes to null when absent", () => {
+    const [entry] = parseHistoryEntries([
+      {
+        id: "abc123",
+        timestamp: "2026-01-01T12:00:00+00:00",
+        action: "privilege_enabled",
+        chore_slug: "screen_time",
+        assignee: "alice",
+      },
+    ]);
+    expect(entry.reason).toBeNull();
+    expect(entry.durationMinutes).toBeNull();
+  });
 });
 
 describe("historyActionLabel", () => {
@@ -628,5 +663,22 @@ describe("historyActionLabel", () => {
     expect(historyActionLabel("missed")).toBe("Missed");
     expect(historyActionLabel("adjusted")).toBe("Adjusted");
     expect(historyActionLabel("points_reset")).toBe("Points reset");
+    expect(historyActionLabel("privilege_enabled")).toBe("Privilege enabled");
+    expect(historyActionLabel("privilege_disabled")).toBe("Privilege disabled");
+    expect(historyActionLabel("privilege_temporarily_disabled")).toBe(
+      "Privilege temporarily disabled"
+    );
+  });
+});
+
+describe("historyActionClass", () => {
+  it("classes each known action", () => {
+    expect(historyActionClass("completed")).toBe("state-good");
+    expect(historyActionClass("privilege_enabled")).toBe("state-good");
+    expect(historyActionClass("uncompleted")).toBe("state-bad");
+    expect(historyActionClass("privilege_disabled")).toBe("state-bad");
+    expect(historyActionClass("missed")).toBe("state-warn");
+    expect(historyActionClass("privilege_temporarily_disabled")).toBe("state-warn");
+    expect(historyActionClass("reset")).toBe("state-neutral");
   });
 });
