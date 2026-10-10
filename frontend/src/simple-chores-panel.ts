@@ -1414,7 +1414,11 @@ export class SimpleChoresPanel extends LitElement {
         </div>
         <div class="history-cell history-chore">
           <div class="name">${entry.choreName}</div>
-          ${categoryName ? html`<div class="meta">${categoryName}</div>` : nothing}
+          ${categoryName
+            ? html`<div class="meta">${categoryName}</div>`
+            : entry.reason
+              ? html`<div class="meta">"${entry.reason}"</div>`
+              : nothing}
         </div>
         <div class="history-cell history-assignee">
           ${this._displayName(entry.assignee)}

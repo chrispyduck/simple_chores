@@ -352,6 +352,8 @@ class HistoryStorage:
         points_total: int,
         points_missed: int = 0,
         missed_total: int = 0,
+        reason: str | None = None,
+        duration_minutes: int | None = None,
     ) -> dict[str, Any]:
         """Append a new entry, evicting the oldest past MAX_HISTORY_ENTRIES."""
         entry: dict[str, Any] = {
@@ -366,6 +368,8 @@ class HistoryStorage:
             "points_total": points_total,
             "points_missed": points_missed,
             "missed_total": missed_total,
+            "reason": reason,
+            "duration_minutes": duration_minutes,
         }
         self._entries.append(entry)
         if len(self._entries) > MAX_HISTORY_ENTRIES:

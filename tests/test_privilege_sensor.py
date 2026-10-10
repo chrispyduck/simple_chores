@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.simple_chores.data import PointsStorage
+from custom_components.simple_chores.data import HistoryStorage, PointsStorage
 from custom_components.simple_chores.models import (
     ChoreConfig,
     ChoreFrequency,
@@ -37,6 +37,7 @@ def mock_manager(mock_points_storage: MagicMock) -> MagicMock:
     """Build a ChoreSensorManager double exposing just what PrivilegeSensor reads."""
     manager = MagicMock()
     manager.points_storage = mock_points_storage
+    manager.history_storage = MagicMock(spec=HistoryStorage)
     manager.sensors = {}
     return manager
 
@@ -358,3 +359,124 @@ class TestCaseInsensitiveAssigneeMatching:
         sensor = PrivilegeSensor(hass, privilege, "Alice", mock_manager)
 
         assert sensor._are_linked_chores_complete() is True
+
+
+class TestLinkedChoreNotAssignedToPerson:
+    """
+    A linked chore not assigned to this person must not block the privilege.
+
+    E.g. a privilege shared across siblings whose linked_chores list is the
+    union of everyone's chores, or a stale slug left over from a chore that
+    was reassigned away from this person.
+    """
+
+    def test_unassigned_linked_chore_is_skipped_not_treated_as_incomplete(
+        self, hass, mock_manager
+    ) -> None:
+        """
+        Only chores actually assigned to this person must be complete.
+
+        A linked chore that was never assigned to them doesn't count against
+        them.
+        """
+        privilege = PrivilegeConfig(
+            name="Use Tablet",
+            slug="tablet",
+            behavior=PrivilegeBehavior.AUTOMATIC,
+            linked_chores=["dishes", "take_out_recycling"],
+            assignees=["alice"],
+        )
+        # alice has a sensor for "dishes" (complete) but none for
+        # "take_out_recycling" - that chore belongs to a sibling.
+        _link_chore(hass, mock_manager, complete=True)
+
+        sensor = PrivilegeSensor(hass, privilege, "alice", mock_manager)
+
+        assert sensor._are_linked_chores_complete() is True
+
+    def test_still_blocks_on_an_assigned_but_incomplete_chore(
+        self, hass, mock_manager
+    ) -> None:
+        """Skipping unassigned chores must not turn into skipping all checks."""
+        privilege = PrivilegeConfig(
+            name="Use Tablet",
+            slug="tablet",
+            behavior=PrivilegeBehavior.AUTOMATIC,
+            linked_chores=["dishes", "take_out_recycling"],
+            assignees=["alice"],
+        )
+        # alice's own linked chore ("dishes") is still pending.
+        _link_chore(hass, mock_manager, complete=False)
+
+        sensor = PrivilegeSensor(hass, privilege, "alice", mock_manager)
+
+        assert sensor._are_linked_chores_complete() is False
+
+
+class TestNoLinkedChoresNothingOutstanding:
+    """
+    A no-linked-chores privilege is Enabled whenever nothing is Pending.
+
+    That's true both when this assignee finished everything requested of
+    them, and when nothing has been requested at all (including after
+    auto-finalize resets a completed chore back to Not Requested, which
+    must not re-disable the privilege).
+    """
+
+    def test_enabled_when_nothing_has_ever_been_requested(
+        self, hass, mock_manager
+    ) -> None:
+        """No chores exist for this assignee at all - nothing outstanding."""
+        privilege = PrivilegeConfig(
+            name="Watch TV",
+            slug="watch_tv",
+            behavior=PrivilegeBehavior.AUTOMATIC,
+            assignees=["alice"],
+        )
+        sensor = PrivilegeSensor(hass, privilege, "alice", mock_manager)
+
+        assert sensor._are_linked_chores_complete() is True
+
+    def test_enabled_once_auto_finalize_resets_chore_to_not_requested(
+        self, hass, mock_manager
+    ) -> None:
+        """
+        Regression test: auto-finalize resetting a chore must not disable this.
+
+        A completed chore auto-finalizing back to Not Requested must not
+        flip this privilege back to Disabled - there's still nothing
+        Pending, so it should stay Enabled.
+        """
+        privilege = PrivilegeConfig(
+            name="Watch TV",
+            slug="watch_tv",
+            behavior=PrivilegeBehavior.AUTOMATIC,
+            assignees=["alice"],
+        )
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+        chore_sensor = ChoreSensor(hass, chore, "alice")
+        chore_sensor.set_state(ChoreState.NOT_REQUESTED.value)
+        mock_manager.sensors["alice_dishes"] = chore_sensor
+
+        sensor = PrivilegeSensor(hass, privilege, "alice", mock_manager)
+
+        assert sensor._are_linked_chores_complete() is True
+
+    def test_still_disabled_while_a_chore_is_pending(self, hass, mock_manager) -> None:
+        """A genuinely outstanding chore still blocks the privilege."""
+        privilege = PrivilegeConfig(
+            name="Watch TV",
+            slug="watch_tv",
+            behavior=PrivilegeBehavior.AUTOMATIC,
+            assignees=["alice"],
+        )
+        _link_chore(hass, mock_manager, complete=False)
+
+        sensor = PrivilegeSensor(hass, privilege, "alice", mock_manager)
+
+        assert sensor._are_linked_chores_complete() is False
