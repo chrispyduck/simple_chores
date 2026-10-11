@@ -110,6 +110,14 @@ export class SimpleChoresPanel extends LitElement {
   @state() private _userAdjustInput: Record<string, string> = {};
   /** Draft "reason" text per privilege block row, keyed by `${slug}:${assignee}`. */
   @state() private _disableReasonInput: Record<string, string> = {};
+  /**
+   * Rows (keyed by `${slug}:${assignee}`) whose temporary-block "until" time
+   * just changed server-side, so the date should flash briefly. Populated by
+   * `_detectUntilChanges` and self-clears after the animation finishes.
+   */
+  @state() private _untilFlash: Record<string, boolean> = {};
+  /** Last-seen `disableUntil` per row, used to detect the change above. */
+  private _lastDisableUntil: Record<string, string | undefined> = {};
   @state() private _historyEntries: HistoryEntry[] | null = null;
   @state() private _historyLoading = false;
   @state() private _historyUserFilter = "";
@@ -130,6 +138,46 @@ export class SimpleChoresPanel extends LitElement {
       this._loadedUserDisplayNames = true;
       this._loadUserDisplayNames();
     }
+  }
+
+  protected willUpdate(changed: PropertyValues): void {
+    if (changed.has("hass") && this.hass) {
+      this._detectUntilChanges();
+    }
+  }
+
+  /**
+   * Compare each privilege assignee's `disableUntil` against what we last
+   * saw, so a server-side change (extending/shortening a block, or a fresh
+   * block appearing) can flash the "until" date instead of silently
+   * updating - easy to miss otherwise since it's just text in a chip.
+   */
+  private _detectUntilChanges(): void {
+    const privileges = parsePrivileges(this.hass.states);
+    let flashed: Record<string, boolean> | null = null;
+    for (const p of privileges) {
+      for (const a of p.assignees) {
+        const key = this._disableReasonKey(p.slug, a.assignee);
+        const previous = this._lastDisableUntil[key];
+        if (previous !== undefined && previous !== a.disableUntil) {
+          flashed = flashed ?? {};
+          flashed[key] = true;
+          this._scheduleUntilFlashClear(key);
+        }
+        this._lastDisableUntil[key] = a.disableUntil;
+      }
+    }
+    if (flashed) {
+      this._untilFlash = { ...this._untilFlash, ...flashed };
+    }
+  }
+
+  private _scheduleUntilFlashClear(key: string): void {
+    setTimeout(() => {
+      if (!this._untilFlash[key]) return;
+      const { [key]: _discard, ...rest } = this._untilFlash;
+      this._untilFlash = rest;
+    }, 900);
   }
 
   /**
@@ -603,12 +651,15 @@ export class SimpleChoresPanel extends LitElement {
                   <span class="assignee-name">${this._displayName(a.assignee)}</span>
                   <span class="state-chip ${this._privilegeStateClass(a.state)}">
                     ${a.state}${isTemp && a.disableUntil
-                      ? html` (${this._formatUntil(a.disableUntil)})`
+                      ? html`<span
+                          class="until-date ${this._untilFlash[reasonKey]
+                            ? "until-flash"
+                            : ""}"
+                        >
+                          (${this._formatUntil(a.disableUntil)})</span
+                        >`
                       : nothing}
                   </span>
-                  ${isTemp && a.disableReason
-                    ? html`<span class="disable-reason">"${a.disableReason}"</span>`
-                    : nothing}
                   ${privilege.behavior === "manual"
                     ? html`
                         <div class="row-actions">
@@ -668,44 +719,50 @@ export class SimpleChoresPanel extends LitElement {
                       }
                     }}
                   />
-                  ${this._renderBlockStepper(
-                    "1h",
-                    isTemp,
-                    () =>
-                      this._adjustTemporaryDisable(privilege.slug, a.assignee, -60),
-                    () =>
-                      this._addTemporaryDisable(
-                        privilege.slug,
-                        a.assignee,
-                        isTemp,
-                        60,
-                        reasonKey
-                      )
-                  )}
-                  ${this._renderBlockStepper(
-                    "1d",
-                    isTemp,
-                    () =>
-                      this._adjustTemporaryDisable(privilege.slug, a.assignee, -1440),
-                    () =>
-                      this._addTemporaryDisable(
-                        privilege.slug,
-                        a.assignee,
-                        isTemp,
-                        1440,
-                        reasonKey
-                      )
-                  )}
-                  <button
-                    class="action-chip"
-                    title="Clear the block now"
-                    ?disabled=${!isTemp}
-                    @click=${() =>
-                      this._clearTemporaryDisable(privilege.slug, a.assignee)}
-                  >
-                    <ha-icon icon="mdi:backspace-outline"></ha-icon>
-                    <span>Clear</span>
-                  </button>
+                  <div class="block-stepper-buttons">
+                    ${this._renderBlockStepper(
+                      "1h",
+                      isTemp,
+                      () =>
+                        this._adjustTemporaryDisable(privilege.slug, a.assignee, -60),
+                      () =>
+                        this._addTemporaryDisable(
+                          privilege.slug,
+                          a.assignee,
+                          isTemp,
+                          60,
+                          reasonKey
+                        )
+                    )}
+                    ${this._renderBlockStepper(
+                      "1d",
+                      isTemp,
+                      () =>
+                        this._adjustTemporaryDisable(
+                          privilege.slug,
+                          a.assignee,
+                          -1440
+                        ),
+                      () =>
+                        this._addTemporaryDisable(
+                          privilege.slug,
+                          a.assignee,
+                          isTemp,
+                          1440,
+                          reasonKey
+                        )
+                    )}
+                    <button
+                      class="action-chip"
+                      title="Clear the block now"
+                      ?disabled=${!isTemp}
+                      @click=${() =>
+                        this._clearTemporaryDisable(privilege.slug, a.assignee)}
+                    >
+                      <ha-icon icon="mdi:backspace-outline"></ha-icon>
+                      <span>Clear</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             `;
@@ -2423,9 +2480,14 @@ export class SimpleChoresPanel extends LitElement {
       border-radius: 50%;
       display: inline-flex;
       color: var(--secondary-text-color, #727272);
+      transition: transform 0.12s ease, background 0.12s ease;
     }
     .icon-button:hover {
       background: rgba(0, 0, 0, 0.06);
+    }
+    .icon-button:active {
+      transform: scale(0.88);
+      background: rgba(0, 0, 0, 0.12);
     }
     .icon-button.danger {
       color: var(--error-color, #db4437);
@@ -2443,12 +2505,17 @@ export class SimpleChoresPanel extends LitElement {
       font: inherit;
       font-size: 12px;
       white-space: nowrap;
+      transition: transform 0.12s ease, background 0.12s ease;
     }
     .action-chip ha-icon {
       --mdc-icon-size: 16px;
     }
     .action-chip:hover:not(:disabled) {
       background: rgba(0, 0, 0, 0.06);
+    }
+    .action-chip:active:not(:disabled) {
+      transform: scale(0.94);
+      background: rgba(0, 0, 0, 0.12);
     }
     .action-chip:disabled {
       opacity: 0.5;
@@ -2518,7 +2585,7 @@ export class SimpleChoresPanel extends LitElement {
     .assignee-row.privilege-row {
       flex-direction: column;
       align-items: stretch;
-      gap: 8px;
+      gap: 10px;
     }
     .assignee-name {
       flex: 1;
@@ -2547,12 +2614,15 @@ export class SimpleChoresPanel extends LitElement {
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 8px 10px;
+      background: var(--secondary-background-color, rgba(0, 0, 0, 0.03));
+      border-radius: 8px;
+      padding: 8px 10px;
     }
     .block-steppers-label {
       font-size: 12px;
       color: var(--secondary-text-color, #727272);
-      margin-right: 2px;
+      white-space: nowrap;
     }
     .disable-reason-input {
       flex: 1;
@@ -2565,10 +2635,18 @@ export class SimpleChoresPanel extends LitElement {
       background: var(--card-background-color, #fff);
       color: var(--primary-text-color, #212121);
     }
-    .disable-reason {
-      font-size: 12px;
-      font-style: italic;
-      color: var(--secondary-text-color, #727272);
+    /*
+     * Steppers + clear button stay together as one unit when wrapping,
+     * instead of each one wrapping independently and scattering across
+     * two ragged lines.
+     */
+    .block-stepper-buttons {
+      display: flex;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 6px;
+      flex-shrink: 0;
+      margin-left: auto;
     }
     .stepper {
       display: inline-flex;
@@ -2587,12 +2665,17 @@ export class SimpleChoresPanel extends LitElement {
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      transition: transform 0.1s ease, background 0.12s ease;
     }
     .stepper button ha-icon {
       --mdc-icon-size: 16px;
     }
     .stepper button:hover:not(:disabled) {
       background: rgba(0, 0, 0, 0.06);
+    }
+    .stepper button:active:not(:disabled) {
+      transform: scale(0.85);
+      background: rgba(0, 0, 0, 0.12);
     }
     .stepper button:disabled {
       color: var(--disabled-text-color, #bdbdbd);
@@ -2619,6 +2702,24 @@ export class SimpleChoresPanel extends LitElement {
       padding: 2px 8px;
       border-radius: 999px;
       white-space: nowrap;
+    }
+    .until-date {
+      display: inline-block;
+    }
+    .until-flash {
+      animation: until-pulse 0.9s ease;
+    }
+    @keyframes until-pulse {
+      0% {
+        transform: scale(1);
+      }
+      25% {
+        transform: scale(1.18);
+        color: var(--primary-color, #03a9f4);
+      }
+      100% {
+        transform: scale(1);
+      }
     }
     .state-good {
       background: rgba(76, 175, 80, 0.15);
