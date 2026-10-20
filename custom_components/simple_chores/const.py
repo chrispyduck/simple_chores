@@ -38,6 +38,7 @@ SERVICE_RESET_POINTS = "reset_points"
 # History (audit log) services
 SERVICE_GET_HISTORY = "get_history"
 SERVICE_RESET_HISTORY = "reset_history"
+SERVICE_UNDO_COMPLETION = "undo_completion"
 
 # Category-scoped chore services
 SERVICE_MARK_COMPLETE_BY_CATEGORY = "mark_complete_by_category"
@@ -79,6 +80,8 @@ ATTR_RESET_TOTAL = "reset_total"
 ATTR_CATEGORY = "category"
 ATTR_CATEGORY_SLUG = "category_slug"
 ATTR_NEW_SLUG = "new_slug"
+ATTR_ENTRY_ID = "entry_id"
+ATTR_PENALTY = "penalty"
 
 # Settings service parameters
 ATTR_AUTO_FINALIZE_ENABLED = "auto_finalize_enabled"

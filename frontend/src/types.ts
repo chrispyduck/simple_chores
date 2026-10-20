@@ -536,10 +536,16 @@ export function displayName(
  * since points were already awarded when it was completed. "missed" is
  * logged when start_new_day / finalize_by_category counts a chore that
  * wasn't completed towards the assignee's cumulative points_missed.
- * "adjusted" is a manual adjust_points call (not tied to any chore).
+ * "adjusted" is a manual adjust_points call (not tied to any chore), whose
+ * `reason` (if given) is the admin's justification for the adjustment.
  * "points_reset" is a reset_points call clearing earned/missed and
  * optionally the lifetime total - its points_delta is the negative of the
  * pre-reset lifetime total when that was cleared, or 0 otherwise.
+ * "undone" is logged by undo_completion, which reverses a "completed"
+ * entry: its points_delta is the negative of that entry's award plus any
+ * `penalty` withheld on top, and `reason` carries the admin's justification.
+ * The reversed "completed" entry itself gets flagged `undone` (not a
+ * separate action - the History tab strikes that row through instead).
  * "privilege_enabled"/"privilege_disabled" fire whenever a privilege's state
  * actually changes to that value - whether from enable_privilege/
  * disable_privilege, or automatically as linked chores are completed/
@@ -555,6 +561,7 @@ export type HistoryAction =
   | "missed"
   | "adjusted"
   | "points_reset"
+  | "undone"
   | "privilege_enabled"
   | "privilege_disabled"
   | "privilege_temporarily_disabled";
@@ -567,6 +574,7 @@ export const HISTORY_ACTIONS: HistoryAction[] = [
   "missed",
   "adjusted",
   "points_reset",
+  "undone",
   "privilege_enabled",
   "privilege_disabled",
   "privilege_temporarily_disabled",
@@ -591,10 +599,17 @@ export interface HistoryEntry {
    * entry, or null for entries logged before missed points were tracked.
    */
   missedTotal: number | null;
-  /** Justification given for a "privilege_temporarily_disabled" entry, if any. */
+  /**
+   * Justification given for a "privilege_temporarily_disabled", "adjusted",
+   * or "undone" entry, if any.
+   */
   reason: string | null;
   /** Block length in minutes for a "privilege_temporarily_disabled" entry. */
   durationMinutes: number | null;
+  /** Extra points withheld on top of the reversed award - "undone" entries only. */
+  penalty: number | null;
+  /** True once this "completed" entry has been reversed by undo_completion. */
+  undone: boolean;
 }
 
 /**
@@ -618,6 +633,8 @@ export function parseHistoryEntries(raw: any[] | undefined | null): HistoryEntry
     missedTotal: e.missed_total ?? null,
     reason: e.reason ?? null,
     durationMinutes: e.duration_minutes ?? null,
+    penalty: e.penalty ?? null,
+    undone: e.undone ?? false,
   }));
 }
 
@@ -636,12 +653,14 @@ export function historyActionLabel(action: HistoryAction): string {
       return "Adjusted";
     case "points_reset":
       return "Points reset";
+    case "undone":
+      return "Undone";
     case "privilege_enabled":
       return "Privilege enabled";
     case "privilege_disabled":
       return "Privilege disabled";
     case "privilege_temporarily_disabled":
-      return "Privilege temporarily disabled";
+      return "Temporarily disabled";
     default:
       return action;
   }
@@ -652,6 +671,7 @@ export function historyActionClass(action: HistoryAction): string {
   if (action === "completed") return "state-good";
   if (action === "privilege_enabled") return "state-good";
   if (action === "uncompleted") return "state-bad";
+  if (action === "undone") return "state-bad";
   if (action === "privilege_disabled") return "state-bad";
   if (action === "missed") return "state-warn";
   if (action === "adjusted") return "state-warn";

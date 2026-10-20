@@ -79,6 +79,16 @@ interface ResetPointsDraft {
   resetTotal: boolean;
 }
 
+/** Draft backing the History tab's "undo completion" dialog. */
+interface UndoCompletionDraft {
+  entryId: string;
+  choreName: string;
+  assignee: string;
+  awarded: number; // the original entry's points_delta, for the confirmation copy
+  reason: string;
+  penalty: number;
+}
+
 /**
  * Admin panel for managing Simple Chores chore and privilege definitions,
  * and for day-to-day operations (marking chores, enabling/disabling
@@ -107,7 +117,9 @@ export class SimpleChoresPanel extends LitElement {
   @state() private _userDisplayNames: Record<string, string> = {};
   @state() private _settingsDraft: SettingsDraft | null = null;
   @state() private _resetPointsDialog: ResetPointsDraft | null = null;
+  @state() private _undoDialog: UndoCompletionDraft | null = null;
   @state() private _userAdjustInput: Record<string, string> = {};
+  @state() private _userAdjustReasonInput: Record<string, string> = {};
   /** Draft "reason" text per privilege block row, keyed by `${slug}:${assignee}`. */
   @state() private _disableReasonInput: Record<string, string> = {};
   /**
@@ -287,6 +299,7 @@ export class SimpleChoresPanel extends LitElement {
 
       ${this._dialog ? this._renderDialog(chores, categories, assignees) : nothing}
       ${this._resetPointsDialog ? this._renderResetPointsDialog(assignees) : nothing}
+      ${this._undoDialog ? this._renderUndoDialog() : nothing}
     `;
   }
 
@@ -1254,6 +1267,18 @@ export class SimpleChoresPanel extends LitElement {
               };
             }}
           />
+          <input
+            type="text"
+            class="user-adjust-reason-input"
+            placeholder="Reason (optional)"
+            .value=${this._userAdjustReasonInput[assignee] ?? ""}
+            @input=${(e: Event) => {
+              this._userAdjustReasonInput = {
+                ...this._userAdjustReasonInput,
+                [assignee]: (e.target as HTMLInputElement).value,
+              };
+            }}
+          />
           <button @click=${() => this._applyPointsAdjustment(assignee)}>
             Apply adjustment
           </button>
@@ -1276,13 +1301,17 @@ export class SimpleChoresPanel extends LitElement {
       return;
     }
 
+    const reason = this._userAdjustReasonInput[assignee]?.trim();
+
     const ok = await this._call(SERVICE_DOMAIN, "adjust_points", {
       user: assignee,
       adjustment,
+      ...(reason ? { reason } : {}),
     });
 
     if (ok) {
       this._userAdjustInput = { ...this._userAdjustInput, [assignee]: "" };
+      this._userAdjustReasonInput = { ...this._userAdjustReasonInput, [assignee]: "" };
     }
   }
 
@@ -1445,6 +1474,7 @@ export class SimpleChoresPanel extends LitElement {
                   <div class="history-cell history-action">Action</div>
                   <div class="history-cell history-earned">Earned</div>
                   <div class="history-cell history-missed">Missed</div>
+                  <div class="history-cell history-undo">Undo</div>
                 </div>
                 ${sorted.map((entry) => this._renderHistoryRow(entry, categories))}
               </div>
@@ -1463,19 +1493,23 @@ export class SimpleChoresPanel extends LitElement {
           ? "points-negative"
           : "";
     const pointsLabel = entry.pointsDelta > 0 ? `+${entry.pointsDelta}` : entry.pointsDelta;
+    // Undoing a completion doesn't change the chore - only an admin can do
+    // it, and only once (see undo_completion's `undone` guard).
+    const canUndo =
+      entry.action === "completed" && !entry.undone && Boolean(this.hass.user?.is_admin);
 
     return html`
-      <div class="history-row">
+      <div class="history-row ${entry.undone ? "history-row-undone" : ""}">
         <div class="history-cell history-time">
           ${this._formatHistoryTimestamp(entry.timestamp)}
         </div>
         <div class="history-cell history-chore">
           <div class="name">${entry.choreName}</div>
-          ${categoryName
-            ? html`<div class="meta">${categoryName}</div>`
-            : entry.reason
-              ? html`<div class="meta">"${entry.reason}"</div>`
-              : nothing}
+          ${categoryName ? html`<div class="meta">${categoryName}</div>` : nothing}
+          ${entry.reason ? html`<div class="meta">"${entry.reason}"</div>` : nothing}
+          ${entry.penalty
+            ? html`<div class="meta points-negative">Penalty: -${entry.penalty}</div>`
+            : nothing}
         </div>
         <div class="history-cell history-assignee">
           ${this._displayName(entry.assignee)}
@@ -1500,8 +1534,117 @@ export class SimpleChoresPanel extends LitElement {
             ? html`<div class="meta points-negative">+${entry.pointsMissed}</div>`
             : nothing}
         </div>
+        <div class="history-cell history-undo">
+          ${canUndo
+            ? html`
+                <button
+                  type="button"
+                  class="action-chip history-undo-button"
+                  title="Reverse this completion's points"
+                  @click=${() => this._openUndoDialog(entry)}
+                >
+                  <ha-icon icon="mdi:undo"></ha-icon>
+                  <span>Undo</span>
+                </button>
+              `
+            : entry.undone
+              ? html`<span class="meta">Undone</span>`
+              : html`<span class="meta">—</span>`}
+        </div>
       </div>
     `;
+  }
+
+  private _openUndoDialog = (entry: HistoryEntry) => {
+    this._error = null;
+    this._undoDialog = {
+      entryId: entry.id,
+      choreName: entry.choreName,
+      assignee: entry.assignee,
+      awarded: entry.pointsDelta,
+      reason: "",
+      penalty: 0,
+    };
+  };
+
+  private _renderUndoDialog() {
+    const draft = this._undoDialog;
+    if (!draft) return nothing;
+    const total = draft.awarded + draft.penalty;
+
+    return html`
+      <div class="overlay" @click=${this._onUndoOverlayClick}>
+        <div class="dialog" role="dialog" aria-modal="true">
+          <div class="dialog-header">
+            <h2>Undo completion</h2>
+            <button class="icon-button" @click=${() => (this._undoDialog = null)}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="dialog-body">
+            <p class="hint danger-text">
+              Reverses "${draft.choreName}" for ${this._displayName(draft.assignee)},
+              clawing back the ${draft.awarded} point(s) it awarded${draft.penalty
+                ? html` plus a ${draft.penalty}-point penalty (${total} total)`
+                : nothing}. This cannot be undone.
+            </p>
+            <label>
+              Reason
+              <input
+                type="text"
+                placeholder="Why is this being undone?"
+                .value=${draft.reason}
+                @input=${(e: Event) => {
+                  draft.reason = (e.target as HTMLInputElement).value;
+                  this.requestUpdate();
+                }}
+              />
+            </label>
+            <label>
+              Penalty (extra points to withhold)
+              <input
+                type="number"
+                min="0"
+                .value=${String(draft.penalty)}
+                @input=${(e: Event) => {
+                  draft.penalty = Math.max(
+                    0,
+                    Number((e.target as HTMLInputElement).value) || 0
+                  );
+                  this.requestUpdate();
+                }}
+              />
+            </label>
+          </div>
+          <div class="dialog-footer">
+            <button @click=${() => (this._undoDialog = null)}>Cancel</button>
+            <button class="danger" ?disabled=${this._busy} @click=${() => this._confirmUndo()}>
+              Undo completion
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private _onUndoOverlayClick = (e: MouseEvent) => {
+    if (e.target === e.currentTarget) this._undoDialog = null;
+  };
+
+  private async _confirmUndo() {
+    const draft = this._undoDialog;
+    if (!draft) return;
+
+    const ok = await this._call(SERVICE_DOMAIN, "undo_completion", {
+      entry_id: draft.entryId,
+      penalty: draft.penalty,
+      ...(draft.reason.trim() ? { reason: draft.reason.trim() } : {}),
+    });
+
+    if (ok) {
+      this._undoDialog = null;
+      await this._loadHistory();
+    }
   }
 
   private _toggleHistoryActionFilter(action: HistoryAction): void {
@@ -2964,16 +3107,25 @@ export class SimpleChoresPanel extends LitElement {
     }
     .history-row {
       display: grid;
-      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.9fr 0.8fr;
+      grid-template-columns: 1.2fr 1.5fr 0.9fr 0.8fr 0.8fr 0.7fr 0.9fr;
       gap: 8px;
       align-items: center;
       padding: 10px 14px;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
       font-size: 13px;
-      min-width: 640px;
+      min-width: 760px;
     }
     .history-row:last-child {
       border-bottom: none;
+    }
+    /* A reversed completion stays in the log (it's an audit trail) but
+       reads as struck-through, matching the done-and-undone state. */
+    .history-row-undone {
+      opacity: 0.7;
+    }
+    .history-row-undone .history-cell.history-chore .name,
+    .history-row-undone .history-action .state-chip {
+      text-decoration: line-through;
     }
     .history-header {
       font-size: 12px;
@@ -2988,6 +3140,20 @@ export class SimpleChoresPanel extends LitElement {
     .history-cell .meta {
       font-size: 11px;
       color: var(--secondary-text-color, #727272);
+    }
+    .history-cell.history-undo {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      text-align: right;
+    }
+    .history-undo-button {
+      font-size: 11px;
+      padding: 2px 8px 2px 6px;
+      white-space: nowrap;
+    }
+    .history-undo-button ha-icon {
+      --mdc-icon-size: 14px;
     }
     .history-earned,
     .history-missed {
@@ -3101,6 +3267,17 @@ export class SimpleChoresPanel extends LitElement {
     }
     .user-adjust-input {
       width: 90px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--primary-text-color, #212121);
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .user-adjust-reason-input {
+      flex: 1;
+      min-width: 0;
       font: inherit;
       font-size: 14px;
       color: var(--primary-text-color, #212121);

@@ -4,7 +4,9 @@ from datetime import UTC, datetime, time, timedelta
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.auth.const import GROUP_ID_ADMIN
+from homeassistant.core import Context
+from homeassistant.exceptions import ServiceValidationError, Unauthorized
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
@@ -14,8 +16,11 @@ from custom_components.simple_chores.const import (
     ATTR_AUTO_FINALIZE_ENABLED,
     ATTR_CATEGORY_SLUG,
     ATTR_CHORE_SLUG,
+    ATTR_ENTRY_ID,
     ATTR_NEW_DAY_TIME,
+    ATTR_PENALTY,
     ATTR_PRIVILEGE_SLUG,
+    ATTR_REASON,
     ATTR_RESET_TOTAL,
     ATTR_USER,
     DOMAIN,
@@ -37,6 +42,7 @@ from custom_components.simple_chores.const import (
     SERVICE_RESET_HISTORY,
     SERVICE_RESET_POINTS,
     SERVICE_START_NEW_DAY,
+    SERVICE_UNDO_COMPLETION,
     SERVICE_UPDATE_CHORE,
     SERVICE_UPDATE_SETTINGS,
 )
@@ -71,6 +77,25 @@ def make_summary_update_mock(summary_sensor):
         await summary_sensor.async_update()
 
     return AsyncMock(side_effect=update_side_effect)
+
+
+async def _admin_context(hass) -> Context:
+    """Build a Context for a freshly created administrator user."""
+    user = await hass.auth.async_create_user("Admin", group_ids=[GROUP_ID_ADMIN])
+    return Context(user_id=user.id)
+
+
+async def _non_admin_context(hass) -> Context:
+    """
+    Build a Context for a freshly created non-admin user.
+
+    A user manager's very first non-system user is auto-promoted to owner
+    (and therefore admin) - see AuthManager._user_should_be_owner - so an
+    unrelated user is created first to keep this one from claiming that slot.
+    """
+    await hass.auth.async_create_user("Decoy")
+    user = await hass.auth.async_create_user("Kid")
+    return Context(user_id=user.id)
 
 
 @pytest.fixture(autouse=True)
@@ -121,6 +146,7 @@ class TestServiceSetup:
         assert hass.services.has_service(DOMAIN, SERVICE_RESET_POINTS)
         assert hass.services.has_service(DOMAIN, SERVICE_GET_HISTORY)
         assert hass.services.has_service(DOMAIN, SERVICE_RESET_HISTORY)
+        assert hass.services.has_service(DOMAIN, SERVICE_UNDO_COMPLETION)
         assert hass.services.has_service(DOMAIN, SERVICE_UPDATE_SETTINGS)
 
     @pytest.mark.asyncio
@@ -131,8 +157,9 @@ class TestServiceSetup:
         # Verify all services are in the correct domain
         services = hass.services.async_services_for_domain(DOMAIN)
         # 12 chore services (incl. finalize_one) + 7 category services
-        # + 1 settings service + 8 privilege services + 2 history services
-        assert len(services) == 30
+        # + 1 settings service + 8 privilege services + 3 history services -
+        # get_history, reset_history, undo_completion.
+        assert len(services) == 31
 
 
 class TestMarkCompleteService:
@@ -4799,3 +4826,240 @@ class TestHistoryService:
         assert entries[0]["action"] == "points_reset"
         assert entries[0]["points_delta"] == 0
         assert entries[0]["points_total"] == 40
+
+    @pytest.mark.asyncio
+    async def test_adjust_points_records_reason(self, hass) -> None:
+        """A reason passed to adjust_points is stored on its 'adjusted' entry."""
+        history_storage = await self._setup(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_ADJUST_POINTS,
+            {ATTR_USER: "alice", ATTR_ADJUSTMENT: 5, ATTR_REASON: "Bonus"},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert entries[0]["reason"] == "Bonus"
+
+    @pytest.mark.asyncio
+    async def test_adjust_points_without_reason_defaults_to_none(self, hass) -> None:
+        """Omitting the reason stores None, not an empty string."""
+        history_storage = await self._setup(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_ADJUST_POINTS,
+            {ATTR_USER: "alice", ATTR_ADJUSTMENT: 5},
+            blocking=True,
+        )
+
+        entries = history_storage.get_entries()
+        assert entries[0]["reason"] is None
+
+
+class TestUndoCompletionService:
+    """Tests for the undo_completion service (admin-only points clawback)."""
+
+    def _make_sensor(
+        self, hass, *, slug="dishes", assignee="alice", points=10
+    ) -> ChoreSensor:
+        chore = ChoreConfig(
+            name=slug.title(),
+            slug=slug,
+            frequency=ChoreFrequency.DAILY,
+            assignees=[assignee],
+            points=points,
+        )
+        with patch.object(ChoreSensor, "async_write_ha_state", Mock()):
+            sensor = ChoreSensor(hass, chore, assignee)
+            sensor.async_update_ha_state = AsyncMock()
+        return sensor
+
+    async def _setup(self, hass, *sensors):
+        from custom_components.simple_chores.data import HistoryStorage, PointsStorage
+
+        points_storage = PointsStorage(hass)
+        await points_storage.async_load()
+        history_storage = HistoryStorage(hass)
+        await history_storage.async_load()
+
+        hass.data[DOMAIN] = {
+            "sensors": {f"{s.assignee}_{s.chore.slug}": s for s in sensors},
+            "points_storage": points_storage,
+            "history_storage": history_storage,
+        }
+        await async_setup_services(hass)
+        return points_storage, history_storage
+
+    async def _complete(self, hass, *, user="alice", chore_slug="dishes") -> str:
+        """Mark the chore complete and return the resulting entry's id."""
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_MARK_COMPLETE,
+            {ATTR_USER: user, ATTR_CHORE_SLUG: chore_slug},
+            blocking=True,
+        )
+        history_storage = hass.data[DOMAIN]["history_storage"]
+        return history_storage.get_entries()[-1]["id"]
+
+    @pytest.mark.asyncio
+    async def test_undo_completion_claws_back_points_and_marks_undone(
+        self, hass
+    ) -> None:
+        """Undoing a completion reverses its points and flags the original entry."""
+        sensor = self._make_sensor(hass, points=10)
+        points_storage, history_storage = await self._setup(hass, sensor)
+        entry_id = await self._complete(hass)
+        assert points_storage.get_points("alice") == 10
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_UNDO_COMPLETION,
+            {ATTR_ENTRY_ID: entry_id, ATTR_REASON: "Didn't actually do it"},
+            blocking=True,
+            context=await _admin_context(hass),
+        )
+
+        assert points_storage.get_points("alice") == 0
+        assert points_storage.get_points_earned("alice") == 0
+
+        entries = history_storage.get_entries()
+        assert len(entries) == 2
+        original, undone = entries
+        assert original["id"] == entry_id
+        assert original["undone"] is True
+        assert undone["action"] == "undone"
+        assert undone["points_delta"] == -10
+        assert undone["points_total"] == 0
+        assert undone["reason"] == "Didn't actually do it"
+        assert undone["assignee"] == "alice"
+        assert undone["chore_slug"] == "dishes"
+
+    @pytest.mark.asyncio
+    async def test_undo_completion_with_penalty_withholds_extra_points(
+        self, hass
+    ) -> None:
+        """A penalty on top of the award is clawed back from the total only."""
+        sensor = self._make_sensor(hass, points=10)
+        points_storage, history_storage = await self._setup(hass, sensor)
+        entry_id = await self._complete(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_UNDO_COMPLETION,
+            {ATTR_ENTRY_ID: entry_id, ATTR_PENALTY: 5},
+            blocking=True,
+            context=await _admin_context(hass),
+        )
+
+        # 10 awarded + 5 penalty clawed back from the total...
+        assert points_storage.get_points("alice") == -5
+        # ...but points_earned only reverses the original award, not the penalty.
+        assert points_storage.get_points_earned("alice") == 0
+
+        undone = history_storage.get_entries()[-1]
+        assert undone["points_delta"] == -15
+        assert undone["penalty"] == 5
+
+    @pytest.mark.asyncio
+    async def test_undo_completion_rejects_non_admin(self, hass) -> None:
+        """A non-admin caller is rejected before anything is changed."""
+        sensor = self._make_sensor(hass, points=10)
+        points_storage, _ = await self._setup(hass, sensor)
+        entry_id = await self._complete(hass)
+
+        with pytest.raises(Unauthorized):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_UNDO_COMPLETION,
+                {ATTR_ENTRY_ID: entry_id},
+                blocking=True,
+                context=await _non_admin_context(hass),
+            )
+
+        assert points_storage.get_points("alice") == 10
+
+    @pytest.mark.asyncio
+    async def test_undo_completion_rejects_call_with_no_user(self, hass) -> None:
+        """A call with no associated user (e.g. an automation) is rejected too."""
+        sensor = self._make_sensor(hass, points=10)
+        await self._setup(hass, sensor)
+        entry_id = await self._complete(hass)
+
+        with pytest.raises(Unauthorized):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_UNDO_COMPLETION,
+                {ATTR_ENTRY_ID: entry_id},
+                blocking=True,
+            )
+
+    @pytest.mark.asyncio
+    async def test_undo_completion_rejects_unknown_entry_id(self, hass) -> None:
+        """An unrecognized entry_id raises a validation error."""
+        sensor = self._make_sensor(hass, points=10)
+        await self._setup(hass, sensor)
+
+        with pytest.raises(ServiceValidationError, match="No history entry found"):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_UNDO_COMPLETION,
+                {ATTR_ENTRY_ID: "not-a-real-id"},
+                blocking=True,
+                context=await _admin_context(hass),
+            )
+
+    @pytest.mark.asyncio
+    async def test_undo_completion_rejects_non_completed_entry(self, hass) -> None:
+        """Only a 'completed' entry can be undone - e.g. not a 'reset' entry."""
+        sensor = self._make_sensor(hass, points=10)
+        await self._setup(hass, sensor)
+        await self._complete(hass)
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_FINALIZE_ONE,
+            {ATTR_USER: "alice", ATTR_CHORE_SLUG: "dishes"},
+            blocking=True,
+        )
+        history_storage = hass.data[DOMAIN]["history_storage"]
+        reset_entry_id = next(
+            e["id"] for e in history_storage.get_entries() if e["action"] == "reset"
+        )
+
+        with pytest.raises(ServiceValidationError, match="not a completion"):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_UNDO_COMPLETION,
+                {ATTR_ENTRY_ID: reset_entry_id},
+                blocking=True,
+                context=await _admin_context(hass),
+            )
+
+    @pytest.mark.asyncio
+    async def test_undo_completion_rejects_double_undo(self, hass) -> None:
+        """Undoing the same entry twice raises instead of double-clawing points."""
+        sensor = self._make_sensor(hass, points=10)
+        points_storage, _ = await self._setup(hass, sensor)
+        entry_id = await self._complete(hass)
+        admin_context = await _admin_context(hass)
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_UNDO_COMPLETION,
+            {ATTR_ENTRY_ID: entry_id},
+            blocking=True,
+            context=admin_context,
+        )
+        assert points_storage.get_points("alice") == 0
+
+        with pytest.raises(ServiceValidationError, match="already been undone"):
+            await hass.services.async_call(
+                DOMAIN,
+                SERVICE_UNDO_COMPLETION,
+                {ATTR_ENTRY_ID: entry_id},
+                blocking=True,
+                context=admin_context,
+            )
+
+        assert points_storage.get_points("alice") == 0

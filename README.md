@@ -40,8 +40,9 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
   * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon. Pass `new_slug` to rename it; any privilege linking to it by slug is updated to match. Pass `points_by_assignee` (`"user:points,..."`) to set or clear per-assignee point overrides.
   * `simple_chores.delete_chore` - Remove a chore from the system.
   * `simple_chores.refresh_summary` - Force refresh of summary sensor attributes for one or all assignees.
-  * `simple_chores.adjust_points` - Manually adjusts an assignee's earned points by a specified amount (positive or negative). Useful for bonuses, penalties, or corrections.
+  * `simple_chores.adjust_points` - Manually adjusts an assignee's earned points by a specified amount (positive or negative). Useful for bonuses, penalties, or corrections. Takes an optional `reason`, shown in the History tab.
   * `simple_chores.reset_points` - Reset points tracking for one or all assignees. Always resets daily stats (points_missed, points_possible). Optionally resets total_points with `reset_total: true`.
+  * `simple_chores.undo_completion` - Administrators only. Reverses a completed chore's history entry: claws back the points it awarded, and optionally withholds an additional `penalty`. Takes the history entry's `entry_id`, an optional `penalty` (default 0), and an optional `reason`, both shown in the History tab. The reversed entry is struck through there and can't be undone twice. Never changes the chore's current state.
   * `simple_chores.update_settings` - Update integration-wide settings: `auto_finalize_enabled`, `auto_finalize_delay_minutes` (see Auto-finalize above), and `new_day_time`, `new_week_day`, `new_week_time` (see Automatic daily/weekly reset above).
 
 ## Installation

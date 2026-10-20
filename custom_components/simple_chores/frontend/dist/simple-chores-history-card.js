@@ -622,7 +622,9 @@ function Ye(i) {
     pointsMissed: e.points_missed ?? 0,
     missedTotal: e.missed_total ?? null,
     reason: e.reason ?? null,
-    durationMinutes: e.duration_minutes ?? null
+    durationMinutes: e.duration_minutes ?? null,
+    penalty: e.penalty ?? null,
+    undone: e.undone ?? !1
   })) : [];
 }
 function Ke(i) {
@@ -639,18 +641,20 @@ function Ke(i) {
       return "Adjusted";
     case "points_reset":
       return "Points reset";
+    case "undone":
+      return "Undone";
     case "privilege_enabled":
       return "Privilege enabled";
     case "privilege_disabled":
       return "Privilege disabled";
     case "privilege_temporarily_disabled":
-      return "Privilege temporarily disabled";
+      return "Temporarily disabled";
     default:
       return i;
   }
 }
 function Xe(i) {
-  return i === "completed" || i === "privilege_enabled" ? "state-good" : i === "uncompleted" || i === "privilege_disabled" ? "state-bad" : i === "missed" || i === "adjusted" || i === "privilege_temporarily_disabled" ? "state-warn" : "state-neutral";
+  return i === "completed" || i === "privilege_enabled" ? "state-good" : i === "uncompleted" || i === "undone" || i === "privilege_disabled" ? "state-bad" : i === "missed" || i === "adjusted" || i === "privilege_temporarily_disabled" ? "state-warn" : "state-neutral";
 }
 var Ze = Object.defineProperty, Ge = Object.getOwnPropertyDescriptor, K = (i, e, t, s) => {
   for (var r = s > 1 ? void 0 : s ? Ge(e, t) : e, o = i.length - 1, n; o >= 0; o--)
@@ -910,7 +914,7 @@ let m = class extends A {
   _renderRow(i) {
     const e = i.pointsDelta > 0 ? "points-positive" : i.pointsDelta < 0 ? "points-negative" : "", t = i.pointsDelta > 0 ? `+${i.pointsDelta}` : i.pointsDelta;
     return f`
-      <div class="row">
+      <div class="row ${i.undone ? "row-undone" : ""}">
         <div class="cell time">${this._formatTime(i.timestamp)}</div>
         <div class="cell event">
           <span class="state-chip ${Xe(i.action)}">
@@ -992,6 +996,13 @@ m.styles = ce`
     }
     .row:last-child {
       border-bottom: none;
+    }
+    .row-undone {
+      opacity: 0.7;
+    }
+    .row-undone .cell.chore,
+    .row-undone .state-chip {
+      text-decoration: line-through;
     }
     .col-header {
       font-size: 12px;

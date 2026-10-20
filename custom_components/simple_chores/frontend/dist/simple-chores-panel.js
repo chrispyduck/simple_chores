@@ -3,18 +3,18 @@
  * Copyright 2019 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const q = globalThis, V = q.ShadowRoot && (q.ShadyCSS === void 0 || q.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, G = Symbol(), te = /* @__PURE__ */ new WeakMap();
+const M = globalThis, V = M.ShadowRoot && (M.ShadyCSS === void 0 || M.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, G = Symbol(), te = /* @__PURE__ */ new WeakMap();
 let me = class {
-  constructor(e, s, o) {
-    if (this._$cssResult$ = !0, o !== G) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
+  constructor(e, s, i) {
+    if (this._$cssResult$ = !0, i !== G) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
     this.cssText = e, this.t = s;
   }
   get styleSheet() {
     let e = this.o;
     const s = this.t;
     if (V && e === void 0) {
-      const o = s !== void 0 && s.length === 1;
-      o && (e = te.get(s)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), o && te.set(s, e));
+      const i = s !== void 0 && s.length === 1;
+      i && (e = te.get(s)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), i && te.set(s, e));
     }
     return e;
   }
@@ -23,21 +23,21 @@ let me = class {
   }
 };
 const ke = (t) => new me(typeof t == "string" ? t : t + "", void 0, G), Ce = (t, ...e) => {
-  const s = t.length === 1 ? t[0] : e.reduce((o, i, a) => o + ((r) => {
-    if (r._$cssResult$ === !0) return r.cssText;
-    if (typeof r == "number") return r;
-    throw Error("Value passed to 'css' function must be a 'css' function result: " + r + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
-  })(i) + t[a + 1], t[0]);
+  const s = t.length === 1 ? t[0] : e.reduce((i, o, a) => i + ((n) => {
+    if (n._$cssResult$ === !0) return n.cssText;
+    if (typeof n == "number") return n;
+    throw Error("Value passed to 'css' function must be a 'css' function result: " + n + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
+  })(o) + t[a + 1], t[0]);
   return new me(s, t, G);
 }, Ae = (t, e) => {
   if (V) t.adoptedStyleSheets = e.map((s) => s instanceof CSSStyleSheet ? s : s.styleSheet);
   else for (const s of e) {
-    const o = document.createElement("style"), i = q.litNonce;
-    i !== void 0 && o.setAttribute("nonce", i), o.textContent = s.cssText, t.appendChild(o);
+    const i = document.createElement("style"), o = M.litNonce;
+    o !== void 0 && i.setAttribute("nonce", o), i.textContent = s.cssText, t.appendChild(i);
   }
 }, se = V ? (t) => t : (t) => t instanceof CSSStyleSheet ? ((e) => {
   let s = "";
-  for (const o of e.cssRules) s += o.cssText;
+  for (const i of e.cssRules) s += i.cssText;
   return ke(s);
 })(t) : t;
 /**
@@ -45,10 +45,10 @@ const ke = (t) => new me(typeof t == "string" ? t : t + "", void 0, G), Ce = (t,
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const { is: Ee, defineProperty: Se, getOwnPropertyDescriptor: De, getOwnPropertyNames: Pe, getOwnPropertySymbols: Ue, getPrototypeOf: Te } = Object, W = globalThis, ie = W.trustedTypes, Ne = ie ? ie.emptyScript : "", ze = W.reactiveElementPolyfillSupport, z = (t, e) => t, H = { toAttribute(t, e) {
+const { is: Ee, defineProperty: De, getOwnPropertyDescriptor: Se, getOwnPropertyNames: Ue, getOwnPropertySymbols: Pe, getPrototypeOf: Te } = Object, W = globalThis, ie = W.trustedTypes, Re = ie ? ie.emptyScript : "", Ne = W.reactiveElementPolyfillSupport, N = (t, e) => t, H = { toAttribute(t, e) {
   switch (e) {
     case Boolean:
-      t = t ? Ne : null;
+      t = t ? Re : null;
       break;
     case Object:
     case Array:
@@ -84,58 +84,58 @@ let A = class extends HTMLElement {
   }
   static createProperty(e, s = oe) {
     if (s.state && (s.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((s = Object.create(s)).wrapped = !0), this.elementProperties.set(e, s), !s.noAccessor) {
-      const o = Symbol(), i = this.getPropertyDescriptor(e, o, s);
-      i !== void 0 && Se(this.prototype, e, i);
+      const i = Symbol(), o = this.getPropertyDescriptor(e, i, s);
+      o !== void 0 && De(this.prototype, e, o);
     }
   }
-  static getPropertyDescriptor(e, s, o) {
-    const { get: i, set: a } = De(this.prototype, e) ?? { get() {
+  static getPropertyDescriptor(e, s, i) {
+    const { get: o, set: a } = Se(this.prototype, e) ?? { get() {
       return this[s];
-    }, set(r) {
-      this[s] = r;
+    }, set(n) {
+      this[s] = n;
     } };
-    return { get: i, set(r) {
-      const n = i?.call(this);
-      a?.call(this, r), this.requestUpdate(e, n, o);
+    return { get: o, set(n) {
+      const l = o?.call(this);
+      a?.call(this, n), this.requestUpdate(e, l, i);
     }, configurable: !0, enumerable: !0 };
   }
   static getPropertyOptions(e) {
     return this.elementProperties.get(e) ?? oe;
   }
   static _$Ei() {
-    if (this.hasOwnProperty(z("elementProperties"))) return;
+    if (this.hasOwnProperty(N("elementProperties"))) return;
     const e = Te(this);
     e.finalize(), e.l !== void 0 && (this.l = [...e.l]), this.elementProperties = new Map(e.elementProperties);
   }
   static finalize() {
-    if (this.hasOwnProperty(z("finalized"))) return;
-    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(z("properties"))) {
-      const s = this.properties, o = [...Pe(s), ...Ue(s)];
-      for (const i of o) this.createProperty(i, s[i]);
+    if (this.hasOwnProperty(N("finalized"))) return;
+    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(N("properties"))) {
+      const s = this.properties, i = [...Ue(s), ...Pe(s)];
+      for (const o of i) this.createProperty(o, s[o]);
     }
     const e = this[Symbol.metadata];
     if (e !== null) {
       const s = litPropertyMetadata.get(e);
-      if (s !== void 0) for (const [o, i] of s) this.elementProperties.set(o, i);
+      if (s !== void 0) for (const [i, o] of s) this.elementProperties.set(i, o);
     }
     this._$Eh = /* @__PURE__ */ new Map();
-    for (const [s, o] of this.elementProperties) {
-      const i = this._$Eu(s, o);
-      i !== void 0 && this._$Eh.set(i, s);
+    for (const [s, i] of this.elementProperties) {
+      const o = this._$Eu(s, i);
+      o !== void 0 && this._$Eh.set(o, s);
     }
     this.elementStyles = this.finalizeStyles(this.styles);
   }
   static finalizeStyles(e) {
     const s = [];
     if (Array.isArray(e)) {
-      const o = new Set(e.flat(1 / 0).reverse());
-      for (const i of o) s.unshift(se(i));
+      const i = new Set(e.flat(1 / 0).reverse());
+      for (const o of i) s.unshift(se(o));
     } else e !== void 0 && s.push(se(e));
     return s;
   }
   static _$Eu(e, s) {
-    const o = s.attribute;
-    return o === !1 ? void 0 : typeof o == "string" ? o : typeof e == "string" ? e.toLowerCase() : void 0;
+    const i = s.attribute;
+    return i === !1 ? void 0 : typeof i == "string" ? i : typeof e == "string" ? e.toLowerCase() : void 0;
   }
   constructor() {
     super(), this._$Ep = void 0, this.isUpdatePending = !1, this.hasUpdated = !1, this._$Em = null, this._$Ev();
@@ -151,7 +151,7 @@ let A = class extends HTMLElement {
   }
   _$E_() {
     const e = /* @__PURE__ */ new Map(), s = this.constructor.elementProperties;
-    for (const o of s.keys()) this.hasOwnProperty(o) && (e.set(o, this[o]), delete this[o]);
+    for (const i of s.keys()) this.hasOwnProperty(i) && (e.set(i, this[i]), delete this[i]);
     e.size > 0 && (this._$Ep = e);
   }
   createRenderRoot() {
@@ -166,35 +166,35 @@ let A = class extends HTMLElement {
   disconnectedCallback() {
     this._$EO?.forEach((e) => e.hostDisconnected?.());
   }
-  attributeChangedCallback(e, s, o) {
-    this._$AK(e, o);
+  attributeChangedCallback(e, s, i) {
+    this._$AK(e, i);
   }
   _$ET(e, s) {
-    const o = this.constructor.elementProperties.get(e), i = this.constructor._$Eu(e, o);
-    if (i !== void 0 && o.reflect === !0) {
-      const a = (o.converter?.toAttribute !== void 0 ? o.converter : H).toAttribute(s, o.type);
-      this._$Em = e, a == null ? this.removeAttribute(i) : this.setAttribute(i, a), this._$Em = null;
+    const i = this.constructor.elementProperties.get(e), o = this.constructor._$Eu(e, i);
+    if (o !== void 0 && i.reflect === !0) {
+      const a = (i.converter?.toAttribute !== void 0 ? i.converter : H).toAttribute(s, i.type);
+      this._$Em = e, a == null ? this.removeAttribute(o) : this.setAttribute(o, a), this._$Em = null;
     }
   }
   _$AK(e, s) {
-    const o = this.constructor, i = o._$Eh.get(e);
-    if (i !== void 0 && this._$Em !== i) {
-      const a = o.getPropertyOptions(i), r = typeof a.converter == "function" ? { fromAttribute: a.converter } : a.converter?.fromAttribute !== void 0 ? a.converter : H;
-      this._$Em = i;
-      const n = r.fromAttribute(s, a.type);
-      this[i] = n ?? this._$Ej?.get(i) ?? n, this._$Em = null;
+    const i = this.constructor, o = i._$Eh.get(e);
+    if (o !== void 0 && this._$Em !== o) {
+      const a = i.getPropertyOptions(o), n = typeof a.converter == "function" ? { fromAttribute: a.converter } : a.converter?.fromAttribute !== void 0 ? a.converter : H;
+      this._$Em = o;
+      const l = n.fromAttribute(s, a.type);
+      this[o] = l ?? this._$Ej?.get(o) ?? l, this._$Em = null;
     }
   }
-  requestUpdate(e, s, o, i = !1, a) {
+  requestUpdate(e, s, i, o = !1, a) {
     if (e !== void 0) {
-      const r = this.constructor;
-      if (i === !1 && (a = this[e]), o ??= r.getPropertyOptions(e), !((o.hasChanged ?? Y)(a, s) || o.useDefault && o.reflect && a === this._$Ej?.get(e) && !this.hasAttribute(r._$Eu(e, o)))) return;
-      this.C(e, s, o);
+      const n = this.constructor;
+      if (o === !1 && (a = this[e]), i ??= n.getPropertyOptions(e), !((i.hasChanged ?? Y)(a, s) || i.useDefault && i.reflect && a === this._$Ej?.get(e) && !this.hasAttribute(n._$Eu(e, i)))) return;
+      this.C(e, s, i);
     }
     this.isUpdatePending === !1 && (this._$ES = this._$EP());
   }
-  C(e, s, { useDefault: o, reflect: i, wrapped: a }, r) {
-    o && !(this._$Ej ??= /* @__PURE__ */ new Map()).has(e) && (this._$Ej.set(e, r ?? s ?? this[e]), a !== !0 || r !== void 0) || (this._$AL.has(e) || (this.hasUpdated || o || (s = void 0), this._$AL.set(e, s)), i === !0 && this._$Em !== e && (this._$Eq ??= /* @__PURE__ */ new Set()).add(e));
+  C(e, s, { useDefault: i, reflect: o, wrapped: a }, n) {
+    i && !(this._$Ej ??= /* @__PURE__ */ new Map()).has(e) && (this._$Ej.set(e, n ?? s ?? this[e]), a !== !0 || n !== void 0) || (this._$AL.has(e) || (this.hasUpdated || i || (s = void 0), this._$AL.set(e, s)), o === !0 && this._$Em !== e && (this._$Eq ??= /* @__PURE__ */ new Set()).add(e));
   }
   async _$EP() {
     this.isUpdatePending = !0;
@@ -213,21 +213,21 @@ let A = class extends HTMLElement {
     if (!this.isUpdatePending) return;
     if (!this.hasUpdated) {
       if (this.renderRoot ??= this.createRenderRoot(), this._$Ep) {
-        for (const [i, a] of this._$Ep) this[i] = a;
+        for (const [o, a] of this._$Ep) this[o] = a;
         this._$Ep = void 0;
       }
-      const o = this.constructor.elementProperties;
-      if (o.size > 0) for (const [i, a] of o) {
-        const { wrapped: r } = a, n = this[i];
-        r !== !0 || this._$AL.has(i) || n === void 0 || this.C(i, void 0, a, n);
+      const i = this.constructor.elementProperties;
+      if (i.size > 0) for (const [o, a] of i) {
+        const { wrapped: n } = a, l = this[o];
+        n !== !0 || this._$AL.has(o) || l === void 0 || this.C(o, void 0, a, l);
       }
     }
     let e = !1;
     const s = this._$AL;
     try {
-      e = this.shouldUpdate(s), e ? (this.willUpdate(s), this._$EO?.forEach((o) => o.hostUpdate?.()), this.update(s)) : this._$EM();
-    } catch (o) {
-      throw e = !1, this._$EM(), o;
+      e = this.shouldUpdate(s), e ? (this.willUpdate(s), this._$EO?.forEach((i) => i.hostUpdate?.()), this.update(s)) : this._$EM();
+    } catch (i) {
+      throw e = !1, this._$EM(), i;
     }
     e && this._$AE(s);
   }
@@ -256,75 +256,75 @@ let A = class extends HTMLElement {
   firstUpdated(e) {
   }
 };
-A.elementStyles = [], A.shadowRootOptions = { mode: "open" }, A[z("elementProperties")] = /* @__PURE__ */ new Map(), A[z("finalized")] = /* @__PURE__ */ new Map(), ze?.({ ReactiveElement: A }), (W.reactiveElementVersions ??= []).push("2.1.2");
+A.elementStyles = [], A.shadowRootOptions = { mode: "open" }, A[N("elementProperties")] = /* @__PURE__ */ new Map(), A[N("finalized")] = /* @__PURE__ */ new Map(), Ne?.({ ReactiveElement: A }), (W.reactiveElementVersions ??= []).push("2.1.2");
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const X = globalThis, ae = (t) => t, L = X.trustedTypes, re = L ? L.createPolicy("lit-html", { createHTML: (t) => t }) : void 0, be = "$lit$", v = `lit$${Math.random().toFixed(9).slice(2)}$`, _e = "?" + v, Re = `<${_e}>`, k = document, F = () => k.createComment(""), I = (t) => t === null || typeof t != "object" && typeof t != "function", Z = Array.isArray, Fe = (t) => Z(t) || typeof t?.[Symbol.iterator] == "function", K = `[ 	
-\f\r]`, T = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, ne = /-->/g, le = />/g, $ = RegExp(`>|${K}(?:([^\\s"'>=/]+)(${K}*=${K}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), ce = /'/g, de = /"/g, ye = /^(?:script|style|textarea|title)$/i, Ie = (t) => (e, ...s) => ({ _$litType$: t, strings: e, values: s }), l = Ie(1), P = Symbol.for("lit-noChange"), d = Symbol.for("lit-nothing"), pe = /* @__PURE__ */ new WeakMap(), w = k.createTreeWalker(k, 129);
+const X = globalThis, ae = (t) => t, L = X.trustedTypes, ne = L ? L.createPolicy("lit-html", { createHTML: (t) => t }) : void 0, be = "$lit$", v = `lit$${Math.random().toFixed(9).slice(2)}$`, _e = "?" + v, ze = `<${_e}>`, k = document, F = () => k.createComment(""), I = (t) => t === null || typeof t != "object" && typeof t != "function", Z = Array.isArray, Fe = (t) => Z(t) || typeof t?.[Symbol.iterator] == "function", K = `[ 	
+\f\r]`, T = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, re = /-->/g, le = />/g, $ = RegExp(`>|${K}(?:([^\\s"'>=/]+)(${K}*=${K}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`, "g"), ce = /'/g, de = /"/g, ye = /^(?:script|style|textarea|title)$/i, Ie = (t) => (e, ...s) => ({ _$litType$: t, strings: e, values: s }), r = Ie(1), U = Symbol.for("lit-noChange"), d = Symbol.for("lit-nothing"), pe = /* @__PURE__ */ new WeakMap(), w = k.createTreeWalker(k, 129);
 function fe(t, e) {
   if (!Z(t) || !t.hasOwnProperty("raw")) throw Error("invalid template strings array");
-  return re !== void 0 ? re.createHTML(e) : e;
+  return ne !== void 0 ? ne.createHTML(e) : e;
 }
-const Oe = (t, e) => {
-  const s = t.length - 1, o = [];
-  let i, a = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", r = T;
-  for (let n = 0; n < s; n++) {
-    const c = t[n];
-    let m, _, h = -1, y = 0;
-    for (; y < c.length && (r.lastIndex = y, _ = r.exec(c), _ !== null); ) y = r.lastIndex, r === T ? _[1] === "!--" ? r = ne : _[1] !== void 0 ? r = le : _[2] !== void 0 ? (ye.test(_[2]) && (i = RegExp("</" + _[2], "g")), r = $) : _[3] !== void 0 && (r = $) : r === $ ? _[0] === ">" ? (r = i ?? T, h = -1) : _[1] === void 0 ? h = -2 : (h = r.lastIndex - _[2].length, m = _[1], r = _[3] === void 0 ? $ : _[3] === '"' ? de : ce) : r === de || r === ce ? r = $ : r === ne || r === le ? r = T : (r = $, i = void 0);
-    const f = r === $ && t[n + 1].startsWith("/>") ? " " : "";
-    a += r === T ? c + Re : h >= 0 ? (o.push(m), c.slice(0, h) + be + c.slice(h) + v + f) : c + v + (h === -2 ? n : f);
+const je = (t, e) => {
+  const s = t.length - 1, i = [];
+  let o, a = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", n = T;
+  for (let l = 0; l < s; l++) {
+    const c = t[l];
+    let b, _, u = -1, y = 0;
+    for (; y < c.length && (n.lastIndex = y, _ = n.exec(c), _ !== null); ) y = n.lastIndex, n === T ? _[1] === "!--" ? n = re : _[1] !== void 0 ? n = le : _[2] !== void 0 ? (ye.test(_[2]) && (o = RegExp("</" + _[2], "g")), n = $) : _[3] !== void 0 && (n = $) : n === $ ? _[0] === ">" ? (n = o ?? T, u = -1) : _[1] === void 0 ? u = -2 : (u = n.lastIndex - _[2].length, b = _[1], n = _[3] === void 0 ? $ : _[3] === '"' ? de : ce) : n === de || n === ce ? n = $ : n === re || n === le ? n = T : (n = $, o = void 0);
+    const f = n === $ && t[l + 1].startsWith("/>") ? " " : "";
+    a += n === T ? c + ze : u >= 0 ? (i.push(b), c.slice(0, u) + be + c.slice(u) + v + f) : c + v + (u === -2 ? l : f);
   }
-  return [fe(t, a + (t[s] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), o];
+  return [fe(t, a + (t[s] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
 };
-class O {
-  constructor({ strings: e, _$litType$: s }, o) {
-    let i;
+class j {
+  constructor({ strings: e, _$litType$: s }, i) {
+    let o;
     this.parts = [];
-    let a = 0, r = 0;
-    const n = e.length - 1, c = this.parts, [m, _] = Oe(e, s);
-    if (this.el = O.createElement(m, o), w.currentNode = this.el.content, s === 2 || s === 3) {
-      const h = this.el.content.firstChild;
-      h.replaceWith(...h.childNodes);
+    let a = 0, n = 0;
+    const l = e.length - 1, c = this.parts, [b, _] = je(e, s);
+    if (this.el = j.createElement(b, i), w.currentNode = this.el.content, s === 2 || s === 3) {
+      const u = this.el.content.firstChild;
+      u.replaceWith(...u.childNodes);
     }
-    for (; (i = w.nextNode()) !== null && c.length < n; ) {
-      if (i.nodeType === 1) {
-        if (i.hasAttributes()) for (const h of i.getAttributeNames()) if (h.endsWith(be)) {
-          const y = _[r++], f = i.getAttribute(h).split(v), M = /([.?@])?(.*)/.exec(y);
-          c.push({ type: 1, index: a, name: M[2], strings: f, ctor: M[1] === "." ? Me : M[1] === "?" ? qe : M[1] === "@" ? He : B }), i.removeAttribute(h);
-        } else h.startsWith(v) && (c.push({ type: 6, index: a }), i.removeAttribute(h));
-        if (ye.test(i.tagName)) {
-          const h = i.textContent.split(v), y = h.length - 1;
+    for (; (o = w.nextNode()) !== null && c.length < l; ) {
+      if (o.nodeType === 1) {
+        if (o.hasAttributes()) for (const u of o.getAttributeNames()) if (u.endsWith(be)) {
+          const y = _[n++], f = o.getAttribute(u).split(v), q = /([.?@])?(.*)/.exec(y);
+          c.push({ type: 1, index: a, name: q[2], strings: f, ctor: q[1] === "." ? qe : q[1] === "?" ? Me : q[1] === "@" ? He : B }), o.removeAttribute(u);
+        } else u.startsWith(v) && (c.push({ type: 6, index: a }), o.removeAttribute(u));
+        if (ye.test(o.tagName)) {
+          const u = o.textContent.split(v), y = u.length - 1;
           if (y > 0) {
-            i.textContent = L ? L.emptyScript : "";
-            for (let f = 0; f < y; f++) i.append(h[f], F()), w.nextNode(), c.push({ type: 2, index: ++a });
-            i.append(h[y], F());
+            o.textContent = L ? L.emptyScript : "";
+            for (let f = 0; f < y; f++) o.append(u[f], F()), w.nextNode(), c.push({ type: 2, index: ++a });
+            o.append(u[y], F());
           }
         }
-      } else if (i.nodeType === 8) if (i.data === _e) c.push({ type: 2, index: a });
+      } else if (o.nodeType === 8) if (o.data === _e) c.push({ type: 2, index: a });
       else {
-        let h = -1;
-        for (; (h = i.data.indexOf(v, h + 1)) !== -1; ) c.push({ type: 7, index: a }), h += v.length - 1;
+        let u = -1;
+        for (; (u = o.data.indexOf(v, u + 1)) !== -1; ) c.push({ type: 7, index: a }), u += v.length - 1;
       }
       a++;
     }
   }
   static createElement(e, s) {
-    const o = k.createElement("template");
-    return o.innerHTML = e, o;
+    const i = k.createElement("template");
+    return i.innerHTML = e, i;
   }
 }
-function U(t, e, s = t, o) {
-  if (e === P) return e;
-  let i = o !== void 0 ? s._$Co?.[o] : s._$Cl;
+function P(t, e, s = t, i) {
+  if (e === U) return e;
+  let o = i !== void 0 ? s._$Co?.[i] : s._$Cl;
   const a = I(e) ? void 0 : e._$litDirective$;
-  return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(t), i._$AT(t, s, o)), o !== void 0 ? (s._$Co ??= [])[o] = i : s._$Cl = i), i !== void 0 && (e = U(t, i._$AS(t, e.values), i, o)), e;
+  return o?.constructor !== a && (o?._$AO?.(!1), a === void 0 ? o = void 0 : (o = new a(t), o._$AT(t, s, i)), i !== void 0 ? (s._$Co ??= [])[i] = o : s._$Cl = o), o !== void 0 && (e = P(t, o._$AS(t, e.values), o, i)), e;
 }
-class je {
+class Oe {
   constructor(e, s) {
     this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = s;
   }
@@ -335,29 +335,29 @@ class je {
     return this._$AM._$AU;
   }
   u(e) {
-    const { el: { content: s }, parts: o } = this._$AD, i = (e?.creationScope ?? k).importNode(s, !0);
-    w.currentNode = i;
-    let a = w.nextNode(), r = 0, n = 0, c = o[0];
+    const { el: { content: s }, parts: i } = this._$AD, o = (e?.creationScope ?? k).importNode(s, !0);
+    w.currentNode = o;
+    let a = w.nextNode(), n = 0, l = 0, c = i[0];
     for (; c !== void 0; ) {
-      if (r === c.index) {
-        let m;
-        c.type === 2 ? m = new j(a, a.nextSibling, this, e) : c.type === 1 ? m = new c.ctor(a, c.name, c.strings, this, e) : c.type === 6 && (m = new Le(a, this, e)), this._$AV.push(m), c = o[++n];
+      if (n === c.index) {
+        let b;
+        c.type === 2 ? b = new O(a, a.nextSibling, this, e) : c.type === 1 ? b = new c.ctor(a, c.name, c.strings, this, e) : c.type === 6 && (b = new Le(a, this, e)), this._$AV.push(b), c = i[++l];
       }
-      r !== c?.index && (a = w.nextNode(), r++);
+      n !== c?.index && (a = w.nextNode(), n++);
     }
-    return w.currentNode = k, i;
+    return w.currentNode = k, o;
   }
   p(e) {
     let s = 0;
-    for (const o of this._$AV) o !== void 0 && (o.strings !== void 0 ? (o._$AI(e, o, s), s += o.strings.length - 2) : o._$AI(e[s])), s++;
+    for (const i of this._$AV) i !== void 0 && (i.strings !== void 0 ? (i._$AI(e, i, s), s += i.strings.length - 2) : i._$AI(e[s])), s++;
   }
 }
-class j {
+class O {
   get _$AU() {
     return this._$AM?._$AU ?? this._$Cv;
   }
-  constructor(e, s, o, i) {
-    this.type = 2, this._$AH = d, this._$AN = void 0, this._$AA = e, this._$AB = s, this._$AM = o, this.options = i, this._$Cv = i?.isConnected ?? !0;
+  constructor(e, s, i, o) {
+    this.type = 2, this._$AH = d, this._$AN = void 0, this._$AA = e, this._$AB = s, this._$AM = i, this.options = o, this._$Cv = o?.isConnected ?? !0;
   }
   get parentNode() {
     let e = this._$AA.parentNode;
@@ -371,7 +371,7 @@ class j {
     return this._$AB;
   }
   _$AI(e, s = this) {
-    e = U(this, e, s), I(e) ? e === d || e == null || e === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : e !== this._$AH && e !== P && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Fe(e) ? this.k(e) : this._(e);
+    e = P(this, e, s), I(e) ? e === d || e == null || e === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : e !== this._$AH && e !== U && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Fe(e) ? this.k(e) : this._(e);
   }
   O(e) {
     return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -383,28 +383,28 @@ class j {
     this._$AH !== d && I(this._$AH) ? this._$AA.nextSibling.data = e : this.T(k.createTextNode(e)), this._$AH = e;
   }
   $(e) {
-    const { values: s, _$litType$: o } = e, i = typeof o == "number" ? this._$AC(e) : (o.el === void 0 && (o.el = O.createElement(fe(o.h, o.h[0]), this.options)), o);
-    if (this._$AH?._$AD === i) this._$AH.p(s);
+    const { values: s, _$litType$: i } = e, o = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = j.createElement(fe(i.h, i.h[0]), this.options)), i);
+    if (this._$AH?._$AD === o) this._$AH.p(s);
     else {
-      const a = new je(i, this), r = a.u(this.options);
-      a.p(s), this.T(r), this._$AH = a;
+      const a = new Oe(o, this), n = a.u(this.options);
+      a.p(s), this.T(n), this._$AH = a;
     }
   }
   _$AC(e) {
     let s = pe.get(e.strings);
-    return s === void 0 && pe.set(e.strings, s = new O(e)), s;
+    return s === void 0 && pe.set(e.strings, s = new j(e)), s;
   }
   k(e) {
     Z(this._$AH) || (this._$AH = [], this._$AR());
     const s = this._$AH;
-    let o, i = 0;
-    for (const a of e) i === s.length ? s.push(o = new j(this.O(F()), this.O(F()), this, this.options)) : o = s[i], o._$AI(a), i++;
-    i < s.length && (this._$AR(o && o._$AB.nextSibling, i), s.length = i);
+    let i, o = 0;
+    for (const a of e) o === s.length ? s.push(i = new O(this.O(F()), this.O(F()), this, this.options)) : i = s[o], i._$AI(a), o++;
+    o < s.length && (this._$AR(i && i._$AB.nextSibling, o), s.length = o);
   }
   _$AR(e = this._$AA.nextSibling, s) {
     for (this._$AP?.(!1, !0, s); e !== this._$AB; ) {
-      const o = ae(e).nextSibling;
-      ae(e).remove(), e = o;
+      const i = ae(e).nextSibling;
+      ae(e).remove(), e = i;
     }
   }
   setConnected(e) {
@@ -418,25 +418,25 @@ class B {
   get _$AU() {
     return this._$AM._$AU;
   }
-  constructor(e, s, o, i, a) {
-    this.type = 1, this._$AH = d, this._$AN = void 0, this.element = e, this.name = s, this._$AM = i, this.options = a, o.length > 2 || o[0] !== "" || o[1] !== "" ? (this._$AH = Array(o.length - 1).fill(new String()), this.strings = o) : this._$AH = d;
+  constructor(e, s, i, o, a) {
+    this.type = 1, this._$AH = d, this._$AN = void 0, this.element = e, this.name = s, this._$AM = o, this.options = a, i.length > 2 || i[0] !== "" || i[1] !== "" ? (this._$AH = Array(i.length - 1).fill(new String()), this.strings = i) : this._$AH = d;
   }
-  _$AI(e, s = this, o, i) {
+  _$AI(e, s = this, i, o) {
     const a = this.strings;
-    let r = !1;
-    if (a === void 0) e = U(this, e, s, 0), r = !I(e) || e !== this._$AH && e !== P, r && (this._$AH = e);
+    let n = !1;
+    if (a === void 0) e = P(this, e, s, 0), n = !I(e) || e !== this._$AH && e !== U, n && (this._$AH = e);
     else {
-      const n = e;
-      let c, m;
-      for (e = a[0], c = 0; c < a.length - 1; c++) m = U(this, n[o + c], s, c), m === P && (m = this._$AH[c]), r ||= !I(m) || m !== this._$AH[c], m === d ? e = d : e !== d && (e += (m ?? "") + a[c + 1]), this._$AH[c] = m;
+      const l = e;
+      let c, b;
+      for (e = a[0], c = 0; c < a.length - 1; c++) b = P(this, l[i + c], s, c), b === U && (b = this._$AH[c]), n ||= !I(b) || b !== this._$AH[c], b === d ? e = d : e !== d && (e += (b ?? "") + a[c + 1]), this._$AH[c] = b;
     }
-    r && !i && this.j(e);
+    n && !o && this.j(e);
   }
   j(e) {
     e === d ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
   }
 }
-class Me extends B {
+class qe extends B {
   constructor() {
     super(...arguments), this.type = 3;
   }
@@ -444,7 +444,7 @@ class Me extends B {
     this.element[this.name] = e === d ? void 0 : e;
   }
 }
-class qe extends B {
+class Me extends B {
   constructor() {
     super(...arguments), this.type = 4;
   }
@@ -453,39 +453,39 @@ class qe extends B {
   }
 }
 class He extends B {
-  constructor(e, s, o, i, a) {
-    super(e, s, o, i, a), this.type = 5;
+  constructor(e, s, i, o, a) {
+    super(e, s, i, o, a), this.type = 5;
   }
   _$AI(e, s = this) {
-    if ((e = U(this, e, s, 0) ?? d) === P) return;
-    const o = this._$AH, i = e === d && o !== d || e.capture !== o.capture || e.once !== o.once || e.passive !== o.passive, a = e !== d && (o === d || i);
-    i && this.element.removeEventListener(this.name, this, o), a && this.element.addEventListener(this.name, this, e), this._$AH = e;
+    if ((e = P(this, e, s, 0) ?? d) === U) return;
+    const i = this._$AH, o = e === d && i !== d || e.capture !== i.capture || e.once !== i.once || e.passive !== i.passive, a = e !== d && (i === d || o);
+    o && this.element.removeEventListener(this.name, this, i), a && this.element.addEventListener(this.name, this, e), this._$AH = e;
   }
   handleEvent(e) {
     typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
   }
 }
 class Le {
-  constructor(e, s, o) {
-    this.element = e, this.type = 6, this._$AN = void 0, this._$AM = s, this.options = o;
+  constructor(e, s, i) {
+    this.element = e, this.type = 6, this._$AN = void 0, this._$AM = s, this.options = i;
   }
   get _$AU() {
     return this._$AM._$AU;
   }
   _$AI(e) {
-    U(this, e);
+    P(this, e);
   }
 }
 const We = X.litHtmlPolyfillSupport;
-We?.(O, j), (X.litHtmlVersions ??= []).push("3.3.3");
+We?.(j, O), (X.litHtmlVersions ??= []).push("3.3.3");
 const Be = (t, e, s) => {
-  const o = s?.renderBefore ?? e;
-  let i = o._$litPart$;
-  if (i === void 0) {
+  const i = s?.renderBefore ?? e;
+  let o = i._$litPart$;
+  if (o === void 0) {
     const a = s?.renderBefore ?? null;
-    o._$litPart$ = i = new j(e.insertBefore(F(), a), a, void 0, s ?? {});
+    i._$litPart$ = o = new O(e.insertBefore(F(), a), a, void 0, s ?? {});
   }
-  return i._$AI(t), i;
+  return o._$AI(t), o;
 };
 /**
  * @license
@@ -493,7 +493,7 @@ const Be = (t, e, s) => {
  * SPDX-License-Identifier: BSD-3-Clause
  */
 const J = globalThis;
-class R extends A {
+class z extends A {
   constructor() {
     super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
   }
@@ -512,12 +512,12 @@ class R extends A {
     super.disconnectedCallback(), this._$Do?.setConnected(!1);
   }
   render() {
-    return P;
+    return U;
   }
 }
-R._$litElement$ = !0, R.finalized = !0, J.litElementHydrateSupport?.({ LitElement: R });
+z._$litElement$ = !0, z.finalized = !0, J.litElementHydrateSupport?.({ LitElement: z });
 const Ke = J.litElementPolyfillSupport;
-Ke?.({ LitElement: R });
+Ke?.({ LitElement: z });
 (J.litElementVersions ??= []).push("4.2.2");
 /**
  * @license
@@ -535,30 +535,30 @@ const Ve = (t) => (e, s) => {
  * SPDX-License-Identifier: BSD-3-Clause
  */
 const Ge = { attribute: !0, type: String, converter: H, reflect: !1, hasChanged: Y }, Ye = (t = Ge, e, s) => {
-  const { kind: o, metadata: i } = s;
-  let a = globalThis.litPropertyMetadata.get(i);
-  if (a === void 0 && globalThis.litPropertyMetadata.set(i, a = /* @__PURE__ */ new Map()), o === "setter" && ((t = Object.create(t)).wrapped = !0), a.set(s.name, t), o === "accessor") {
-    const { name: r } = s;
-    return { set(n) {
+  const { kind: i, metadata: o } = s;
+  let a = globalThis.litPropertyMetadata.get(o);
+  if (a === void 0 && globalThis.litPropertyMetadata.set(o, a = /* @__PURE__ */ new Map()), i === "setter" && ((t = Object.create(t)).wrapped = !0), a.set(s.name, t), i === "accessor") {
+    const { name: n } = s;
+    return { set(l) {
       const c = e.get.call(this);
-      e.set.call(this, n), this.requestUpdate(r, c, t, !0, n);
-    }, init(n) {
-      return n !== void 0 && this.C(r, void 0, t, n), n;
+      e.set.call(this, l), this.requestUpdate(n, c, t, !0, l);
+    }, init(l) {
+      return l !== void 0 && this.C(n, void 0, t, l), l;
     } };
   }
-  if (o === "setter") {
-    const { name: r } = s;
-    return function(n) {
-      const c = this[r];
-      e.call(this, n), this.requestUpdate(r, c, t, !0, n);
+  if (i === "setter") {
+    const { name: n } = s;
+    return function(l) {
+      const c = this[n];
+      e.call(this, l), this.requestUpdate(n, c, t, !0, l);
     };
   }
-  throw Error("Unsupported decorator location: " + o);
+  throw Error("Unsupported decorator location: " + i);
 };
 function Q(t) {
-  return (e, s) => typeof s == "object" ? Ye(t, e, s) : ((o, i, a) => {
-    const r = i.hasOwnProperty(a);
-    return i.constructor.createProperty(a, o), r ? Object.getOwnPropertyDescriptor(i, a) : void 0;
+  return (e, s) => typeof s == "object" ? Ye(t, e, s) : ((i, o, a) => {
+    const n = o.hasOwnProperty(a);
+    return o.constructor.createProperty(a, i), n ? Object.getOwnPropertyDescriptor(o, a) : void 0;
   })(t, e, s);
 }
 /**
@@ -566,7 +566,7 @@ function Q(t) {
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-function b(t) {
+function m(t) {
   return Q({ ...t, state: !0, attribute: !1 });
 }
 const Xe = "sensor.simple_chore_", ve = "sensor.simple_chore_privilege_", $e = "sensor.simple_chore_meta_", xe = "sensor.simple_chore_category_", Ze = "number.simple_chore_meta_", we = "sensor.simple_chore_meta_settings", Je = ["daily", "weekly", "manual", "once"], Qe = ["automatic", "manual"], et = [
@@ -577,7 +577,7 @@ const Xe = "sensor.simple_chore_", ve = "sensor.simple_chore_privilege_", $e = "
   "friday",
   "saturday",
   "sunday"
-], E = "mdi:clipboard-list-outline", S = "mdi:star", D = "mdi:tag-outline", ee = "";
+], E = "mdi:clipboard-list-outline", D = "mdi:star", S = "mdi:tag-outline", ee = "";
 function tt() {
   return {
     slug: "",
@@ -611,7 +611,7 @@ function it() {
   return {
     slug: "",
     name: "",
-    icon: D
+    icon: S
   };
 }
 function ot(t) {
@@ -625,13 +625,13 @@ function at() {
   return {
     slug: "",
     name: "",
-    icon: S,
+    icon: D,
     behavior: "automatic",
     linkedChores: [],
     assignees: []
   };
 }
-function rt(t) {
+function nt(t) {
   return {
     slug: t.slug,
     name: t.name,
@@ -644,76 +644,76 @@ function rt(t) {
 function x(t) {
   return t.toLowerCase().replace(/\s+/g, "-").replace(/-/g, "_").replace(/[^a-z0-9_]/g, "").replace(/_+/g, "_");
 }
-function nt(t) {
+function rt(t) {
   const e = /* @__PURE__ */ new Map();
-  for (const [s, o] of Object.entries(t)) {
+  for (const [s, i] of Object.entries(t)) {
     if (!s.startsWith(Xe) || s.startsWith(ve) || s.startsWith($e) || s.startsWith(xe)) continue;
-    const i = o.attributes, a = i.chore_slug;
+    const o = i.attributes, a = o.chore_slug;
     if (!a) continue;
-    let r = e.get(a);
-    r || (r = {
+    let n = e.get(a);
+    n || (n = {
       slug: a,
-      name: i.chore_name ?? a,
-      description: i.description ?? "",
-      frequency: i.frequency ?? "daily",
-      icon: i.icon ?? E,
+      name: o.chore_name ?? a,
+      description: o.description ?? "",
+      frequency: o.frequency ?? "daily",
+      icon: o.icon ?? E,
       // default_points is the chore's shared value; older/unrefreshed
       // sensors may not have it yet, so fall back to this assignee's
       // resolved points rather than leaving the definition unset.
-      points: i.default_points ?? i.points ?? 0,
-      category: i.category ?? null,
+      points: o.default_points ?? o.points ?? 0,
+      category: o.category ?? null,
       assignees: []
-    }, e.set(a, r)), r.assignees.push({
-      assignee: i.assignee,
+    }, e.set(a, n)), n.assignees.push({
+      assignee: o.assignee,
       entityId: s,
-      state: o.state,
-      points: i.points ?? r.points
+      state: i.state,
+      points: o.points ?? n.points
     });
   }
   for (const s of e.values())
-    s.assignees.sort((o, i) => o.assignee.localeCompare(i.assignee));
-  return [...e.values()].sort((s, o) => s.name.localeCompare(o.name));
+    s.assignees.sort((i, o) => i.assignee.localeCompare(o.assignee));
+  return [...e.values()].sort((s, i) => s.name.localeCompare(i.name));
 }
 function he(t) {
   const e = /* @__PURE__ */ new Map();
-  for (const [s, o] of Object.entries(t)) {
+  for (const [s, i] of Object.entries(t)) {
     if (!s.startsWith(ve)) continue;
-    const i = o.attributes, a = i.privilege_slug;
+    const o = i.attributes, a = o.privilege_slug;
     if (!a) continue;
-    let r = e.get(a);
-    r || (r = {
+    let n = e.get(a);
+    n || (n = {
       slug: a,
-      name: i.privilege_name ?? a,
-      icon: i.icon ?? S,
-      behavior: i.behavior ?? "automatic",
-      linkedChores: i.linked_chores ?? [],
+      name: o.privilege_name ?? a,
+      icon: o.icon ?? D,
+      behavior: o.behavior ?? "automatic",
+      linkedChores: o.linked_chores ?? [],
       assignees: []
-    }, e.set(a, r)), r.assignees.push({
-      assignee: i.assignee,
+    }, e.set(a, n)), n.assignees.push({
+      assignee: o.assignee,
       entityId: s,
-      state: o.state,
-      disableUntil: i.disable_until,
-      disableReason: i.disable_reason
+      state: i.state,
+      disableUntil: o.disable_until,
+      disableReason: o.disable_reason
     });
   }
   for (const s of e.values())
-    s.assignees.sort((o, i) => o.assignee.localeCompare(i.assignee));
-  return [...e.values()].sort((s, o) => s.name.localeCompare(o.name));
+    s.assignees.sort((i, o) => i.assignee.localeCompare(o.assignee));
+  return [...e.values()].sort((s, i) => s.name.localeCompare(i.name));
 }
 function lt(t) {
   const e = [];
-  for (const [s, o] of Object.entries(t)) {
+  for (const [s, i] of Object.entries(t)) {
     if (!s.startsWith(xe)) continue;
-    const i = o.attributes, a = i.category_slug;
+    const o = i.attributes, a = o.category_slug;
     a && e.push({
       slug: a,
-      name: i.category_name ?? a,
-      icon: i.icon ?? D,
+      name: o.category_name ?? a,
+      icon: o.icon ?? S,
       entityId: s,
-      choreCount: Number(o.state) || 0
+      choreCount: Number(i.state) || 0
     });
   }
-  return e.sort((s, o) => s.name.localeCompare(o.name));
+  return e.sort((s, i) => s.name.localeCompare(i.name));
 }
 const C = {
   autoFinalizeEnabled: !0,
@@ -736,42 +736,42 @@ function ct(t) {
 }
 function dt(t) {
   const e = [];
-  for (const [s, o] of Object.entries(t)) {
+  for (const [s, i] of Object.entries(t)) {
     if (!s.startsWith($e) || s === we) continue;
-    const i = o.attributes, a = i.assignee;
+    const o = i.attributes, a = o.assignee;
     a && e.push({
       assignee: a,
       entityId: s,
-      totalPoints: i.total_points ?? 0,
-      pointsEarned: i.points_earned ?? 0,
-      pointsMissed: i.points_missed ?? 0,
-      pointsPossible: i.points_possible ?? 0,
-      totalPending: i.total_pending ?? 0,
-      totalComplete: i.total_complete ?? 0
+      totalPoints: o.total_points ?? 0,
+      pointsEarned: o.points_earned ?? 0,
+      pointsMissed: o.points_missed ?? 0,
+      pointsPossible: o.points_possible ?? 0,
+      totalPending: o.total_pending ?? 0,
+      totalComplete: o.total_complete ?? 0
     });
   }
-  return e.sort((s, o) => s.assignee.localeCompare(o.assignee));
+  return e.sort((s, i) => s.assignee.localeCompare(i.assignee));
 }
 function pt(t) {
   const e = [];
-  for (const [s, o] of Object.entries(t)) {
+  for (const [s, i] of Object.entries(t)) {
     if (!s.startsWith(Ze)) continue;
-    const i = o.attributes.assignee;
-    i && e.push({
-      assignee: i,
+    const o = i.attributes.assignee;
+    o && e.push({
+      assignee: o,
       entityId: s,
-      value: Number(o.state) || 0
+      value: Number(i.state) || 0
     });
   }
-  return e.sort((s, o) => s.assignee.localeCompare(o.assignee));
+  return e.sort((s, i) => s.assignee.localeCompare(i.assignee));
 }
 function ht(t, e) {
   const s = /* @__PURE__ */ new Set();
-  for (const o of t)
-    for (const i of o.assignees) s.add(i.assignee);
-  for (const o of e)
-    for (const i of o.assignees) s.add(i.assignee);
-  return [...s].sort((o, i) => o.localeCompare(i));
+  for (const i of t)
+    for (const o of i.assignees) s.add(o.assignee);
+  for (const i of e)
+    for (const o of i.assignees) s.add(o.assignee);
+  return [...s].sort((i, o) => i.localeCompare(o));
 }
 function ut(t) {
   const e = {};
@@ -789,6 +789,7 @@ const mt = [
   "missed",
   "adjusted",
   "points_reset",
+  "undone",
   "privilege_enabled",
   "privilege_disabled",
   "privilege_temporarily_disabled"
@@ -807,7 +808,9 @@ function bt(t) {
     pointsMissed: e.points_missed ?? 0,
     missedTotal: e.missed_total ?? null,
     reason: e.reason ?? null,
-    durationMinutes: e.duration_minutes ?? null
+    durationMinutes: e.duration_minutes ?? null,
+    penalty: e.penalty ?? null,
+    undone: e.undone ?? !1
   })) : [];
 }
 function ue(t) {
@@ -824,28 +827,30 @@ function ue(t) {
       return "Adjusted";
     case "points_reset":
       return "Points reset";
+    case "undone":
+      return "Undone";
     case "privilege_enabled":
       return "Privilege enabled";
     case "privilege_disabled":
       return "Privilege disabled";
     case "privilege_temporarily_disabled":
-      return "Privilege temporarily disabled";
+      return "Temporarily disabled";
     default:
       return t;
   }
 }
 function ge(t) {
-  return t === "completed" || t === "privilege_enabled" ? "state-good" : t === "uncompleted" || t === "privilege_disabled" ? "state-bad" : t === "missed" || t === "adjusted" || t === "privilege_temporarily_disabled" ? "state-warn" : "state-neutral";
+  return t === "completed" || t === "privilege_enabled" ? "state-good" : t === "uncompleted" || t === "undone" || t === "privilege_disabled" ? "state-bad" : t === "missed" || t === "adjusted" || t === "privilege_temporarily_disabled" ? "state-warn" : "state-neutral";
 }
-var _t = Object.defineProperty, yt = Object.getOwnPropertyDescriptor, g = (t, e, s, o) => {
-  for (var i = o > 1 ? void 0 : o ? yt(e, s) : e, a = t.length - 1, r; a >= 0; a--)
-    (r = t[a]) && (i = (o ? r(e, s, i) : r(i)) || i);
-  return o && i && _t(e, s, i), i;
+var _t = Object.defineProperty, yt = Object.getOwnPropertyDescriptor, g = (t, e, s, i) => {
+  for (var o = i > 1 ? void 0 : i ? yt(e, s) : e, a = t.length - 1, n; a >= 0; a--)
+    (n = t[a]) && (o = (i ? n(e, s, o) : n(o)) || o);
+  return i && o && _t(e, s, o), o;
 };
-const p = "simple_chores", N = "__uncategorized__";
-let u = class extends R {
+const p = "simple_chores", R = "__uncategorized__";
+let h = class extends z {
   constructor() {
-    super(...arguments), this.narrow = !1, this._tab = "chores", this._dialog = null, this._busy = !1, this._error = null, this._bulkUser = "", this._categoryFilter = "", this._choreSort = "name", this._userDisplayNames = {}, this._settingsDraft = null, this._resetPointsDialog = null, this._userAdjustInput = {}, this._disableReasonInput = {}, this._untilFlash = {}, this._lastDisableUntil = {}, this._historyEntries = null, this._historyLoading = !1, this._historyUserFilter = "", this._historyCategoryFilter = "", this._historyChoreFilter = "", this._historyActionFilter = [], this._loadedUserDisplayNames = !1, this._openResetPointsDialog = (t) => {
+    super(...arguments), this.narrow = !1, this._tab = "chores", this._dialog = null, this._busy = !1, this._error = null, this._bulkUser = "", this._categoryFilter = "", this._choreSort = "name", this._userDisplayNames = {}, this._settingsDraft = null, this._resetPointsDialog = null, this._undoDialog = null, this._userAdjustInput = {}, this._userAdjustReasonInput = {}, this._disableReasonInput = {}, this._untilFlash = {}, this._lastDisableUntil = {}, this._historyEntries = null, this._historyLoading = !1, this._historyUserFilter = "", this._historyCategoryFilter = "", this._historyChoreFilter = "", this._historyActionFilter = [], this._loadedUserDisplayNames = !1, this._openResetPointsDialog = (t) => {
       this._error = null, this._resetPointsDialog = {
         user: t.length === 1 ? t[0] : "",
         resetTotal: !1
@@ -854,6 +859,17 @@ let u = class extends R {
       t.target === t.currentTarget && (this._resetPointsDialog = null);
     }, this._openHistoryTab = () => {
       this._tab = "history", this._historyEntries === null && this._loadHistory();
+    }, this._openUndoDialog = (t) => {
+      this._error = null, this._undoDialog = {
+        entryId: t.id,
+        choreName: t.choreName,
+        assignee: t.assignee,
+        awarded: t.pointsDelta,
+        reason: "",
+        penalty: 0
+      };
+    }, this._onUndoOverlayClick = (t) => {
+      t.target === t.currentTarget && (this._undoDialog = null);
     }, this._onOverlayClick = (t) => {
       t.target === t.currentTarget && this._closeDialog();
     }, this._dismissError = () => {
@@ -884,9 +900,9 @@ let u = class extends R {
     const t = he(this.hass.states);
     let e = null;
     for (const s of t)
-      for (const o of s.assignees) {
-        const i = this._disableReasonKey(s.slug, o.assignee), a = this._lastDisableUntil[i];
-        a !== void 0 && a !== o.disableUntil && (e = e ?? {}, e[i] = !0, this._scheduleUntilFlashClear(i)), this._lastDisableUntil[i] = o.disableUntil;
+      for (const i of s.assignees) {
+        const o = this._disableReasonKey(s.slug, i.assignee), a = this._lastDisableUntil[o];
+        a !== void 0 && a !== i.disableUntil && (e = e ?? {}, e[o] = !0, this._scheduleUntilFlashClear(o)), this._lastDisableUntil[o] = i.disableUntil;
       }
     e && (this._untilFlash = { ...this._untilFlash, ...e });
   }
@@ -918,16 +934,16 @@ let u = class extends R {
   }
   render() {
     if (!this.hass) return d;
-    const t = nt(this.hass.states), e = he(this.hass.states), s = lt(this.hass.states), o = ct(this.hass.states), i = dt(this.hass.states), a = pt(this.hass.states), r = ht(t, e);
-    return l`
+    const t = rt(this.hass.states), e = he(this.hass.states), s = lt(this.hass.states), i = ct(this.hass.states), o = dt(this.hass.states), a = pt(this.hass.states), n = ht(t, e);
+    return r`
       <div class="toolbar">
         <ha-icon icon="mdi:clipboard-check-outline"></ha-icon>
         <span class="toolbar-title">Chores</span>
-        ${this._busy ? l`<ha-icon class="spin" icon="mdi:loading"></ha-icon>` : d}
+        ${this._busy ? r`<ha-icon class="spin" icon="mdi:loading"></ha-icon>` : d}
       </div>
 
       <div class="content">
-        ${this._error ? l`
+        ${this._error ? r`
               <div class="banner error">
                 <span>${this._error}</span>
                 <button class="icon-button" @click=${this._dismissError}>
@@ -975,32 +991,33 @@ let u = class extends R {
           </button>
         </div>
 
-        ${this._tab === "chores" ? this._renderChoresTab(t, s, r) : this._tab === "privileges" ? this._renderPrivilegesTab(e, t, r) : this._tab === "categories" ? this._renderCategoriesTab(s, r) : this._tab === "users" ? this._renderUsersTab(r, i, a) : this._tab === "history" ? this._renderHistoryTab(t, s, r) : this._renderSettingsTab(o, r)}
+        ${this._tab === "chores" ? this._renderChoresTab(t, s, n) : this._tab === "privileges" ? this._renderPrivilegesTab(e, t, n) : this._tab === "categories" ? this._renderCategoriesTab(s, n) : this._tab === "users" ? this._renderUsersTab(n, o, a) : this._tab === "history" ? this._renderHistoryTab(t, s, n) : this._renderSettingsTab(i, n)}
       </div>
 
-      ${this._dialog ? this._renderDialog(t, s, r) : d}
-      ${this._resetPointsDialog ? this._renderResetPointsDialog(r) : d}
+      ${this._dialog ? this._renderDialog(t, s, n) : d}
+      ${this._resetPointsDialog ? this._renderResetPointsDialog(n) : d}
+      ${this._undoDialog ? this._renderUndoDialog() : d}
     `;
   }
   // --- Chores tab ----------------------------------------------------
   _renderChoresTab(t, e, s) {
-    const o = t.filter((r) => {
+    const i = t.filter((n) => {
       if (this._categoryFilter) {
-        if (this._categoryFilter === N) {
-          if (r.category) return !1;
-        } else if (r.category !== this._categoryFilter)
+        if (this._categoryFilter === R) {
+          if (n.category) return !1;
+        } else if (n.category !== this._categoryFilter)
           return !1;
       }
-      return !(this._bulkUser && !r.assignees.some((n) => n.assignee === this._bulkUser));
-    }), i = this._sortChores(o, e), a = this._categoryFilter && this._categoryFilter !== N;
-    return l`
+      return !(this._bulkUser && !n.assignees.some((l) => l.assignee === this._bulkUser));
+    }), o = this._sortChores(i, e), a = this._categoryFilter && this._categoryFilter !== R;
+    return r`
       <div class="actions-row">
         <button class="primary" @click=${this._openCreateChore}>
           <ha-icon icon="mdi:plus"></ha-icon> New chore
         </button>
         ${this._renderCategoryFilterPicker(e)}
         ${this._renderChoreSortPicker()}
-        ${a ? l`
+        ${a ? r`
               <button
                 title="Reset completed manual chores in this category to not requested, and count pending ones as missed"
                 @click=${() => this._categoryAction(this._categoryFilter, "finalize_by_category")}
@@ -1014,12 +1031,12 @@ let u = class extends R {
         <button @click=${() => this._startNewDay()}>Start new day</button>
       </div>
 
-      ${this._renderPointsSummary(o)}
+      ${this._renderPointsSummary(i)}
 
-      ${i.length === 0 ? l`<p class="empty">
+      ${o.length === 0 ? r`<p class="empty">
             ${t.length === 0 ? "No chores yet. Create one to get started." : "No chores match the current filters."}
-          </p>` : l`<div class="card-grid">
-            ${i.map((r) => this._renderChoreCard(r, e))}
+          </p>` : r`<div class="card-grid">
+            ${o.map((n) => this._renderChoreCard(n, e))}
           </div>`}
     `;
   }
@@ -1030,36 +1047,36 @@ let u = class extends R {
       { value: "frequency", label: "Sort: Frequency" },
       { value: "category", label: "Sort: Category" }
     ];
-    return l`
+    return r`
       <select
         class="user-picker"
         title="Sort chores"
         .value=${this._choreSort}
         @change=${(e) => this._choreSort = e.target.value}
       >
-        ${t.map((e) => l`<option value=${e.value}>${e.label}</option>`)}
+        ${t.map((e) => r`<option value=${e.value}>${e.label}</option>`)}
       </select>
     `;
   }
   _sortChores(t, e) {
-    const s = [...t], o = (i) => i ? e.find((a) => a.slug === i)?.name ?? i : "";
+    const s = [...t], i = (o) => o ? e.find((a) => a.slug === o)?.name ?? o : "";
     switch (this._choreSort) {
       case "points":
-        s.sort((i, a) => a.points - i.points || i.name.localeCompare(a.name));
+        s.sort((o, a) => a.points - o.points || o.name.localeCompare(a.name));
         break;
       case "frequency":
         s.sort(
-          (i, a) => i.frequency.localeCompare(a.frequency) || i.name.localeCompare(a.name)
+          (o, a) => o.frequency.localeCompare(a.frequency) || o.name.localeCompare(a.name)
         );
         break;
       case "category":
         s.sort(
-          (i, a) => o(i.category).localeCompare(o(a.category)) || i.name.localeCompare(a.name)
+          (o, a) => i(o.category).localeCompare(i(a.category)) || o.name.localeCompare(a.name)
         );
         break;
       case "name":
       default:
-        s.sort((i, a) => i.name.localeCompare(a.name));
+        s.sort((o, a) => o.name.localeCompare(a.name));
     }
     return s;
   }
@@ -1071,20 +1088,20 @@ let u = class extends R {
    */
   _renderPointsSummary(t) {
     const e = /* @__PURE__ */ new Map();
-    for (const o of t)
-      for (const i of o.assignees)
-        this._bulkUser && i.assignee !== this._bulkUser || e.set(i.assignee, (e.get(i.assignee) ?? 0) + i.points);
+    for (const i of t)
+      for (const o of i.assignees)
+        this._bulkUser && o.assignee !== this._bulkUser || e.set(o.assignee, (e.get(o.assignee) ?? 0) + o.points);
     if (e.size === 0) return d;
-    const s = [...e.entries()].sort((o, i) => o[0].localeCompare(i[0]));
-    return l`
+    const s = [...e.entries()].sort((i, o) => i[0].localeCompare(o[0]));
+    return r`
       <div class="points-summary">
         <ha-icon icon="mdi:star-outline"></ha-icon>
         <span>Points possible:</span>
         ${s.map(
-      ([o, i], a) => l`
-            ${a > 0 ? l`<span class="points-summary-sep">·</span>` : d}
+      ([i, o], a) => r`
+            ${a > 0 ? r`<span class="points-summary-sep">·</span>` : d}
             <span
-              ><strong>${this._displayName(o)}</strong> ${i}</span
+              ><strong>${this._displayName(i)}</strong> ${o}</span
             >
           `
     )}
@@ -1092,7 +1109,7 @@ let u = class extends R {
     `;
   }
   _renderCategoryFilterPicker(t) {
-    return l`
+    return r`
       <select
         class="user-picker"
         title="Filter chores by category"
@@ -1100,15 +1117,15 @@ let u = class extends R {
         @change=${(e) => this._categoryFilter = e.target.value}
       >
         <option value="">All categories</option>
-        <option value=${N}>Uncategorized</option>
+        <option value=${R}>Uncategorized</option>
         ${t.map(
-      (e) => l`<option value=${e.slug}>${e.name}</option>`
+      (e) => r`<option value=${e.slug}>${e.name}</option>`
     )}
       </select>
     `;
   }
   _renderBulkUserPicker(t) {
-    return l`
+    return r`
       <select
         class="user-picker"
         title="Filter the chores shown below, and limit Reset completed / Start new day, to one assignee"
@@ -1117,23 +1134,23 @@ let u = class extends R {
       >
         <option value="">All assignees</option>
         ${t.map(
-      (e) => l`<option value=${e}>${this._displayName(e)}</option>`
+      (e) => r`<option value=${e}>${this._displayName(e)}</option>`
     )}
       </select>
     `;
   }
   _renderChoreCard(t, e) {
-    const s = t.assignees.some((a) => a.points !== t.points), o = `${t.points} point${t.points === 1 ? "" : "s"}${s ? " (default)" : ""}`, i = t.category ? e.find((a) => a.slug === t.category)?.name ?? t.category : null;
-    return l`
+    const s = t.assignees.some((a) => a.points !== t.points), i = `${t.points} point${t.points === 1 ? "" : "s"}${s ? " (default)" : ""}`, o = t.category ? e.find((a) => a.slug === t.category)?.name ?? t.category : null;
+    return r`
       <div class="card">
         <div class="card-header">
           <ha-icon .icon=${t.icon || E}></ha-icon>
           <div class="card-title">
             <div class="name">${t.name}</div>
             <div class="meta">
-              ${t.frequency} · ${o}
-              ${i ? l` · ${i}` : d}
-              ${t.description ? l` · ${t.description}` : d}
+              ${t.frequency} · ${i}
+              ${o ? r` · ${o}` : d}
+              ${t.description ? r` · ${t.description}` : d}
             </div>
           </div>
           <div class="card-actions">
@@ -1155,10 +1172,10 @@ let u = class extends R {
         </div>
         <div class="assignee-list">
           ${t.assignees.filter((a) => !this._bulkUser || a.assignee === this._bulkUser).map(
-      (a) => l`
+      (a) => r`
                 <div class="assignee-row">
                   <span class="assignee-name">${this._displayName(a.assignee)}</span>
-                  ${a.points !== t.points ? l`<span class="points-override-badge" title="Point override"
+                  ${a.points !== t.points ? r`<span class="points-override-badge" title="Point override"
                         >${a.points}pt</span
                       >` : d}
                   <span class="state-chip ${this._choreStateClass(a.state)}"
@@ -1214,31 +1231,31 @@ let u = class extends R {
   }
   // --- Privileges tab --------------------------------------------------
   _renderPrivilegesTab(t, e, s) {
-    return l`
+    return r`
       <div class="actions-row">
         <button class="primary" @click=${this._openCreatePrivilege}>
           <ha-icon icon="mdi:plus"></ha-icon> New privilege
         </button>
       </div>
 
-      ${t.length === 0 ? l`<p class="empty">No privileges yet. Create one to get started.</p>` : l`<div class="card-grid">
-            ${t.map((o) => this._renderPrivilegeCard(o, e, s))}
+      ${t.length === 0 ? r`<p class="empty">No privileges yet. Create one to get started.</p>` : r`<div class="card-grid">
+            ${t.map((i) => this._renderPrivilegeCard(i, e, s))}
           </div>`}
     `;
   }
   _renderPrivilegeCard(t, e, s) {
-    const o = t.linkedChores.map(
-      (i) => e.find((a) => a.slug === i)?.name ?? i
+    const i = t.linkedChores.map(
+      (o) => e.find((a) => a.slug === o)?.name ?? o
     );
-    return l`
+    return r`
       <div class="card">
         <div class="card-header">
-          <ha-icon .icon=${t.icon || S}></ha-icon>
+          <ha-icon .icon=${t.icon || D}></ha-icon>
           <div class="card-title">
             <div class="name">${t.name}</div>
             <div class="meta">
               ${t.behavior}
-              ${o.length ? l` · linked: ${o.join(", ")}` : l` · linked: all requested chores`}
+              ${i.length ? r` · linked: ${i.join(", ")}` : r` · linked: all requested chores`}
             </div>
           </div>
           <div class="card-actions">
@@ -1259,27 +1276,27 @@ let u = class extends R {
           </div>
         </div>
         <div class="assignee-list">
-          ${t.assignees.map((i) => {
-      const a = i.state === "Temporarily Disabled", r = this._disableReasonKey(t.slug, i.assignee);
-      return l`
+          ${t.assignees.map((o) => {
+      const a = o.state === "Temporarily Disabled", n = this._disableReasonKey(t.slug, o.assignee);
+      return r`
               <div class="assignee-row privilege-row">
                 <div class="assignee-main">
-                  <span class="assignee-name">${this._displayName(i.assignee)}</span>
-                  <span class="state-chip ${this._privilegeStateClass(i.state)}">
-                    ${i.state}${a && i.disableUntil ? l`<span
-                          class="until-date ${this._untilFlash[r] ? "until-flash" : ""}"
+                  <span class="assignee-name">${this._displayName(o.assignee)}</span>
+                  <span class="state-chip ${this._privilegeStateClass(o.state)}">
+                    ${o.state}${a && o.disableUntil ? r`<span
+                          class="until-date ${this._untilFlash[n] ? "until-flash" : ""}"
                         >
-                          (${this._formatUntil(i.disableUntil)})</span
+                          (${this._formatUntil(o.disableUntil)})</span
                         >` : d}
                   </span>
-                  ${t.behavior === "manual" ? l`
+                  ${t.behavior === "manual" ? r`
                         <div class="row-actions">
                           <button
                             class="action-chip"
                             title="Enable"
-                            ?disabled=${i.state === "Enabled"}
+                            ?disabled=${o.state === "Enabled"}
                             @click=${() => this._call(p, "enable_privilege", {
-        user: i.assignee,
+        user: o.assignee,
         privilege_slug: t.slug
       })}
                           >
@@ -1289,9 +1306,9 @@ let u = class extends R {
                           <button
                             class="action-chip"
                             title="Disable"
-                            ?disabled=${i.state === "Disabled"}
+                            ?disabled=${o.state === "Disabled"}
                             @click=${() => this._call(p, "disable_privilege", {
-        user: i.assignee,
+        user: o.assignee,
         privilege_slug: t.slug
       })}
                           >
@@ -1307,21 +1324,21 @@ let u = class extends R {
                     type="text"
                     class="disable-reason-input"
                     placeholder="Reason (optional)"
-                    .value=${this._disableReasonInput[r] ?? i.disableReason ?? ""}
-                    @input=${(n) => {
+                    .value=${this._disableReasonInput[n] ?? o.disableReason ?? ""}
+                    @input=${(l) => {
         this._disableReasonInput = {
           ...this._disableReasonInput,
-          [r]: n.target.value
+          [n]: l.target.value
         };
       }}
-                    @keydown=${(n) => {
-        n.key === "Enter" && n.target.blur();
+                    @keydown=${(l) => {
+        l.key === "Enter" && l.target.blur();
       }}
                     @blur=${() => {
         a && this._saveDisableReason(
           t.slug,
-          i.assignee,
-          i.disableReason
+          o.assignee,
+          o.disableReason
         );
       }}
                   />
@@ -1329,13 +1346,13 @@ let u = class extends R {
                     ${this._renderBlockStepper(
         "1h",
         a,
-        () => this._adjustTemporaryDisable(t.slug, i.assignee, -60),
+        () => this._adjustTemporaryDisable(t.slug, o.assignee, -60),
         () => this._addTemporaryDisable(
           t.slug,
-          i.assignee,
+          o.assignee,
           a,
           60,
-          r
+          n
         )
       )}
                     ${this._renderBlockStepper(
@@ -1343,22 +1360,22 @@ let u = class extends R {
         a,
         () => this._adjustTemporaryDisable(
           t.slug,
-          i.assignee,
+          o.assignee,
           -1440
         ),
         () => this._addTemporaryDisable(
           t.slug,
-          i.assignee,
+          o.assignee,
           a,
           1440,
-          r
+          n
         )
       )}
                     <button
                       class="action-chip"
                       title="Clear the block now"
                       ?disabled=${!a}
-                      @click=${() => this._clearTemporaryDisable(t.slug, i.assignee)}
+                      @click=${() => this._clearTemporaryDisable(t.slug, o.assignee)}
                     >
                       <ha-icon icon="mdi:backspace-outline"></ha-icon>
                       <span>Clear</span>
@@ -1378,8 +1395,8 @@ let u = class extends R {
    * inside one bordered pill, matching how Home Assistant renders its own
    * number/counter steppers.
    */
-  _renderBlockStepper(t, e, s, o) {
-    return l`
+  _renderBlockStepper(t, e, s, i) {
+    return r`
       <div class="stepper">
         <button
           title="Shorten the block by ${t}"
@@ -1389,7 +1406,7 @@ let u = class extends R {
           <ha-icon icon="mdi:minus"></ha-icon>
         </button>
         <span class="stepper-unit">${t}</span>
-        <button title="Extend the block by ${t}" @click=${o}>
+        <button title="Extend the block by ${t}" @click=${i}>
           <ha-icon icon="mdi:plus"></ha-icon>
         </button>
       </div>
@@ -1400,18 +1417,18 @@ let u = class extends R {
   }
   _formatUntil(t) {
     try {
-      const e = new Date(t), s = /* @__PURE__ */ new Date(), o = e.toDateString() === s.toDateString(), i = e.toLocaleTimeString([], {
+      const e = new Date(t), s = /* @__PURE__ */ new Date(), i = e.toDateString() === s.toDateString(), o = e.toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit"
       });
-      return o ? `until ${i}` : `until ${e.toLocaleDateString()} ${i}`;
+      return i ? `until ${o}` : `until ${e.toLocaleDateString()} ${o}`;
     } catch {
       return "";
     }
   }
   // --- Categories tab --------------------------------------------------
   _renderCategoriesTab(t, e) {
-    return l`
+    return r`
       <div class="actions-row">
         <button class="primary" @click=${this._openCreateCategory}>
           <ha-icon icon="mdi:plus"></ha-icon> New category
@@ -1420,19 +1437,19 @@ let u = class extends R {
         ${this._renderBulkUserPicker(e)}
       </div>
 
-      ${t.length === 0 ? l`<p class="empty">
+      ${t.length === 0 ? r`<p class="empty">
             No categories yet. Create one, then assign it to chores.
-          </p>` : l`<div class="card-grid">
+          </p>` : r`<div class="card-grid">
             ${t.map((s) => this._renderCategoryCard(s))}
           </div>`}
     `;
   }
   _renderCategoryCard(t) {
     const e = `${t.choreCount} chore${t.choreCount === 1 ? "" : "s"}`;
-    return l`
+    return r`
       <div class="card">
         <div class="card-header">
-          <ha-icon .icon=${t.icon || D}></ha-icon>
+          <ha-icon .icon=${t.icon || S}></ha-icon>
           <div class="card-title">
             <div class="name">${t.name}</div>
             <div class="meta">${e}</div>
@@ -1501,7 +1518,7 @@ let u = class extends R {
       newWeekTime: t.newWeekTime
     });
     const s = this._settingsDraft;
-    return l`
+    return r`
       <div class="settings-section">
         <h3>Auto-finalize</h3>
         <p class="hint">
@@ -1515,8 +1532,8 @@ let u = class extends R {
           <input
             type="checkbox"
             .checked=${s.autoFinalizeEnabled}
-            @change=${(o) => {
-      s.autoFinalizeEnabled = o.target.checked, this.requestUpdate();
+            @change=${(i) => {
+      s.autoFinalizeEnabled = i.target.checked, this.requestUpdate();
     }}
           />
           Enable auto-finalize
@@ -1529,8 +1546,8 @@ let u = class extends R {
             min="1"
             ?disabled=${!s.autoFinalizeEnabled}
             .value=${String(s.autoFinalizeDelayMinutes)}
-            @input=${(o) => {
-      s.autoFinalizeDelayMinutes = Number(o.target.value) || 1, this.requestUpdate();
+            @input=${(i) => {
+      s.autoFinalizeDelayMinutes = Number(i.target.value) || 1, this.requestUpdate();
     }}
           />
         </label>
@@ -1550,8 +1567,8 @@ let u = class extends R {
             type="time"
             step="1"
             .value=${s.newDayTime}
-            @input=${(o) => {
-      s.newDayTime = o.target.value, this.requestUpdate();
+            @input=${(i) => {
+      s.newDayTime = i.target.value, this.requestUpdate();
     }}
           />
         </label>
@@ -1560,13 +1577,13 @@ let u = class extends R {
           New week day
           <select
             .value=${s.newWeekDay}
-            @change=${(o) => {
-      s.newWeekDay = o.target.value, this.requestUpdate();
+            @change=${(i) => {
+      s.newWeekDay = i.target.value, this.requestUpdate();
     }}
           >
             ${et.map(
-      (o) => l`<option value=${o} ?selected=${o === s.newWeekDay}>
-                ${o[0].toUpperCase()}${o.slice(1)}
+      (i) => r`<option value=${i} ?selected=${i === s.newWeekDay}>
+                ${i[0].toUpperCase()}${i.slice(1)}
               </option>`
     )}
           </select>
@@ -1578,8 +1595,8 @@ let u = class extends R {
             type="time"
             step="1"
             .value=${s.newWeekTime}
-            @input=${(o) => {
-      s.newWeekTime = o.target.value, this.requestUpdate();
+            @input=${(i) => {
+      s.newWeekTime = i.target.value, this.requestUpdate();
     }}
           />
         </label>
@@ -1640,7 +1657,7 @@ let u = class extends R {
   }
   _renderResetPointsDialog(t) {
     const e = this._resetPointsDialog;
-    return e ? l`
+    return e ? r`
       <div class="overlay" @click=${this._onResetPointsOverlayClick}>
         <div class="dialog" role="dialog" aria-modal="true">
           <div class="dialog-header">
@@ -1666,7 +1683,7 @@ let u = class extends R {
               >
                 <option value="">All users</option>
                 ${t.map(
-      (s) => l`<option value=${s}>${this._displayName(s)}</option>`
+      (s) => r`<option value=${s}>${this._displayName(s)}</option>`
     )}
               </select>
             </label>
@@ -1705,20 +1722,20 @@ let u = class extends R {
   }
   // --- Users tab -----------------------------------------------------
   _renderUsersTab(t, e, s) {
-    const o = new Map(e.map((a) => [a.assignee, a])), i = new Map(s.map((a) => [a.assignee, a]));
-    return l`
-      ${t.length === 0 ? l`<p class="empty">
+    const i = new Map(e.map((a) => [a.assignee, a])), o = new Map(s.map((a) => [a.assignee, a]));
+    return r`
+      ${t.length === 0 ? r`<p class="empty">
             No assignees yet. Add one to a chore or privilege to get started.
-          </p>` : l`<div class="card-grid">
+          </p>` : r`<div class="card-grid">
             ${t.map(
-      (a) => this._renderUserCard(a, o.get(a), i.get(a))
+      (a) => this._renderUserCard(a, i.get(a), o.get(a))
     )}
           </div>`}
     `;
   }
   _renderUserCard(t, e, s) {
-    const o = e?.totalPoints ?? 0, i = e?.pointsEarned ?? 0, a = e?.pointsMissed ?? 0, r = e?.pointsPossible ?? 0;
-    return l`
+    const i = e?.totalPoints ?? 0, o = e?.pointsEarned ?? 0, a = e?.pointsMissed ?? 0, n = e?.pointsPossible ?? 0;
+    return r`
       <div class="card">
         <div class="user-card-header">
           <div class="user-identity">
@@ -1726,13 +1743,13 @@ let u = class extends R {
             <span class="name">${this._displayName(t)}</span>
           </div>
           <div class="user-points-total" title="Lifetime total points">
-            <span class="user-points-value">${o}</span>
+            <span class="user-points-value">${i}</span>
             <span class="user-points-label">points</span>
           </div>
         </div>
         <div class="points-stats">
           <div class="points-stat">
-            <span class="points-stat-value">${i}</span>
+            <span class="points-stat-value">${o}</span>
             <span class="points-stat-label">earned today</span>
           </div>
           <div class="points-stat">
@@ -1740,11 +1757,11 @@ let u = class extends R {
             <span class="points-stat-label">missed</span>
           </div>
           <div class="points-stat">
-            <span class="points-stat-value">${r}</span>
+            <span class="points-stat-value">${n}</span>
             <span class="points-stat-label">possible today</span>
           </div>
         </div>
-        ${s ? l`
+        ${s ? r`
               <div class="user-goal-row">
                 <span class="user-goal-label">Point goal</span>
                 <input
@@ -1752,9 +1769,9 @@ let u = class extends R {
                   min="0"
                   class="user-goal-input"
                   .value=${String(s.value)}
-                  @change=${(n) => this._setPointGoal(
+                  @change=${(l) => this._setPointGoal(
       s.entityId,
-      n.target.value
+      l.target.value
     )}
                 />
               </div>
@@ -1765,10 +1782,22 @@ let u = class extends R {
             class="user-adjust-input"
             placeholder="±points"
             .value=${this._userAdjustInput[t] ?? ""}
-            @input=${(n) => {
+            @input=${(l) => {
       this._userAdjustInput = {
         ...this._userAdjustInput,
-        [t]: n.target.value
+        [t]: l.target.value
+      };
+    }}
+          />
+          <input
+            type="text"
+            class="user-adjust-reason-input"
+            placeholder="Reason (optional)"
+            .value=${this._userAdjustReasonInput[t] ?? ""}
+            @input=${(l) => {
+      this._userAdjustReasonInput = {
+        ...this._userAdjustReasonInput,
+        [t]: l.target.value
       };
     }}
           />
@@ -1790,10 +1819,12 @@ let u = class extends R {
       this._error = "Enter a non-zero point adjustment first.";
       return;
     }
+    const i = this._userAdjustReasonInput[t]?.trim();
     await this._call(p, "adjust_points", {
       user: t,
-      adjustment: s
-    }) && (this._userAdjustInput = { ...this._userAdjustInput, [t]: "" });
+      adjustment: s,
+      ...i ? { reason: i } : {}
+    }) && (this._userAdjustInput = { ...this._userAdjustInput, [t]: "" }, this._userAdjustReasonInput = { ...this._userAdjustReasonInput, [t]: "" });
   }
   /**
    * Fetch the chore audit log via the get_history service's response data.
@@ -1826,64 +1857,64 @@ let u = class extends R {
     await this._call(p, "reset_history", {}) && (this._historyEntries = []);
   }
   _renderHistoryTab(t, e, s) {
-    const o = this._historyEntries ?? [], a = [...o.filter((n) => {
-      if (this._historyUserFilter && n.assignee !== this._historyUserFilter)
+    const i = this._historyEntries ?? [], a = [...i.filter((l) => {
+      if (this._historyUserFilter && l.assignee !== this._historyUserFilter)
         return !1;
       if (this._historyCategoryFilter) {
-        if (this._historyCategoryFilter === N) {
-          if (n.category) return !1;
-        } else if (n.category !== this._historyCategoryFilter)
+        if (this._historyCategoryFilter === R) {
+          if (l.category) return !1;
+        } else if (l.category !== this._historyCategoryFilter)
           return !1;
       }
-      return !(this._historyChoreFilter && n.choreSlug !== this._historyChoreFilter || this._historyActionFilter.length > 0 && !this._historyActionFilter.includes(n.action));
-    })].sort((n, c) => c.timestamp.localeCompare(n.timestamp)), r = [...t].sort((n, c) => n.name.localeCompare(c.name));
-    return l`
+      return !(this._historyChoreFilter && l.choreSlug !== this._historyChoreFilter || this._historyActionFilter.length > 0 && !this._historyActionFilter.includes(l.action));
+    })].sort((l, c) => c.timestamp.localeCompare(l.timestamp)), n = [...t].sort((l, c) => l.name.localeCompare(c.name));
+    return r`
       <div class="actions-row">
         <select
           class="user-picker"
           title="Filter history by assignee"
           .value=${this._historyUserFilter}
-          @change=${(n) => this._historyUserFilter = n.target.value}
+          @change=${(l) => this._historyUserFilter = l.target.value}
         >
           <option value="">All assignees</option>
           ${s.map(
-      (n) => l`<option value=${n}>${this._displayName(n)}</option>`
+      (l) => r`<option value=${l}>${this._displayName(l)}</option>`
     )}
         </select>
         <select
           class="user-picker"
           title="Filter history by category"
           .value=${this._historyCategoryFilter}
-          @change=${(n) => this._historyCategoryFilter = n.target.value}
+          @change=${(l) => this._historyCategoryFilter = l.target.value}
         >
           <option value="">All categories</option>
-          <option value=${N}>Uncategorized</option>
-          ${e.map((n) => l`<option value=${n.slug}>${n.name}</option>`)}
+          <option value=${R}>Uncategorized</option>
+          ${e.map((l) => r`<option value=${l.slug}>${l.name}</option>`)}
         </select>
         <select
           class="user-picker"
           title="Filter history by chore"
           .value=${this._historyChoreFilter}
-          @change=${(n) => this._historyChoreFilter = n.target.value}
+          @change=${(l) => this._historyChoreFilter = l.target.value}
         >
           <option value="">All chores</option>
-          ${r.map((n) => l`<option value=${n.slug}>${n.name}</option>`)}
+          ${n.map((l) => r`<option value=${l.slug}>${l.name}</option>`)}
         </select>
         <div
           class="chip-toggle-group"
           role="group"
           aria-label="Filter history by event type"
         >
-          ${mt.map((n) => {
-      const c = this._historyActionFilter.includes(n);
-      return l`
+          ${mt.map((l) => {
+      const c = this._historyActionFilter.includes(l);
+      return r`
               <button
                 type="button"
-                class="chip-toggle ${ge(n)} ${c ? "selected" : ""}"
+                class="chip-toggle ${ge(l)} ${c ? "selected" : ""}"
                 aria-pressed=${c}
-                @click=${() => this._toggleHistoryActionFilter(n)}
+                @click=${() => this._toggleHistoryActionFilter(l)}
               >
-                ${ue(n)}
+                ${ue(l)}
               </button>
             `;
     })}
@@ -1894,9 +1925,9 @@ let u = class extends R {
         </button>
       </div>
 
-      ${this._historyEntries === null ? l`<p class="empty">Loading history&hellip;</p>` : a.length === 0 ? l`<p class="empty">
-              ${o.length === 0 ? "No chore history yet. Complete a chore to get started." : "No history entries match the current filters."}
-            </p>` : l`
+      ${this._historyEntries === null ? r`<p class="empty">Loading history&hellip;</p>` : a.length === 0 ? r`<p class="empty">
+              ${i.length === 0 ? "No chore history yet. Complete a chore to get started." : "No history entries match the current filters."}
+            </p>` : r`
               <div class="history-list">
                 <div class="history-row history-header">
                   <div class="history-cell history-time">Time</div>
@@ -1905,22 +1936,25 @@ let u = class extends R {
                   <div class="history-cell history-action">Action</div>
                   <div class="history-cell history-earned">Earned</div>
                   <div class="history-cell history-missed">Missed</div>
+                  <div class="history-cell history-undo">Undo</div>
                 </div>
-                ${a.map((n) => this._renderHistoryRow(n, e))}
+                ${a.map((l) => this._renderHistoryRow(l, e))}
               </div>
             `}
     `;
   }
   _renderHistoryRow(t, e) {
-    const s = t.category ? e.find((a) => a.slug === t.category)?.name ?? t.category : null, o = t.pointsDelta > 0 ? "points-positive" : t.pointsDelta < 0 ? "points-negative" : "", i = t.pointsDelta > 0 ? `+${t.pointsDelta}` : t.pointsDelta;
-    return l`
-      <div class="history-row">
+    const s = t.category ? e.find((n) => n.slug === t.category)?.name ?? t.category : null, i = t.pointsDelta > 0 ? "points-positive" : t.pointsDelta < 0 ? "points-negative" : "", o = t.pointsDelta > 0 ? `+${t.pointsDelta}` : t.pointsDelta, a = t.action === "completed" && !t.undone && !!this.hass.user?.is_admin;
+    return r`
+      <div class="history-row ${t.undone ? "history-row-undone" : ""}">
         <div class="history-cell history-time">
           ${this._formatHistoryTimestamp(t.timestamp)}
         </div>
         <div class="history-cell history-chore">
           <div class="name">${t.choreName}</div>
-          ${s ? l`<div class="meta">${s}</div>` : t.reason ? l`<div class="meta">"${t.reason}"</div>` : d}
+          ${s ? r`<div class="meta">${s}</div>` : d}
+          ${t.reason ? r`<div class="meta">"${t.reason}"</div>` : d}
+          ${t.penalty ? r`<div class="meta points-negative">Penalty: -${t.penalty}</div>` : d}
         </div>
         <div class="history-cell history-assignee">
           ${this._displayName(t.assignee)}
@@ -1932,17 +1966,93 @@ let u = class extends R {
         </div>
         <div class="history-cell history-earned" title="Points balance after this entry">
           ${t.pointsTotal}
-          ${t.pointsDelta !== 0 ? l`<div class="meta ${o}">${i}</div>` : d}
+          ${t.pointsDelta !== 0 ? r`<div class="meta ${i}">${o}</div>` : d}
         </div>
         <div
           class="history-cell history-missed"
           title="Cumulative missed points after this entry"
         >
           ${t.missedTotal ?? "—"}
-          ${t.pointsMissed > 0 ? l`<div class="meta points-negative">+${t.pointsMissed}</div>` : d}
+          ${t.pointsMissed > 0 ? r`<div class="meta points-negative">+${t.pointsMissed}</div>` : d}
+        </div>
+        <div class="history-cell history-undo">
+          ${a ? r`
+                <button
+                  type="button"
+                  class="action-chip history-undo-button"
+                  title="Reverse this completion's points"
+                  @click=${() => this._openUndoDialog(t)}
+                >
+                  <ha-icon icon="mdi:undo"></ha-icon>
+                  <span>Undo</span>
+                </button>
+              ` : t.undone ? r`<span class="meta">Undone</span>` : r`<span class="meta">—</span>`}
         </div>
       </div>
     `;
+  }
+  _renderUndoDialog() {
+    const t = this._undoDialog;
+    if (!t) return d;
+    const e = t.awarded + t.penalty;
+    return r`
+      <div class="overlay" @click=${this._onUndoOverlayClick}>
+        <div class="dialog" role="dialog" aria-modal="true">
+          <div class="dialog-header">
+            <h2>Undo completion</h2>
+            <button class="icon-button" @click=${() => this._undoDialog = null}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="dialog-body">
+            <p class="hint danger-text">
+              Reverses "${t.choreName}" for ${this._displayName(t.assignee)},
+              clawing back the ${t.awarded} point(s) it awarded${t.penalty ? r` plus a ${t.penalty}-point penalty (${e} total)` : d}. This cannot be undone.
+            </p>
+            <label>
+              Reason
+              <input
+                type="text"
+                placeholder="Why is this being undone?"
+                .value=${t.reason}
+                @input=${(s) => {
+      t.reason = s.target.value, this.requestUpdate();
+    }}
+              />
+            </label>
+            <label>
+              Penalty (extra points to withhold)
+              <input
+                type="number"
+                min="0"
+                .value=${String(t.penalty)}
+                @input=${(s) => {
+      t.penalty = Math.max(
+        0,
+        Number(s.target.value) || 0
+      ), this.requestUpdate();
+    }}
+              />
+            </label>
+          </div>
+          <div class="dialog-footer">
+            <button @click=${() => this._undoDialog = null}>Cancel</button>
+            <button class="danger" ?disabled=${this._busy} @click=${() => this._confirmUndo()}>
+              Undo completion
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  async _confirmUndo() {
+    const t = this._undoDialog;
+    if (!t) return;
+    await this._call(p, "undo_completion", {
+      entry_id: t.entryId,
+      penalty: t.penalty,
+      ...t.reason.trim() ? { reason: t.reason.trim() } : {}
+    }) && (this._undoDialog = null, await this._loadHistory());
   }
   _toggleHistoryActionFilter(t) {
     this._historyActionFilter = this._historyActionFilter.includes(t) ? this._historyActionFilter.filter((e) => e !== t) : [...this._historyActionFilter, t];
@@ -1954,25 +2064,25 @@ let u = class extends R {
   // --- Dialog ------------------------------------------------------------
   _renderDialog(t, e, s) {
     if (!this._dialog) return d;
-    const o = this._dialog.kind, i = this._dialog.original ? "Edit" : "New", a = o === "chore" ? "chore" : o === "privilege" ? "privilege" : "category";
-    return l`
+    const i = this._dialog.kind, o = this._dialog.original ? "Edit" : "New", a = i === "chore" ? "chore" : i === "privilege" ? "privilege" : "category";
+    return r`
       <div class="overlay" @click=${this._onOverlayClick}>
         <div class="dialog" role="dialog" aria-modal="true">
           <div class="dialog-header">
-            <h2>${i} ${a}</h2>
+            <h2>${o} ${a}</h2>
             <button class="icon-button" @click=${this._closeDialog}>
               <ha-icon icon="mdi:close"></ha-icon>
             </button>
           </div>
           <div class="dialog-body">
-            ${o === "chore" ? this._renderChoreForm(e, s) : o === "privilege" ? this._renderPrivilegeForm(t, s) : this._renderCategoryForm()}
+            ${i === "chore" ? this._renderChoreForm(e, s) : i === "privilege" ? this._renderPrivilegeForm(t, s) : this._renderCategoryForm()}
           </div>
           <div class="dialog-footer">
             <button @click=${this._closeDialog}>Cancel</button>
             <button
               class="primary"
               ?disabled=${this._busy}
-              @click=${() => o === "chore" ? this._saveChoreDialog() : o === "privilege" ? this._savePrivilegeDialog() : this._saveCategoryDialog()}
+              @click=${() => i === "chore" ? this._saveChoreDialog() : i === "privilege" ? this._savePrivilegeDialog() : this._saveCategoryDialog()}
             >
               Save
             </button>
@@ -1982,15 +2092,15 @@ let u = class extends R {
     `;
   }
   _renderChoreForm(t, e) {
-    const s = this._dialog.draft, o = !!this._dialog.original, i = x(s.slug || s.name), a = o && i && i !== this._dialog.original;
-    return l`
+    const s = this._dialog.draft, i = !!this._dialog.original, o = x(s.slug || s.name), a = i && o && o !== this._dialog.original;
+    return r`
       <label>
         Name
         <input
           type="text"
           .value=${s.name}
-          @input=${(r) => {
-      s.name = r.target.value, this.requestUpdate();
+          @input=${(n) => {
+      s.name = n.target.value, this.requestUpdate();
     }}
         />
       </label>
@@ -2000,12 +2110,12 @@ let u = class extends R {
         <input
           type="text"
           .value=${s.slug}
-          placeholder=${i || "auto-generated from name"}
-          @input=${(r) => {
-      s.slug = r.target.value, this.requestUpdate();
+          placeholder=${o || "auto-generated from name"}
+          @input=${(n) => {
+      s.slug = n.target.value, this.requestUpdate();
     }}
         />
-        ${a ? l`<span class="hint">Will be renamed to "${i}"</span>` : o ? d : l`<span class="hint">Will be saved as "${i}"</span>`}
+        ${a ? r`<span class="hint">Will be renamed to "${o}"</span>` : i ? d : r`<span class="hint">Will be saved as "${o}"</span>`}
       </label>
 
       <label>
@@ -2013,8 +2123,8 @@ let u = class extends R {
         <input
           type="text"
           .value=${s.description}
-          @input=${(r) => {
-      s.description = r.target.value, this.requestUpdate();
+          @input=${(n) => {
+      s.description = n.target.value, this.requestUpdate();
     }}
         />
       </label>
@@ -2024,12 +2134,12 @@ let u = class extends R {
           Frequency
           <select
             .value=${s.frequency}
-            @change=${(r) => {
-      s.frequency = r.target.value, this.requestUpdate();
+            @change=${(n) => {
+      s.frequency = n.target.value, this.requestUpdate();
     }}
           >
             ${Je.map(
-      (r) => l`<option value=${r}>${r}</option>`
+      (n) => r`<option value=${n}>${n}</option>`
     )}
           </select>
         </label>
@@ -2040,8 +2150,8 @@ let u = class extends R {
             type="number"
             min="0"
             .value=${String(s.points)}
-            @input=${(r) => {
-      s.points = Number(r.target.value) || 0, this.requestUpdate();
+            @input=${(n) => {
+      s.points = Number(n.target.value) || 0, this.requestUpdate();
     }}
           />
         </label>
@@ -2051,19 +2161,19 @@ let u = class extends R {
         Category
         <select
           .value=${s.category}
-          @change=${(r) => {
-      s.category = r.target.value, this.requestUpdate();
+          @change=${(n) => {
+      s.category = n.target.value, this.requestUpdate();
     }}
         >
           <option value=${ee}>Uncategorized</option>
           ${t.map(
-      (r) => l`<option value=${r.slug}>${r.name}</option>`
+      (n) => r`<option value=${n.slug}>${n.name}</option>`
     )}
         </select>
       </label>
 
-      ${this._renderIconField(s.icon, E, (r) => {
-      s.icon = r, this.requestUpdate();
+      ${this._renderIconField(s.icon, E, (n) => {
+      s.icon = n, this.requestUpdate();
     })}
 
       ${this._renderAssigneeEditor(s, e)}
@@ -2077,7 +2187,7 @@ let u = class extends R {
    * for that assignee (see ChoreDraft.pointsByAssignee).
    */
   _renderPointsByAssigneeEditor(t) {
-    return t.assignees.length === 0 ? d : l`
+    return t.assignees.length === 0 ? d : r`
       <label>
         Points per assignee
         <span class="hint"
@@ -2087,7 +2197,7 @@ let u = class extends R {
         <div class="points-override-list">
           ${t.assignees.map((e) => {
       const s = t.pointsByAssignee[e] ?? t.points;
-      return l`
+      return r`
               <div class="points-override-row">
                 <span class="points-override-name">${this._displayName(e)}</span>
                 <input
@@ -2095,9 +2205,9 @@ let u = class extends R {
                   min="0"
                   class="points-override-input"
                   .value=${String(s)}
-                  @input=${(o) => {
-        const i = Number(o.target.value) || 0, a = { ...t.pointsByAssignee };
-        i === t.points ? delete a[e] : a[e] = i, t.pointsByAssignee = a, this.requestUpdate();
+                  @input=${(i) => {
+        const o = Number(i.target.value) || 0, a = { ...t.pointsByAssignee };
+        o === t.points ? delete a[e] : a[e] = o, t.pointsByAssignee = a, this.requestUpdate();
       }}
                 />
               </div>
@@ -2108,15 +2218,15 @@ let u = class extends R {
     `;
   }
   _renderPrivilegeForm(t, e) {
-    const s = this._dialog.draft, o = !!this._dialog.original, i = x(s.slug || s.name), a = o && i && i !== this._dialog.original;
-    return l`
+    const s = this._dialog.draft, i = !!this._dialog.original, o = x(s.slug || s.name), a = i && o && o !== this._dialog.original;
+    return r`
       <label>
         Name
         <input
           type="text"
           .value=${s.name}
-          @input=${(r) => {
-      s.name = r.target.value, this.requestUpdate();
+          @input=${(n) => {
+      s.name = n.target.value, this.requestUpdate();
     }}
         />
       </label>
@@ -2126,24 +2236,24 @@ let u = class extends R {
         <input
           type="text"
           .value=${s.slug}
-          placeholder=${i || "auto-generated from name"}
-          @input=${(r) => {
-      s.slug = r.target.value, this.requestUpdate();
+          placeholder=${o || "auto-generated from name"}
+          @input=${(n) => {
+      s.slug = n.target.value, this.requestUpdate();
     }}
         />
-        ${a ? l`<span class="hint">Will be renamed to "${i}"</span>` : o ? d : l`<span class="hint">Will be saved as "${i}"</span>`}
+        ${a ? r`<span class="hint">Will be renamed to "${o}"</span>` : i ? d : r`<span class="hint">Will be saved as "${o}"</span>`}
       </label>
 
       <label>
         Behavior
         <select
           .value=${s.behavior}
-          @change=${(r) => {
-      s.behavior = r.target.value, this.requestUpdate();
+          @change=${(n) => {
+      s.behavior = n.target.value, this.requestUpdate();
     }}
         >
           ${Qe.map(
-      (r) => l`<option value=${r}>${r}</option>`
+      (n) => r`<option value=${n}>${n}</option>`
     )}
         </select>
         <span class="hint"
@@ -2152,8 +2262,8 @@ let u = class extends R {
         >
       </label>
 
-      ${this._renderIconField(s.icon, S, (r) => {
-      s.icon = r, this.requestUpdate();
+      ${this._renderIconField(s.icon, D, (n) => {
+      s.icon = n, this.requestUpdate();
     })}
 
       <label>
@@ -2163,18 +2273,18 @@ let u = class extends R {
           complete instead of a specific list.</span
         >
         <div class="checkbox-list">
-          ${t.length === 0 ? l`<span class="hint">No chores defined yet.</span>` : t.map(
-      (r) => l`
+          ${t.length === 0 ? r`<span class="hint">No chores defined yet.</span>` : t.map(
+      (n) => r`
                   <label class="checkbox-item">
                     <input
                       type="checkbox"
-                      .checked=${s.linkedChores.includes(r.slug)}
-                      @change=${(n) => {
-        const c = n.target.checked;
-        s.linkedChores = c ? [...s.linkedChores, r.slug] : s.linkedChores.filter((m) => m !== r.slug), this.requestUpdate();
+                      .checked=${s.linkedChores.includes(n.slug)}
+                      @change=${(l) => {
+        const c = l.target.checked;
+        s.linkedChores = c ? [...s.linkedChores, n.slug] : s.linkedChores.filter((b) => b !== n.slug), this.requestUpdate();
       }}
                     />
-                    ${r.name}
+                    ${n.name}
                   </label>
                 `
     )}
@@ -2185,15 +2295,15 @@ let u = class extends R {
     `;
   }
   _renderCategoryForm() {
-    const t = this._dialog.draft, e = !!this._dialog.original, s = x(t.slug || t.name), o = e && s && s !== this._dialog.original;
-    return l`
+    const t = this._dialog.draft, e = !!this._dialog.original, s = x(t.slug || t.name), i = e && s && s !== this._dialog.original;
+    return r`
       <label>
         Name
         <input
           type="text"
           .value=${t.name}
-          @input=${(i) => {
-      t.name = i.target.value, this.requestUpdate();
+          @input=${(o) => {
+      t.name = o.target.value, this.requestUpdate();
     }}
         />
       </label>
@@ -2204,20 +2314,20 @@ let u = class extends R {
           type="text"
           .value=${t.slug}
           placeholder=${s || "auto-generated from name"}
-          @input=${(i) => {
-      t.slug = i.target.value, this.requestUpdate();
+          @input=${(o) => {
+      t.slug = o.target.value, this.requestUpdate();
     }}
         />
-        ${o ? l`<span class="hint">Will be renamed to "${s}"</span>` : e ? d : l`<span class="hint">Will be saved as "${s}"</span>`}
+        ${i ? r`<span class="hint">Will be renamed to "${s}"</span>` : e ? d : r`<span class="hint">Will be saved as "${s}"</span>`}
       </label>
 
-      ${this._renderIconField(t.icon, D, (i) => {
-      t.icon = i, this.requestUpdate();
+      ${this._renderIconField(t.icon, S, (o) => {
+      t.icon = o, this.requestUpdate();
     })}
     `;
   }
   _renderIconField(t, e, s) {
-    return l`
+    return r`
       <label>
         Icon
         <div class="icon-field">
@@ -2226,25 +2336,25 @@ let u = class extends R {
             type="text"
             .value=${t}
             placeholder=${e}
-            @input=${(o) => s(o.target.value)}
+            @input=${(i) => s(i.target.value)}
           />
         </div>
       </label>
     `;
   }
   _renderAssigneeEditor(t, e) {
-    return l`
+    return r`
       <label>
         Assignees
         <div class="chip-list">
           ${t.assignees.map(
-      (s) => l`
+      (s) => r`
               <span class="chip">
                 ${this._displayName(s)}
                 <button
                   class="chip-remove"
                   @click=${() => {
-        t.assignees = t.assignees.filter((o) => o !== s), this.requestUpdate();
+        t.assignees = t.assignees.filter((i) => i !== s), this.requestUpdate();
       }}
                 >
                   ✕
@@ -2263,7 +2373,7 @@ let u = class extends R {
       </label>
       <datalist id="simple-chores-known-assignees">
         ${e.map(
-      (s) => l`<option value=${s} label=${this._displayName(s)}></option>`
+      (s) => r`<option value=${s} label=${this._displayName(s)}></option>`
     )}
       </datalist>
     `;
@@ -2286,7 +2396,7 @@ let u = class extends R {
     this._error = null, this._dialog = {
       kind: "privilege",
       original: t.slug,
-      draft: rt(t)
+      draft: nt(t)
     };
   }
   _openEditCategory(t) {
@@ -2309,8 +2419,8 @@ let u = class extends R {
     this._busy = !0;
     try {
       return await this.hass.callService(t, e, s), !0;
-    } catch (o) {
-      return this._error = o instanceof Error ? o.message : String(o), !1;
+    } catch (i) {
+      return this._error = i instanceof Error ? i.message : String(i), !1;
     } finally {
       this._busy = !1;
     }
@@ -2370,19 +2480,19 @@ let u = class extends R {
     if (Object.hasOwn(this._disableReasonInput, t))
       return this._disableReasonInput[t].trim();
   }
-  async _addTemporaryDisable(t, e, s, o, i) {
-    const a = this._pendingReason(i);
+  async _addTemporaryDisable(t, e, s, i, o) {
+    const a = this._pendingReason(o);
     if (await this._call(
       p,
       s ? "adjust_temporary_disable" : "temporarily_disable_privilege",
       {
         user: e,
         privilege_slug: t,
-        ...s ? { adjustment: o } : { duration: o },
+        ...s ? { adjustment: i } : { duration: i },
         ...a !== void 0 ? { reason: a } : {}
       }
     ) && a !== void 0) {
-      const { [i]: n, ...c } = this._disableReasonInput;
+      const { [o]: l, ...c } = this._disableReasonInput;
       this._disableReasonInput = c;
     }
   }
@@ -2395,15 +2505,15 @@ let u = class extends R {
    * any edited-but-unsaved reason, same as extending via `_addTemporaryDisable`.
    */
   async _adjustTemporaryDisable(t, e, s) {
-    const o = this._disableReasonKey(t, e), i = this._pendingReason(o);
+    const i = this._disableReasonKey(t, e), o = this._pendingReason(i);
     if (await this._call(p, "adjust_temporary_disable", {
       user: e,
       privilege_slug: t,
       adjustment: s,
-      ...i !== void 0 ? { reason: i } : {}
-    }) && i !== void 0) {
-      const { [o]: r, ...n } = this._disableReasonInput;
-      this._disableReasonInput = n;
+      ...o !== void 0 ? { reason: o } : {}
+    }) && o !== void 0) {
+      const { [i]: n, ...l } = this._disableReasonInput;
+      this._disableReasonInput = l;
     }
   }
   /**
@@ -2413,16 +2523,16 @@ let u = class extends R {
    * touching a stepper. No-ops if the field wasn't actually changed.
    */
   async _saveDisableReason(t, e, s) {
-    const o = this._disableReasonKey(t, e), i = this._pendingReason(o);
-    if (i === void 0 || i === (s ?? "")) return;
+    const i = this._disableReasonKey(t, e), o = this._pendingReason(i);
+    if (o === void 0 || o === (s ?? "")) return;
     if (await this._call(p, "adjust_temporary_disable", {
       user: e,
       privilege_slug: t,
       adjustment: 0,
-      reason: i
+      reason: o
     })) {
-      const { [o]: r, ...n } = this._disableReasonInput;
-      this._disableReasonInput = n;
+      const { [i]: n, ...l } = this._disableReasonInput;
+      this._disableReasonInput = l;
     }
   }
   /**
@@ -2435,7 +2545,7 @@ let u = class extends R {
       user: e,
       privilege_slug: t
     })) {
-      const o = this._disableReasonKey(t, e), { [o]: i, ...a } = this._disableReasonInput;
+      const i = this._disableReasonKey(t, e), { [i]: o, ...a } = this._disableReasonInput;
       this._disableReasonInput = a;
     }
   }
@@ -2449,7 +2559,7 @@ let u = class extends R {
       this._error = "At least one assignee is required.";
       return;
     }
-    const s = e.assignees.join(","), o = Object.entries(e.pointsByAssignee).filter(([a]) => e.assignees.includes(a)).map(([a, r]) => `${a}:${r}`).join(",");
+    const s = e.assignees.join(","), i = Object.entries(e.pointsByAssignee).filter(([a]) => e.assignees.includes(a)).map(([a, n]) => `${a}:${n}`).join(",");
     (t.original ? await this._call(p, "update_chore", {
       slug: t.original,
       name: e.name,
@@ -2458,7 +2568,7 @@ let u = class extends R {
       assignees: s,
       icon: e.icon || E,
       points: e.points,
-      points_by_assignee: o,
+      points_by_assignee: i,
       category: e.category,
       ...this._renameField(t.original, e.slug || e.name)
     }) : await this._call(p, "create_chore", {
@@ -2469,7 +2579,7 @@ let u = class extends R {
       assignees: s,
       icon: e.icon || E,
       points: e.points,
-      points_by_assignee: o,
+      points_by_assignee: i,
       category: e.category
     })) && (this._dialog = null);
   }
@@ -2482,12 +2592,12 @@ let u = class extends R {
     (t.original ? await this._call(p, "update_category", {
       slug: t.original,
       name: e.name,
-      icon: e.icon || D,
+      icon: e.icon || S,
       ...this._renameField(t.original, e.slug || e.name)
     }) : await this._call(p, "create_category", {
       name: e.name,
       slug: x(e.slug || e.name),
-      icon: e.icon || D
+      icon: e.icon || S
     })) && (this._dialog = null);
   }
   async _savePrivilegeDialog() {
@@ -2500,26 +2610,26 @@ let u = class extends R {
       this._error = "At least one assignee is required.";
       return;
     }
-    const s = e.assignees.join(","), o = e.linkedChores.join(",");
+    const s = e.assignees.join(","), i = e.linkedChores.join(",");
     (t.original ? await this._call(p, "update_privilege", {
       slug: t.original,
       name: e.name,
-      icon: e.icon || S,
+      icon: e.icon || D,
       behavior: e.behavior,
-      linked_chores: o,
+      linked_chores: i,
       assignees: s,
       ...this._renameField(t.original, e.slug || e.name)
     }) : await this._call(p, "create_privilege", {
       name: e.name,
       slug: x(e.slug || e.name),
-      icon: e.icon || S,
+      icon: e.icon || D,
       behavior: e.behavior,
-      linked_chores: o,
+      linked_chores: i,
       assignees: s
     })) && (this._dialog = null);
   }
 };
-u.styles = Ce`
+h.styles = Ce`
     :host {
       display: block;
       height: 100vh;
@@ -3158,16 +3268,25 @@ u.styles = Ce`
     }
     .history-row {
       display: grid;
-      grid-template-columns: 1.3fr 1.6fr 1fr 1fr 0.9fr 0.8fr;
+      grid-template-columns: 1.2fr 1.5fr 0.9fr 0.8fr 0.8fr 0.7fr 0.9fr;
       gap: 8px;
       align-items: center;
       padding: 10px 14px;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
       font-size: 13px;
-      min-width: 640px;
+      min-width: 760px;
     }
     .history-row:last-child {
       border-bottom: none;
+    }
+    /* A reversed completion stays in the log (it's an audit trail) but
+       reads as struck-through, matching the done-and-undone state. */
+    .history-row-undone {
+      opacity: 0.7;
+    }
+    .history-row-undone .history-cell.history-chore .name,
+    .history-row-undone .history-action .state-chip {
+      text-decoration: line-through;
     }
     .history-header {
       font-size: 12px;
@@ -3182,6 +3301,20 @@ u.styles = Ce`
     .history-cell .meta {
       font-size: 11px;
       color: var(--secondary-text-color, #727272);
+    }
+    .history-cell.history-undo {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      text-align: right;
+    }
+    .history-undo-button {
+      font-size: 11px;
+      padding: 2px 8px 2px 6px;
+      white-space: nowrap;
+    }
+    .history-undo-button ha-icon {
+      --mdc-icon-size: 14px;
     }
     .history-earned,
     .history-missed {
@@ -3303,6 +3436,17 @@ u.styles = Ce`
       border-radius: 8px;
       padding: 8px 10px;
     }
+    .user-adjust-reason-input {
+      flex: 1;
+      min-width: 0;
+      font: inherit;
+      font-size: 14px;
+      color: var(--primary-text-color, #212121);
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
 
     .points-override-list {
       display: flex;
@@ -3381,67 +3525,73 @@ u.styles = Ce`
   `;
 g([
   Q({ attribute: !1 })
-], u.prototype, "hass", 2);
+], h.prototype, "hass", 2);
 g([
   Q({ type: Boolean })
-], u.prototype, "narrow", 2);
+], h.prototype, "narrow", 2);
 g([
-  b()
-], u.prototype, "_tab", 2);
+  m()
+], h.prototype, "_tab", 2);
 g([
-  b()
-], u.prototype, "_dialog", 2);
+  m()
+], h.prototype, "_dialog", 2);
 g([
-  b()
-], u.prototype, "_busy", 2);
+  m()
+], h.prototype, "_busy", 2);
 g([
-  b()
-], u.prototype, "_error", 2);
+  m()
+], h.prototype, "_error", 2);
 g([
-  b()
-], u.prototype, "_bulkUser", 2);
+  m()
+], h.prototype, "_bulkUser", 2);
 g([
-  b()
-], u.prototype, "_categoryFilter", 2);
+  m()
+], h.prototype, "_categoryFilter", 2);
 g([
-  b()
-], u.prototype, "_choreSort", 2);
+  m()
+], h.prototype, "_choreSort", 2);
 g([
-  b()
-], u.prototype, "_userDisplayNames", 2);
+  m()
+], h.prototype, "_userDisplayNames", 2);
 g([
-  b()
-], u.prototype, "_settingsDraft", 2);
+  m()
+], h.prototype, "_settingsDraft", 2);
 g([
-  b()
-], u.prototype, "_resetPointsDialog", 2);
+  m()
+], h.prototype, "_resetPointsDialog", 2);
 g([
-  b()
-], u.prototype, "_userAdjustInput", 2);
+  m()
+], h.prototype, "_undoDialog", 2);
 g([
-  b()
-], u.prototype, "_disableReasonInput", 2);
+  m()
+], h.prototype, "_userAdjustInput", 2);
 g([
-  b()
-], u.prototype, "_untilFlash", 2);
+  m()
+], h.prototype, "_userAdjustReasonInput", 2);
 g([
-  b()
-], u.prototype, "_historyEntries", 2);
+  m()
+], h.prototype, "_disableReasonInput", 2);
 g([
-  b()
-], u.prototype, "_historyLoading", 2);
+  m()
+], h.prototype, "_untilFlash", 2);
 g([
-  b()
-], u.prototype, "_historyUserFilter", 2);
+  m()
+], h.prototype, "_historyEntries", 2);
 g([
-  b()
-], u.prototype, "_historyCategoryFilter", 2);
+  m()
+], h.prototype, "_historyLoading", 2);
 g([
-  b()
-], u.prototype, "_historyChoreFilter", 2);
+  m()
+], h.prototype, "_historyUserFilter", 2);
 g([
-  b()
-], u.prototype, "_historyActionFilter", 2);
-u = g([
+  m()
+], h.prototype, "_historyCategoryFilter", 2);
+g([
+  m()
+], h.prototype, "_historyChoreFilter", 2);
+g([
+  m()
+], h.prototype, "_historyActionFilter", 2);
+h = g([
   Ve("simple-chores-panel")
-], u);
+], h);

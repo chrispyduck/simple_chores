@@ -178,7 +178,7 @@ export class SimpleChoresHistoryCard extends LitElement {
     const pointsLabel = entry.pointsDelta > 0 ? `+${entry.pointsDelta}` : entry.pointsDelta;
 
     return html`
-      <div class="row">
+      <div class="row ${entry.undone ? "row-undone" : ""}">
         <div class="cell time">${this._formatTime(entry.timestamp)}</div>
         <div class="cell event">
           <span class="state-chip ${historyActionClass(entry.action)}">
@@ -267,6 +267,13 @@ export class SimpleChoresHistoryCard extends LitElement {
     }
     .row:last-child {
       border-bottom: none;
+    }
+    .row-undone {
+      opacity: 0.7;
+    }
+    .row-undone .cell.chore,
+    .row-undone .state-chip {
+      text-decoration: line-through;
     }
     .col-header {
       font-size: 12px;

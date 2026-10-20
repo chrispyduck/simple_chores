@@ -20,6 +20,7 @@ Service actions have been implemented to allow external automation and scripts t
 10. `simple_chores.refresh_summary` - Force refresh of summary sensor attributes
 11. `simple_chores.adjust_points` - Manually adjust an assignee's earned points by a specified amount (positive or negative)
 12. `simple_chores.reset_points` - Reset points tracking (daily stats and/or total points)
+13. `simple_chores.undo_completion` - Administrators only. Reverse a completed chore's history entry, clawing back its points and optionally withholding an additional penalty
 
 ### Privilege Services
 
@@ -49,11 +50,20 @@ Service actions have been implemented to allow external automation and scripts t
 
 - `user` (required, string): The assignee/user whose points should be adjusted
 - `adjustment` (required, integer): The number of points to add (positive) or subtract (negative). Range: -1,000,000,000 to 1,000,000,000
+- `reason` (optional, string): Justification for the adjustment, shown in the History tab
 
 ### reset_points
 
 - `user` (optional, string): The assignee/user whose points should be reset. If not provided, resets points for all users.
 - `reset_total` (optional, boolean): Whether to reset total_points (lifetime earned points) to zero. Default: false (only resets points_earned and daily stats)
+
+### undo_completion
+
+Administrators only - a non-admin caller is rejected. Reverses a "completed" history entry: claws back the points it awarded, and optionally withholds an additional penalty on top. Never touches the chore's current state (it doesn't re-request or un-complete anything) - by the time this is used, the chore has usually already auto-finalized or moved into a new cycle. The reversed entry is flagged so it can't be undone twice, and shows struck through in the History tab.
+
+- `entry_id` (required, string): The id of the "completed" history entry to undo
+- `penalty` (optional, integer): Additional points to withhold on top of the reversed award. Default: 0. Range: 0 to 1,000,000,000
+- `reason` (optional, string): Justification for the undo, shown in the History tab
 
 ### enable_privilege, disable_privilege
 

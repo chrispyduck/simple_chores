@@ -11,7 +11,11 @@ import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HassJob, ServiceResponse, SupportsResponse
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import (
+    HomeAssistantError,
+    ServiceValidationError,
+    Unauthorized,
+)
 from homeassistant.helpers.event import async_call_later, async_track_time_change
 
 from .const import (
@@ -25,6 +29,7 @@ from .const import (
     ATTR_CHORE_SLUG,
     ATTR_DESCRIPTION,
     ATTR_DURATION,
+    ATTR_ENTRY_ID,
     ATTR_FREQUENCY,
     ATTR_ICON,
     ATTR_LINKED_CHORES,
@@ -33,6 +38,7 @@ from .const import (
     ATTR_NEW_SLUG,
     ATTR_NEW_WEEK_DAY,
     ATTR_NEW_WEEK_TIME,
+    ATTR_PENALTY,
     ATTR_POINTS,
     ATTR_POINTS_BY_ASSIGNEE,
     ATTR_PRIVILEGE_SLUG,
@@ -68,6 +74,7 @@ from .const import (
     SERVICE_RESET_POINTS,
     SERVICE_START_NEW_DAY,
     SERVICE_TEMPORARILY_DISABLE_PRIVILEGE,
+    SERVICE_UNDO_COMPLETION,
     SERVICE_UPDATE_CATEGORY,
     SERVICE_UPDATE_CHORE,
     SERVICE_UPDATE_PRIVILEGE,
@@ -115,6 +122,29 @@ def _validate_integration_loaded(hass: HomeAssistant) -> None:
         msg = "Simple Chores integration not loaded"
         LOGGER.error(msg)
         raise HomeAssistantError(msg)
+
+
+async def _require_admin(hass: HomeAssistant, call: ServiceCall) -> None:
+    """
+    Raise Unauthorized unless `call` was made by an administrator.
+
+    Most of this integration's services rely on the admin panel's
+    require_admin=True sidebar gating alone (see panel.py) - the service
+    layer trusts whoever can call it. undo_completion is sensitive enough
+    (it reverses points and can levy a punitive penalty) to check the
+    caller directly instead of relying on that UI-only gate.
+    """
+    user = (
+        await hass.auth.async_get_user(call.context.user_id)
+        if call.context.user_id
+        else None
+    )
+    if user is None or not user.is_admin:
+        LOGGER.warning(
+            "Unauthorized attempt to call a service requiring admin (user_id=%s)",
+            call.context.user_id,
+        )
+        raise Unauthorized(context=call.context)
 
 
 def _find_matching_sensors(
@@ -463,6 +493,7 @@ ADJUST_POINTS_SCHEMA = vol.Schema(
         vol.Required(ATTR_ADJUSTMENT): vol.All(
             vol.Coerce(int), vol.Range(min=-1000000000, max=1000000000)
         ),
+        vol.Optional(ATTR_REASON, default=""): cv.string,
     }
 )
 
@@ -481,6 +512,16 @@ RESET_POINTS_SCHEMA = vol.Schema(
 
 GET_HISTORY_SCHEMA = vol.Schema({})
 RESET_HISTORY_SCHEMA = vol.Schema({})
+
+UNDO_COMPLETION_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTRY_ID): cv.string,
+        vol.Optional(ATTR_PENALTY, default=0): vol.All(
+            vol.Coerce(int), vol.Range(min=0)
+        ),
+        vol.Optional(ATTR_REASON, default=""): cv.string,
+    }
+)
 
 # Privilege service schemas
 PRIVILEGE_SERVICE_SCHEMA = vol.Schema(
@@ -1909,6 +1950,7 @@ async def handle_adjust_points(hass: HomeAssistant, call: ServiceCall) -> None:
     """
     user = call.data[ATTR_USER]
     adjustment = call.data[ATTR_ADJUSTMENT]
+    reason = call.data.get(ATTR_REASON, "") or None
 
     LOGGER.info(
         "Service 'adjust_points' called with user='%s', adjustment=%d",
@@ -1942,6 +1984,7 @@ async def handle_adjust_points(hass: HomeAssistant, call: ServiceCall) -> None:
             points_total=new_total,
             points_missed=0,
             missed_total=points_storage.get_points_missed(user),
+            reason=reason,
         )
 
     LOGGER.info(
@@ -2083,6 +2126,101 @@ async def handle_reset_history(
 
     count = await history_storage.async_clear()
     LOGGER.info("Cleared %d chore history entr%s", count, "y" if count == 1 else "ies")
+
+
+async def handle_undo_completion(hass: HomeAssistant, call: ServiceCall) -> None:
+    """
+    Handle the undo_completion service call.
+
+    Reverses a past "completed" history entry: claws back the points it
+    awarded, optionally withholds an additional penalty on top, and records
+    the reversal - with the admin's reason - as its own "undone" entry. The
+    original entry is flagged undone (see HistoryStorage.async_mark_undone)
+    so the History tab can strike it through and hide its Undo button,
+    preventing a double-undo.
+
+    Deliberately never touches the chore sensor's current state, unlike
+    finalize_one/reset_completed - by the time an admin reviews history the
+    chore has likely already auto-finalized or moved into a new cycle, and
+    flipping today's sensor based on an old entry would be wrong. Only
+    administrators may call this - see _require_admin.
+    """
+    await _require_admin(hass, call)
+
+    entry_id = call.data[ATTR_ENTRY_ID]
+    penalty = call.data.get(ATTR_PENALTY, 0)
+    reason = call.data.get(ATTR_REASON, "") or None
+
+    LOGGER.info(
+        "Service 'undo_completion' called with entry_id='%s', penalty=%d",
+        entry_id,
+        penalty,
+    )
+
+    _validate_integration_loaded(hass)
+    history_storage = hass.data[DOMAIN].get("history_storage")
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    if not history_storage or not points_storage:
+        msg = "History or points storage not initialized"
+        LOGGER.error(msg)
+        raise HomeAssistantError(msg)
+
+    original = next(
+        (entry for entry in history_storage.get_entries() if entry["id"] == entry_id),
+        None,
+    )
+    if original is None:
+        msg = f"No history entry found with id '{entry_id}'"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+    if original["action"] != "completed":
+        msg = f"History entry '{entry_id}' is not a completion and can't be undone"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+    if original.get("undone"):
+        msg = f"History entry '{entry_id}' has already been undone"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    assignee = original["assignee"]
+    awarded = original["points_delta"]
+    total_clawback = awarded + penalty
+
+    # Claw back the original award the same way mark_pending reverses an
+    # un-completed chore (both total and earned); the penalty on top is
+    # punitive, not a reversal of anything earned, so - like adjust_points -
+    # it only touches the raw total.
+    await points_storage.add_points(assignee, -total_clawback)
+    await points_storage.add_points_earned(assignee, -awarded)
+    await history_storage.async_mark_undone(entry_id)
+
+    new_total = points_storage.get_points(assignee)
+    await history_storage.async_add_entry(
+        action="undone",
+        chore_slug=original["chore_slug"],
+        chore_name=original["chore_name"],
+        category=original["category"],
+        assignee=assignee,
+        points_delta=-total_clawback,
+        points_total=new_total,
+        points_missed=0,
+        missed_total=points_storage.get_points_missed(assignee),
+        reason=reason,
+        penalty=penalty,
+    )
+
+    LOGGER.info(
+        "Undid completion '%s' for '%s': clawed back %d point(s) "
+        "(%d awarded + %d penalty), new total %d",
+        entry_id,
+        assignee,
+        total_clawback,
+        awarded,
+        penalty,
+        new_total,
+    )
+
+    await _update_summary_sensors(hass, assignee)
 
 
 def _find_matching_privilege_sensors(
@@ -2619,6 +2757,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_RESET_HISTORY,
         partial(handle_reset_history, hass),
         schema=RESET_HISTORY_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UNDO_COMPLETION,
+        partial(handle_undo_completion, hass),
+        schema=UNDO_COMPLETION_SCHEMA,
     )
     # Category-scoped chore services
     hass.services.async_register(

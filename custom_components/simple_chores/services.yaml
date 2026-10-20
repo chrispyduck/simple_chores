@@ -306,6 +306,13 @@ adjust_points:
           min: -1000000000
           max: 1000000000
           mode: box
+    reason:
+      name: Reason
+      description: Optional justification for the adjustment, shown in the History tab
+      required: false
+      example: "Bonus for helping a sibling"
+      selector:
+        text:
 
 reset_points:
   name: Reset Points
@@ -334,6 +341,36 @@ get_history:
 reset_history:
   name: Reset History
   description: Permanently delete every chore-history entry. This cannot be undone.
+
+undo_completion:
+  name: Undo Completion
+  description: Reverse a completed chore's history entry, clawing back the points it awarded and optionally withholding an additional penalty. Administrators only.
+  fields:
+    entry_id:
+      name: History Entry ID
+      description: The id of the "completed" history entry to undo
+      required: true
+      example: "3f1b6c2e8e1a4d6f9a7b0c5d2e4f6a8b"
+      selector:
+        text:
+    penalty:
+      name: Penalty
+      description: Additional points to withhold on top of the reversed award
+      required: false
+      default: 0
+      example: 5
+      selector:
+        number:
+          min: 0
+          max: 1000000000
+          mode: box
+    reason:
+      name: Reason
+      description: Optional justification for the undo, shown in the History tab
+      required: false
+      example: "Chore wasn't actually done"
+      selector:
+        text:
 
 # Category-scoped chore services
 mark_complete_by_category:

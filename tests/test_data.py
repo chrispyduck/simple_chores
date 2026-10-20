@@ -443,8 +443,32 @@ class TestHistoryStorage:
         assert entry["missed_total"] == 0
         assert entry["id"]
         assert entry["timestamp"]
+        # New entries start un-reversed, and carry no penalty unless given one.
+        assert entry["undone"] is False
+        assert entry["penalty"] is None
 
         assert storage.get_entries() == [entry]
+
+    @pytest.mark.asyncio
+    async def test_add_entry_stores_penalty(self, hass) -> None:
+        """Test that a passed-in penalty is stored on the entry."""
+        storage = HistoryStorage(hass)
+        await storage.async_load()
+
+        entry = await storage.async_add_entry(
+            action="undone",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category=None,
+            assignee="alice",
+            points_delta=-15,
+            points_total=-5,
+            reason="Didn't actually do it",
+            penalty=5,
+        )
+
+        assert entry["penalty"] == 5
+        assert entry["reason"] == "Didn't actually do it"
 
     @pytest.mark.asyncio
     async def test_add_entry_records_missed_points(self, hass) -> None:
@@ -571,3 +595,64 @@ class TestHistoryStorage:
         entries = storage2.get_entries()
         assert len(entries) == 1
         assert entries[0]["chore_slug"] == "dishes"
+
+    @pytest.mark.asyncio
+    async def test_mark_undone_flags_entry_and_returns_true(self, hass) -> None:
+        """Test that async_mark_undone flips the matching entry's flag."""
+        storage = HistoryStorage(hass)
+        await storage.async_load()
+        entry = await storage.async_add_entry(
+            action="completed",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category=None,
+            assignee="alice",
+            points_delta=10,
+            points_total=10,
+        )
+
+        found = await storage.async_mark_undone(entry["id"])
+
+        assert found is True
+        assert storage.get_entries()[0]["undone"] is True
+
+    @pytest.mark.asyncio
+    async def test_mark_undone_unknown_id_returns_false(self, hass) -> None:
+        """Test that marking an unknown id is a no-op and reports not found."""
+        storage = HistoryStorage(hass)
+        await storage.async_load()
+        await storage.async_add_entry(
+            action="completed",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category=None,
+            assignee="alice",
+            points_delta=10,
+            points_total=10,
+        )
+
+        found = await storage.async_mark_undone("not-a-real-id")
+
+        assert found is False
+        assert storage.get_entries()[0]["undone"] is False
+
+    @pytest.mark.asyncio
+    async def test_mark_undone_persists_across_instances(self, hass) -> None:
+        """Test that the undone flag survives a reload, like other stored data."""
+        storage1 = HistoryStorage(hass)
+        await storage1.async_load()
+        entry = await storage1.async_add_entry(
+            action="completed",
+            chore_slug="dishes",
+            chore_name="Dishes",
+            category=None,
+            assignee="alice",
+            points_delta=10,
+            points_total=10,
+        )
+        await storage1.async_mark_undone(entry["id"])
+
+        storage2 = HistoryStorage(hass)
+        await storage2.async_load()
+
+        assert storage2.get_entries()[0]["undone"] is True

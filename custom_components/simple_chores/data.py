@@ -354,6 +354,7 @@ class HistoryStorage:
         missed_total: int = 0,
         reason: str | None = None,
         duration_minutes: int | None = None,
+        penalty: int | None = None,
     ) -> dict[str, Any]:
         """Append a new entry, evicting the oldest past MAX_HISTORY_ENTRIES."""
         entry: dict[str, Any] = {
@@ -370,12 +371,28 @@ class HistoryStorage:
             "missed_total": missed_total,
             "reason": reason,
             "duration_minutes": duration_minutes,
+            # Extra points withheld on top of clawing back a completion's own
+            # award - only set on an "undone" entry, see handle_undo_completion.
+            "penalty": penalty,
+            # Flips true on the original "completed" entry once it's undone,
+            # so the History tab can strike it through and hide its Undo
+            # button (preventing a double-undo) - see async_mark_undone.
+            "undone": False,
         }
         self._entries.append(entry)
         if len(self._entries) > MAX_HISTORY_ENTRIES:
             self._entries = self._entries[-MAX_HISTORY_ENTRIES:]
         await self.async_save()
         return entry
+
+    async def async_mark_undone(self, entry_id: str) -> bool:
+        """Flag the entry with `entry_id` as undone. Returns whether it was found."""
+        for entry in self._entries:
+            if entry["id"] == entry_id:
+                entry["undone"] = True
+                await self.async_save()
+                return True
+        return False
 
     async def async_clear(self) -> int:
         """Delete every stored entry, returning how many were removed."""
