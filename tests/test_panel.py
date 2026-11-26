@@ -199,8 +199,50 @@ class TestAsyncRegisterHistoryCard:
         assert static_configs[0].url_path == CARD_URL
         assert static_configs[0].path == str(bundle)
 
-        mock_add.assert_called_once_with(hass, CARD_URL)
+        expected_url = f"{CARD_URL}?v={int(bundle.stat().st_mtime)}"
+        mock_add.assert_called_once_with(hass, expected_url)
+        assert hass.data[panel._CARD_MODULE_URL] == expected_url
         assert hass.data[panel._CARD_STATIC_REGISTERED] is True
+
+    @pytest.mark.asyncio
+    async def test_replaces_stale_module_url_on_reregister(
+        self, hass: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A reload after the bundle changed swaps the old URL for the new one."""
+        bundle = tmp_path / "simple-chores-history-card.js"
+        bundle.write_text("export {};")
+        monkeypatch.setattr(panel, "Path", lambda _file: _FakePath(bundle))
+        hass.data[panel._CARD_MODULE_URL] = f"{CARD_URL}?v=1"
+
+        with (
+            patch.object(panel.frontend, "add_extra_js_url") as mock_add,
+            patch.object(panel.frontend, "remove_extra_js_url") as mock_remove,
+        ):
+            await panel.async_register_history_card(hass)
+
+        expected_url = f"{CARD_URL}?v={int(bundle.stat().st_mtime)}"
+        mock_remove.assert_called_once_with(hass, f"{CARD_URL}?v=1")
+        mock_add.assert_called_once_with(hass, expected_url)
+
+    @pytest.mark.asyncio
+    async def test_same_module_url_is_not_removed(
+        self, hass: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Re-registering an unchanged bundle leaves its URL in place."""
+        bundle = tmp_path / "simple-chores-history-card.js"
+        bundle.write_text("export {};")
+        monkeypatch.setattr(panel, "Path", lambda _file: _FakePath(bundle))
+        hass.data[panel._CARD_MODULE_URL] = (
+            f"{CARD_URL}?v={int(bundle.stat().st_mtime)}"
+        )
+
+        with (
+            patch.object(panel.frontend, "add_extra_js_url"),
+            patch.object(panel.frontend, "remove_extra_js_url") as mock_remove,
+        ):
+            await panel.async_register_history_card(hass)
+
+        mock_remove.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_does_not_reregister_static_path_twice(
@@ -222,8 +264,17 @@ class TestAsyncUnregisterHistoryCard:
     """Tests for async_unregister_history_card."""
 
     def test_removes_extra_js_url(self, hass: MagicMock) -> None:
-        """Unregistering stops injecting the card bundle into page loads."""
+        """Unregistering stops injecting the registered card URL."""
+        hass.data[panel._CARD_MODULE_URL] = f"{CARD_URL}?v=123"
         with patch.object(panel.frontend, "remove_extra_js_url") as mock_remove:
             panel.async_unregister_history_card(hass)
 
-        mock_remove.assert_called_once_with(hass, CARD_URL)
+        mock_remove.assert_called_once_with(hass, f"{CARD_URL}?v=123")
+        assert panel._CARD_MODULE_URL not in hass.data
+
+    def test_noop_when_never_registered(self, hass: MagicMock) -> None:
+        """Unregistering without a prior registration does nothing."""
+        with patch.object(panel.frontend, "remove_extra_js_url") as mock_remove:
+            panel.async_unregister_history_card(hass)
+
+        mock_remove.assert_not_called()
