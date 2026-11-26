@@ -10,7 +10,13 @@ from typing import TYPE_CHECKING
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HassJob, ServiceResponse, SupportsResponse
+from homeassistant.core import (
+    Event,
+    HassJob,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
 from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
@@ -45,9 +51,13 @@ from .const import (
     ATTR_REASON,
     ATTR_RESET_TOTAL,
     ATTR_SLUG,
+    ATTR_SUGGESTED_DURATION,
+    ATTR_TIMER_ENTITY,
+    ATTR_TIMER_MINUTES,
     ATTR_USER,
     DOMAIN,
     LOGGER,
+    MAX_SUGGESTED_DURATION_MINUTES,
     SERVICE_ADJUST_POINTS,
     SERVICE_ADJUST_TEMPORARY_DISABLE,
     SERVICE_CLEAR_TEMPORARY_DISABLE,
@@ -62,16 +72,19 @@ from .const import (
     SERVICE_FINALIZE_BY_CATEGORY,
     SERVICE_FINALIZE_ONE,
     SERVICE_GET_HISTORY,
+    SERVICE_MARK_ACTIVE,
     SERVICE_MARK_COMPLETE,
     SERVICE_MARK_COMPLETE_BY_CATEGORY,
     SERVICE_MARK_NOT_REQUESTED,
     SERVICE_MARK_NOT_REQUESTED_BY_CATEGORY,
     SERVICE_MARK_PENDING,
     SERVICE_MARK_PENDING_BY_CATEGORY,
+    SERVICE_PAUSE_TIMER,
     SERVICE_REFRESH_SUMMARY,
     SERVICE_RESET_COMPLETED,
     SERVICE_RESET_HISTORY,
     SERVICE_RESET_POINTS,
+    SERVICE_RESUME_TIMER,
     SERVICE_START_NEW_DAY,
     SERVICE_TEMPORARILY_DISABLE_PRIVILEGE,
     SERVICE_UNDO_COMPLETION,
@@ -82,6 +95,7 @@ from .const import (
     sanitize_entity_id,
 )
 from .models import (
+    OUTSTANDING_CHORE_STATES,
     CategoryConfig,
     ChoreConfig,
     ChoreFrequency,
@@ -105,6 +119,20 @@ SERVICE_SCHEMA = vol.Schema(
         vol.Required(ATTR_CHORE_SLUG): cv.string,
     }
 )
+
+
+MARK_ACTIVE_SCHEMA = SERVICE_SCHEMA.extend(
+    {
+        vol.Optional(ATTR_TIMER_MINUTES): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=1440)
+        ),
+        vol.Optional(ATTR_TIMER_ENTITY): cv.entity_domain("timer"),
+    }
+)
+
+# Fired by HA's timer integration when a running or paused timer helper is
+# cancelled (timer.cancel) - but not when it pauses or runs out on its own.
+EVENT_TIMER_CANCELLED = "timer.cancelled"
 
 
 def _validate_integration_loaded(hass: HomeAssistant) -> None:
@@ -450,6 +478,11 @@ async def async_catch_up_auto_finalize(hass: HomeAssistant) -> None:
         )
 
 
+# Suggested chore duration in minutes; 0 means "none" (and clears it on update).
+_SUGGESTED_DURATION = vol.All(
+    vol.Coerce(int), vol.Range(min=0, max=MAX_SUGGESTED_DURATION_MINUTES)
+)
+
 CREATE_CHORE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_NAME): cv.string,
@@ -463,6 +496,7 @@ CREATE_CHORE_SCHEMA = vol.Schema(
         ),
         vol.Optional(ATTR_POINTS_BY_ASSIGNEE, default=""): cv.string,
         vol.Optional(ATTR_CATEGORY, default=""): cv.string,
+        vol.Optional(ATTR_SUGGESTED_DURATION, default=0): _SUGGESTED_DURATION,
     }
 )
 
@@ -477,6 +511,7 @@ UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_POINTS): vol.All(vol.Coerce(int), vol.Range(min=0)),
         vol.Optional(ATTR_POINTS_BY_ASSIGNEE): cv.string,
         vol.Optional(ATTR_CATEGORY): cv.string,
+        vol.Optional(ATTR_SUGGESTED_DURATION): _SUGGESTED_DURATION,
         vol.Optional(ATTR_NEW_SLUG): cv.string,
     }
 )
@@ -814,6 +849,210 @@ async def handle_mark_pending(hass: HomeAssistant, call: ServiceCall) -> None:
             await _update_privilege_sensors_from_chores(hass, affected_user)
 
 
+async def _handle_timer_change(
+    hass: HomeAssistant, call: ServiceCall, *, pause: bool
+) -> None:
+    """
+    Pause or resume the timer on an Active chore.
+
+    Shared by pause_timer and resume_timer. A sensor with nothing to change
+    (not Active, no timer, or already in the requested state) is skipped
+    rather than treated as an error, so a double tap can't fail.
+    """
+    service = SERVICE_PAUSE_TIMER if pause else SERVICE_RESUME_TIMER
+    user = call.data.get(ATTR_USER)
+    chore_slug = call.data[ATTR_CHORE_SLUG]
+    LOGGER.info(
+        "Service '%s' called with user='%s', chore_slug='%s'",
+        service,
+        user or "all assignees",
+        chore_slug,
+    )
+
+    _validate_integration_loaded(hass)
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
+    if not matching_sensors:
+        msg = (
+            f"No sensor found for user '{user}' and chore '{chore_slug}'"
+            if user
+            else f"No sensors found for chore '{chore_slug}'"
+        )
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    changed = [
+        sensor
+        for sensor in matching_sensors
+        if (sensor.pause_timer() if pause else sensor.resume_timer())
+    ]
+    if changed:
+        await asyncio.gather(
+            *(sensor.async_update_ha_state(force_refresh=True) for sensor in changed)
+        )
+    for sensor in changed:
+        LOGGER.info(
+            "%s %s the timer on '%s'",
+            sensor.assignee,
+            "paused" if pause else "resumed",
+            sensor.chore.name,
+        )
+
+
+async def handle_pause_timer(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the pause_timer service call."""
+    await _handle_timer_change(hass, call, pause=True)
+
+
+async def handle_resume_timer(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the resume_timer service call."""
+    await _handle_timer_change(hass, call, pause=False)
+
+
+async def handle_mark_active(hass: HomeAssistant, call: ServiceCall) -> None:
+    """
+    Handle the mark_active service call.
+
+    Active means the assignee is working on the chore right now. It's still
+    outstanding (it counts like Pending for missed points, summaries and
+    privileges), but the sensor also records when it started and, if
+    `timer_minutes` is given, when its timer runs out, so the UI can show a
+    running clock. `timer_entity` links an HA timer helper to the chore:
+    cancelling that helper later moves the chore back to Pending (see
+    async_setup_timer_listener). Moving a Complete chore back to Active un-completes it,
+    deducting its points the same way mark_pending does.
+    """
+    user = call.data.get(ATTR_USER)
+    chore_slug = call.data[ATTR_CHORE_SLUG]
+    timer_minutes = call.data.get(ATTR_TIMER_MINUTES)
+    timer_entity = call.data.get(ATTR_TIMER_ENTITY)
+
+    LOGGER.info(
+        "Service 'mark_active' called with user='%s', chore_slug='%s', "
+        "timer_minutes=%s, timer_entity=%s",
+        user or "all assignees",
+        chore_slug,
+        timer_minutes,
+        timer_entity,
+    )
+
+    _validate_integration_loaded(hass)
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    points_storage = hass.data[DOMAIN].get("points_storage")
+    matching_sensors = _find_matching_sensors(sensors, chore_slug, user)
+
+    if not matching_sensors:
+        if user:
+            msg = (
+                f"No sensor found for user '{user}' and chore '{chore_slug}'. "
+                f"Available sensors: {list(sensors.keys())}"
+            )
+        else:
+            msg = f"No sensors found for chore '{chore_slug}'"
+        LOGGER.error(msg)
+        raise ServiceValidationError(msg)
+
+    affected_users = set()
+    state_update_tasks = []
+
+    for sensor in matching_sensors:
+        was_complete = sensor.get_state() == ChoreState.COMPLETE.value
+
+        sensor.start_activity(timer_minutes, timer_entity)
+        state_update_tasks.append(sensor.async_update_ha_state(force_refresh=True))
+        affected_users.add(sensor.assignee)
+
+        LOGGER.info(
+            "%s started '%s'%s",
+            sensor.assignee,
+            sensor.chore.name,
+            f" ({timer_minutes} minute timer)" if timer_minutes else "",
+        )
+
+        if was_complete:
+            await _clear_completion_tracking(hass, sensor)
+            if points_storage:
+                chore_points = sensor.chore.points_for(sensor.assignee)
+                await points_storage.add_points(sensor.assignee, -chore_points)
+                await points_storage.add_points_earned(sensor.assignee, -chore_points)
+                await _record_history(hass, sensor, "uncompleted", -chore_points)
+
+    if state_update_tasks:
+        await asyncio.gather(*state_update_tasks)
+
+    LOGGER.info(
+        "Marked chore '%s' as active for %s",
+        chore_slug,
+        f"user '{user}'" if user else f"{len(matching_sensors)} assignee(s)",
+    )
+
+    for affected_user in affected_users:
+        await _update_summary_sensors(hass, affected_user)
+        await _update_privilege_sensors_from_chores(hass, affected_user)
+
+
+async def _handle_timer_cancelled(hass: HomeAssistant, event: Event) -> None:
+    """
+    Move Active chores linked to a just-cancelled timer helper back to Pending.
+
+    Stopping the timer means the assignee stopped working on the chore
+    without finishing it. Only cancellation counts: a paused timer leaves the
+    chore Active, and a timer that runs out leaves it Active for the
+    assignee to finish.
+    """
+    timer_id = event.data.get("entity_id")
+    if not timer_id or DOMAIN not in hass.data:
+        return
+    sensors = hass.data[DOMAIN].get("sensors", {})
+    stopped = [
+        sensor
+        for sensor in sensors.values()
+        if sensor.get_state() == ChoreState.ACTIVE.value
+        and sensor.timer_entity == timer_id
+    ]
+    if not stopped:
+        return
+
+    for sensor in stopped:
+        sensor.set_state(ChoreState.PENDING.value)
+        LOGGER.info(
+            "%s stopped '%s' (timer %s cancelled) - back to pending",
+            sensor.assignee,
+            sensor.chore.name,
+            timer_id,
+        )
+    await asyncio.gather(
+        *(sensor.async_update_ha_state(force_refresh=True) for sensor in stopped)
+    )
+    for affected_user in {sensor.assignee for sensor in stopped}:
+        await _update_summary_sensors(hass, affected_user)
+        await _update_privilege_sensors_from_chores(hass, affected_user)
+
+
+def async_setup_timer_listener(hass: HomeAssistant) -> None:
+    """
+    Listen for timer helpers being cancelled (see _handle_timer_cancelled).
+
+    Safe to call repeatedly: any previous listener is removed first.
+    """
+    async_remove_timer_listener(hass)
+
+    @callback
+    def _on_cancelled(event: Event) -> None:
+        hass.async_create_task(_handle_timer_cancelled(hass, event))
+
+    hass.data[DOMAIN]["timer_cancelled_unsub"] = hass.bus.async_listen(
+        EVENT_TIMER_CANCELLED, _on_cancelled
+    )
+
+
+def async_remove_timer_listener(hass: HomeAssistant) -> None:
+    """Stop listening for cancelled timer helpers, if listening."""
+    unsub = hass.data.get(DOMAIN, {}).pop("timer_cancelled_unsub", None)
+    if unsub:
+        unsub()
+
+
 async def handle_mark_not_requested(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the mark_not_requested service call."""
     user = call.data.get(ATTR_USER)
@@ -1020,7 +1259,7 @@ async def _apply_start_new_day_points_missed(
         if sensor.chore.frequency not in _START_NEW_DAY_FREQUENCIES:
             continue
 
-        if sensor.get_state() == ChoreState.PENDING.value:
+        if sensor.get_state() in OUTSTANDING_CHORE_STATES:
             missed = await _record_missed_points(hass, sensor)
             if missed:
                 LOGGER.debug(
@@ -1096,7 +1335,7 @@ async def handle_start_new_day(hass: HomeAssistant, call: ServiceCall) -> None:
                 reset_count += 1
                 manual_count += 1
         elif (
-            current_state == ChoreState.PENDING.value
+            current_state in OUTSTANDING_CHORE_STATES
             and sensor.chore.frequency == ChoreFrequency.MANUAL
         ):
             # Already counted towards points_missed above - still Pending
@@ -1181,7 +1420,7 @@ async def _apply_frequency_reset(
     for sensor in sensors.values():
         if sensor.chore.frequency != frequency:
             continue
-        if sensor.get_state() == ChoreState.PENDING.value:
+        if sensor.get_state() in OUTSTANDING_CHORE_STATES:
             missed = await _record_missed_points(hass, sensor)
             if missed:
                 LOGGER.debug(
@@ -1208,9 +1447,24 @@ async def _apply_frequency_reset(
             sensor.chore.name,
         )
 
-    if to_reset:
+    # An Active chore that's still unfinished when its period rolls over was
+    # tallied as missed above; drop it back to Pending so the stale activity
+    # clock from the previous period doesn't carry over.
+    to_deactivate = [
+        sensor
+        for sensor in sensors.values()
+        if sensor.chore.frequency == frequency
+        and sensor.get_state() == ChoreState.ACTIVE.value
+    ]
+    for sensor in to_deactivate:
+        sensor.set_state(ChoreState.PENDING.value)
+
+    if to_reset or to_deactivate:
         await asyncio.gather(
-            *(sensor.async_update_ha_state(force_refresh=True) for sensor in to_reset)
+            *(
+                sensor.async_update_ha_state(force_refresh=True)
+                for sensor in [*to_reset, *to_deactivate]
+            )
         )
 
     LOGGER.info(
@@ -1375,6 +1629,7 @@ async def handle_create_chore(hass: HomeAssistant, call: ServiceCall) -> None:
                 call.data.get(ATTR_POINTS_BY_ASSIGNEE, "")
             ),
             category=call.data.get(ATTR_CATEGORY, ""),
+            suggested_duration=call.data.get(ATTR_SUGGESTED_DURATION, 0),
         )
         await config_loader.async_create_chore(chore)
         LOGGER.info("Created chore '%s'", chore.slug)
@@ -1404,6 +1659,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
     points = call.data.get(ATTR_POINTS)
     points_by_assignee_str = call.data.get(ATTR_POINTS_BY_ASSIGNEE)
     category = call.data.get(ATTR_CATEGORY)
+    suggested_duration = call.data.get(ATTR_SUGGESTED_DURATION)
     new_slug = call.data.get(ATTR_NEW_SLUG)
 
     points_by_assignee = (
@@ -1432,6 +1688,7 @@ async def handle_update_chore(hass: HomeAssistant, call: ServiceCall) -> None:
             points=points,
             points_by_assignee=points_by_assignee,
             category=category,
+            suggested_duration=suggested_duration,
             new_slug=new_slug,
         )
         LOGGER.info("Updated chore '%s'", slug)
@@ -1726,7 +1983,7 @@ async def handle_finalize_by_category(hass: HomeAssistant, call: ServiceCall) ->
     for sensor in matching_sensors:
         current_state = sensor.get_state()
 
-        if current_state == ChoreState.PENDING.value:
+        if current_state in OUTSTANDING_CHORE_STATES:
             affected_users.add(sensor.assignee)
             await _record_missed_points(hass, sensor)
             sensors_missed.append(sensor)
@@ -2683,6 +2940,24 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN,
         SERVICE_MARK_PENDING,
         partial(handle_mark_pending, hass),
+        schema=SERVICE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_MARK_ACTIVE,
+        partial(handle_mark_active, hass),
+        schema=MARK_ACTIVE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PAUSE_TIMER,
+        partial(handle_pause_timer, hass),
+        schema=SERVICE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESUME_TIMER,
+        partial(handle_resume_timer, hass),
         schema=SERVICE_SCHEMA,
     )
     hass.services.async_register(

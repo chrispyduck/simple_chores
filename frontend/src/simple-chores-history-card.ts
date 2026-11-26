@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing, PropertyValues } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
+import { customElementOnce } from "./define-once";
 
 import {
   DOMAIN as SERVICE_DOMAIN,
@@ -37,7 +38,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * the page, the same fetch-on-load pattern the admin panel's History tab
  * uses, rather than polling or subscribing to live updates.
  */
-@customElement("simple-chores-history-card")
+@customElementOnce("simple-chores-history-card")
 export class SimpleChoresHistoryCard extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
 

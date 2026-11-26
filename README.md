@@ -18,8 +18,8 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
   * State: chore state is one of: `Pending`, `Complete`, `Not Requested`
   * **Note**: A daily or weekly chore must be requested at least once (marked as Pending or Complete) before it starts resetting on its schedule. Until then, it behaves like a manual chore.
 * Each assignee has a summary sensor at `sensor.simple_chore_summary_{assignee}` that tracks:
-  * Count of pending/complete/not requested chores (`total_pending`, `total_complete`, `total_chores_today`)
-  * Lists of chores in each state (`pending_chores`, `complete_chores`, `not_requested_chores`)
+  * Count of pending/active/complete/not requested chores (`total_pending`, `total_active`, `total_complete`, `total_chores_today`)
+  * Lists of chores in each state (`pending_chores`, `active_chores`, `complete_chores`, `not_requested_chores`). Active chores are also included in `pending_chores` / `total_pending`.
   * **Points tracking**:
     * `total_points`: Lifetime earned points (cumulative)
     * `points_missed`: Cumulative total of all missed opportunities (updated by `start_new_day` for manual/once chores, and automatically for daily/weekly chores at their own scheduled reset - see "Automatic daily/weekly reset" below)
@@ -31,13 +31,15 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
 * The following actions are defined for interacting with chores:
   * `simple_chores.mark_complete` - Marks a chore as complete and awards points to the assignee. Takes a chore slug and optional user as parameters. If user is not specified, marks complete for all assignees.
   * `simple_chores.mark_pending` - Marks a chore as pending. Takes a chore slug and optional user as parameters. If user is not specified, marks pending for all assignees.
+  * `simple_chores.mark_active` - Marks a chore as actively being worked on. Takes a chore slug, optional user, optional `timer_minutes`, and an optional `timer_entity` (a `timer.*` helper - cancelling it moves the chore back to pending). Active chores still count as outstanding (pending) for missed points, summaries, and privileges, but record `active_since` (and `timer_ends_at` when a timer is given) on the chore sensor and are highlighted in the admin panel with a running clock. The summary sensor lists them under `active_chores` / `total_active` (they're also included in `pending_chores`). An active daily/weekly chore that's still unfinished at its scheduled reset is counted as missed and drops back to pending.
+  * `simple_chores.pause_timer` / `simple_chores.resume_timer` - Pause an active chore's built-in timer (keeping the time left, exposed as `timer_paused_remaining`) and resume it later. The chore stays active throughout. Take a chore slug and optional user.
   * `simple_chores.mark_not_requested` - Marks a chore as not requested. Takes a chore slug and optional user as parameters. If user is not specified, marks not requested for all assignees.
   * `simple_chores.finalize_one` - Immediately finalizes one completed chore (the same reset auto-finalize performs, on demand instead of waiting out the delay). Takes a chore slug and optional user; chores that aren't currently complete are left alone.
   * `simple_chores.reset_completed` - Resets all completed chores to not requested. Takes an optional user parameter to reset only that user's chores.
   * `simple_chores.start_new_day` - Resets completed chores based on frequency. Manual chores reset to not requested, once chores are deleted entirely. Calculates missed-points statistics for those chores before resetting. Daily and weekly chores are not touched here - they reset automatically on their own schedule (see "Automatic daily/weekly reset" above). Takes an optional user parameter.
   * `simple_chores.finalize_by_category` - Like `start_new_day`, but scoped to a single category and only for `manual` chores: completed manual chores in the category reset to not requested, and pending ones count towards missed points. Daily, weekly, and once chores in the category are left untouched. Takes a category slug and optional user parameter.
   * `simple_chores.create_chore` - Dynamically create a new chore at runtime with specified properties including points.
-  * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon. Pass `new_slug` to rename it; any privilege linking to it by slug is updated to match. Pass `points_by_assignee` (`"user:points,..."`) to set or clear per-assignee point overrides.
+  * `simple_chores.update_chore` - Update an existing chore's properties including name, description, frequency, assignees, points, and icon. Pass `new_slug` to rename it; any privilege linking to it by slug is updated to match. Pass `points_by_assignee` (`"user:points,..."`) to set or clear per-assignee point overrides, and `suggested_duration` (minutes, `0` to clear) to set or clear the suggested duration.
   * `simple_chores.delete_chore` - Remove a chore from the system.
   * `simple_chores.refresh_summary` - Force refresh of summary sensor attributes for one or all assignees.
   * `simple_chores.adjust_points` - Manually adjusts an assignee's earned points by a specified amount (positive or negative). Useful for bonuses, penalties, or corrections. Takes an optional `reason`, shown in the History tab.
@@ -111,6 +113,7 @@ chores:
 - `points`: Default number of points awarded when the chore is completed (optional, default: 1, must be >= 0)
 - `points_by_assignee`: Per-assignee point overrides, e.g. `{alice: 10, bob: 5}` (optional). An assignee not listed here earns `points` instead - useful for giving an older or younger kid a different reward for the same chore.
 - `icon`: Material Design Icon for the chore (optional, default: `mdi:clipboard-list-outline`)
+- `suggested_duration`: Suggested time to spend on the chore, in minutes (optional, 1-1440). Shown in the admin panel, pre-fills the timer when starting the chore there, and can be displayed on the chore card with `show_duration: true`.
 
 The configuration file is automatically reloaded when changes are detected (checked every 5 seconds).
 
@@ -157,7 +160,8 @@ The summary sensor for each assignee includes a `privileges` attribute containin
 
 Administrators get a "Chores" entry in the Home Assistant sidebar for full
 management of chores, privileges, and categories - creating, editing,
-renaming, and deleting any of them, marking chores complete/pending,
+renaming, and deleting any of them, marking chores complete/pending/active
+(with an optional countdown timer),
 enabling/disabling or temporarily blocking privileges, running
 `reset_completed`/`start_new_day`/`finalize_by_category`, finalizing one
 completed chore on demand, and tuning the Settings tab's auto-finalize
@@ -168,6 +172,28 @@ else sees no change.
 
 The panel's source lives in [frontend/](frontend/); see
 [frontend/README.md](frontend/README.md) for how to build it.
+
+## Dashboard Cards
+
+The integration also registers three custom Lovelace cards, loaded
+automatically on every dashboard (no resource to add by hand). Each one has
+a GUI editor in the "Add Card" dialog, and none of them needs admin access:
+
+* `custom:simple-chores-history-card` - one assignee's recent chore activity.
+* `custom:simple-chores-chore-card` - a single chore (`entity: sensor.simple_chore_<assignee>_<chore>`)
+  as a large tappable tile with its icon, points, state, and - when active - a
+  live countdown. By default a tap opens an options panel to complete the
+  chore; add `timer_entity: timer.<helper>` and it also offers start,
+  pause/resume, and stop, driving that timer helper alongside the chore. Set
+  `show_duration: true` to show the chore's `suggested_duration`.
+* `custom:simple-chores-chore-list-card` - every chore for one assignee
+  (`assignee: <username>`), each rendered as a chore card with the same
+  options. Completed chores fade out after `hide_completed_after` seconds
+  (default 30), and Not Requested chores are hidden unless
+  `show_not_requested: true`.
+
+See [frontend/README.md](frontend/README.md) for every card option and tap
+action.
 
 ## Automation Examples
 

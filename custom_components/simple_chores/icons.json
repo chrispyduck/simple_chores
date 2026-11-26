@@ -14,6 +14,9 @@
     "services": {
         "mark_complete": "mdi:check-circle",
         "mark_pending": "mdi:clipboard-list",
+        "mark_active": "mdi:timer-play-outline",
+        "pause_timer": "mdi:timer-pause-outline",
+        "resume_timer": "mdi:timer-play-outline",
         "mark_not_requested": "mdi:close-circle-outline",
         "create_chore": "mdi:plus-circle",
         "update_chore": "mdi:pencil-circle",

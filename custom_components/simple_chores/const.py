@@ -13,6 +13,7 @@ CONFIG_FILE_NAME = "simple_chores.yaml"
 
 # States
 STATE_PENDING = "Pending"
+STATE_ACTIVE = "Active"
 STATE_COMPLETE = "Complete"
 STATE_NOT_REQUESTED = "Not Requested"
 
@@ -24,6 +25,9 @@ STATE_TEMPORARILY_DISABLED = "Blocked"
 # Chore Services
 SERVICE_MARK_COMPLETE = "mark_complete"
 SERVICE_MARK_PENDING = "mark_pending"
+SERVICE_MARK_ACTIVE = "mark_active"
+SERVICE_PAUSE_TIMER = "pause_timer"
+SERVICE_RESUME_TIMER = "resume_timer"
 SERVICE_MARK_NOT_REQUESTED = "mark_not_requested"
 SERVICE_FINALIZE_ONE = "finalize_one"
 SERVICE_RESET_COMPLETED = "reset_completed"
@@ -75,6 +79,7 @@ ATTR_ASSIGNEES = "assignees"
 ATTR_ICON = "icon"
 ATTR_POINTS = "points"
 ATTR_POINTS_BY_ASSIGNEE = "points_by_assignee"
+ATTR_SUGGESTED_DURATION = "suggested_duration"
 ATTR_ADJUSTMENT = "adjustment"
 ATTR_RESET_TOTAL = "reset_total"
 ATTR_CATEGORY = "category"
@@ -82,6 +87,12 @@ ATTR_CATEGORY_SLUG = "category_slug"
 ATTR_NEW_SLUG = "new_slug"
 ATTR_ENTRY_ID = "entry_id"
 ATTR_PENALTY = "penalty"
+ATTR_TIMER_MINUTES = "timer_minutes"
+ATTR_TIMER_ENTITY = "timer_entity"
+
+# Upper bound (minutes) for a chore's suggested duration - one day, matching
+# the mark_active timer limit.
+MAX_SUGGESTED_DURATION_MINUTES = 1440
 
 # Settings service parameters
 ATTR_AUTO_FINALIZE_ENABLED = "auto_finalize_enabled"

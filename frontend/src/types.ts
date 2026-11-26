@@ -8,6 +8,8 @@ export interface HassEntity {
   state: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   attributes: Record<string, any>;
+  /** ISO timestamp of the last state change (set by HA; absent in tests). */
+  last_changed?: string;
 }
 
 export interface HomeAssistant {
@@ -52,7 +54,7 @@ export const POINT_GOAL_ENTITY_PREFIX = "number.simple_chore_meta_";
 export const SETTINGS_ENTITY_ID = "sensor.simple_chore_meta_settings";
 
 export type ChoreFrequency = "daily" | "weekly" | "manual" | "once";
-export type ChoreStateValue = "Pending" | "Complete" | "Not Requested";
+export type ChoreStateValue = "Pending" | "Active" | "Complete" | "Not Requested";
 export type PrivilegeBehavior = "automatic" | "manual";
 export type PrivilegeStateValue = "Enabled" | "Disabled" | "Temporarily Disabled";
 export type Weekday =
@@ -89,6 +91,10 @@ export interface ChoreAssigneeStatus {
   state: ChoreStateValue;
   /** This assignee's resolved points - the override if set, else chore.points. */
   points: number;
+  /** ISO timestamp the chore became Active; null unless state is "Active". */
+  activeSince: string | null;
+  /** ISO timestamp the Active chore's timer runs out; null if no timer. */
+  timerEndsAt: string | null;
 }
 
 export interface ChoreDefinition {
@@ -100,6 +106,8 @@ export interface ChoreDefinition {
   /** Default points; an assignee's own resolved value lives on ChoreAssigneeStatus. */
   points: number;
   category: string | null;
+  /** Suggested time to spend on the chore, in minutes (null = none). */
+  suggestedDuration: number | null;
   assignees: ChoreAssigneeStatus[];
 }
 
@@ -131,7 +139,10 @@ export interface SummaryDefinition {
   pointsEarned: number;
   pointsMissed: number;
   pointsPossible: number;
+  /** Outstanding chores, including Active ones. */
   totalPending: number;
+  /** Chores currently Active (a subset of totalPending). */
+  totalActive: number;
   totalComplete: number;
 }
 
@@ -173,6 +184,8 @@ export interface ChoreDraft {
    */
   pointsByAssignee: Record<string, number>;
   category: string; // "" (UNCATEGORIZED) means no category
+  /** Suggested duration in minutes, as typed; "" means none. */
+  suggestedDuration: string;
   assignees: string[];
 }
 
@@ -203,8 +216,31 @@ export function emptyChoreDraft(): ChoreDraft {
     points: 1,
     pointsByAssignee: {},
     category: UNCATEGORIZED,
+    suggestedDuration: "",
     assignees: [],
   };
+}
+
+/** Longest suggested duration a chore may have, in minutes (one day). */
+export const MAX_SUGGESTED_DURATION_MINUTES = 1440;
+
+/**
+ * Parse a typed suggested duration into whole minutes, or 0 for "none".
+ * Blank, non-numeric and non-positive input all mean none; anything over
+ * MAX_SUGGESTED_DURATION_MINUTES is clamped to it.
+ */
+export function parseSuggestedDuration(input: string): number {
+  const minutes = Math.floor(Number(input.trim()));
+  if (!Number.isFinite(minutes) || minutes <= 0) return 0;
+  return Math.min(minutes, MAX_SUGGESTED_DURATION_MINUTES);
+}
+
+/** Human-readable duration: "45 min", "1 hr", "1 hr 30 min". */
+export function formatDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours === 0) return `${mins} min`;
+  return mins === 0 ? `${hours} hr` : `${hours} hr ${mins} min`;
 }
 
 export function choreToDraft(chore: ChoreDefinition): ChoreDraft {
@@ -222,6 +258,7 @@ export function choreToDraft(chore: ChoreDefinition): ChoreDraft {
     points: chore.points,
     pointsByAssignee,
     category: chore.category ?? UNCATEGORIZED,
+    suggestedDuration: chore.suggestedDuration ? String(chore.suggestedDuration) : "",
     assignees: chore.assignees.map((a) => a.assignee),
   };
 }
@@ -312,6 +349,7 @@ export function parseChores(states: Record<string, HassEntity>): ChoreDefinition
         // resolved points rather than leaving the definition unset.
         points: attrs.default_points ?? attrs.points ?? 0,
         category: attrs.category ?? null,
+        suggestedDuration: attrs.suggested_duration || null,
         assignees: [],
       };
       bySlug.set(slug, definition);
@@ -322,6 +360,8 @@ export function parseChores(states: Record<string, HassEntity>): ChoreDefinition
       entityId,
       state: entity.state as ChoreStateValue,
       points: attrs.points ?? definition.points,
+      activeSince: attrs.active_since ?? null,
+      timerEndsAt: attrs.timer_ends_at ?? null,
     });
   }
 
@@ -456,6 +496,7 @@ export function parseSummaries(states: Record<string, HassEntity>): SummaryDefin
       pointsMissed: attrs.points_missed ?? 0,
       pointsPossible: attrs.points_possible ?? 0,
       totalPending: attrs.total_pending ?? 0,
+      totalActive: attrs.total_active ?? 0,
       totalComplete: attrs.total_complete ?? 0,
     });
   }
@@ -677,4 +718,43 @@ export function historyActionClass(action: HistoryAction): string {
   if (action === "adjusted") return "state-warn";
   if (action === "privilege_temporarily_disabled") return "state-warn";
   return "state-neutral";
+}
+
+export interface ActivityClock {
+  /** Human-readable clock, e.g. "12:04 elapsed", "3:15 left", "1:02 over". */
+  label: string;
+  /** True once a timer has run out. */
+  overdue: boolean;
+}
+
+function formatClockDuration(totalSeconds: number): string {
+  const secs = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+/**
+ * Describe an Active chore's clock at `now` (ms since epoch): a countdown
+ * while its timer is running, how far past the timer it is once it runs out,
+ * or plain elapsed time when no timer was set. Returns null when there's
+ * nothing to show (no parseable start time and no timer).
+ */
+export function describeActivityClock(
+  activeSince: string | null,
+  timerEndsAt: string | null,
+  now: number
+): ActivityClock | null {
+  const ends = timerEndsAt ? Date.parse(timerEndsAt) : NaN;
+  if (!Number.isNaN(ends)) {
+    const remaining = (ends - now) / 1000;
+    return remaining > 0
+      ? { label: `${formatClockDuration(Math.ceil(remaining))} left`, overdue: false }
+      : { label: `${formatClockDuration(-remaining)} over`, overdue: true };
+  }
+  const since = activeSince ? Date.parse(activeSince) : NaN;
+  if (Number.isNaN(since)) return null;
+  return { label: `${formatClockDuration((now - since) / 1000)} elapsed`, overdue: false };
 }

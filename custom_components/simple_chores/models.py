@@ -7,7 +7,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .const import sanitize_entity_id
+from .const import MAX_SUGGESTED_DURATION_MINUTES, sanitize_entity_id
 
 
 class ChoreFrequency(StrEnum):
@@ -35,8 +35,27 @@ class ChoreState(StrEnum):
     """State of a chore."""
 
     PENDING = "Pending"
+    ACTIVE = "Active"
     COMPLETE = "Complete"
     NOT_REQUESTED = "Not Requested"
+
+    @property
+    def is_outstanding(self) -> bool:
+        """
+        Whether the chore has been requested but not yet completed.
+
+        Active is a refinement of Pending (the assignee is working on it right
+        now), so both count as outstanding for missed points, summary counts,
+        and privilege evaluation.
+        """
+        return self in (ChoreState.PENDING, ChoreState.ACTIVE)
+
+
+# State values (as stored on the sensor) that count as outstanding work - see
+# ChoreState.is_outstanding.
+OUTSTANDING_CHORE_STATES = frozenset(
+    state.value for state in ChoreState if state.is_outstanding
+)
 
 
 class PrivilegeBehavior(StrEnum):
@@ -86,6 +105,12 @@ class ChoreConfig(BaseModel):
         default=None,
         description="Slug of the category this chore belongs to (None = uncategorized)",
     )
+    suggested_duration: int | None = Field(
+        default=None,
+        description="Suggested time to spend on the chore, in minutes (None = unset)",
+        ge=1,
+        le=MAX_SUGGESTED_DURATION_MINUTES,
+    )
 
     @field_validator("slug")
     @classmethod
@@ -127,6 +152,14 @@ class ChoreConfig(BaseModel):
         if not v:
             return None
         return sanitize_entity_id(v) or None
+
+    @field_validator("suggested_duration", mode="before")
+    @classmethod
+    def validate_suggested_duration(cls, v: object) -> object:
+        """Treat 0 / empty as "no suggested duration"."""
+        if v in (0, "", None):
+            return None
+        return v
 
     def points_for(self, assignee: str) -> int:
         """Return the points this chore awards `assignee`, honoring any override."""

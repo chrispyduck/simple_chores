@@ -28,8 +28,10 @@ from .panel import (
 from .sensor import async_setup_platform
 from .services import (
     async_catch_up_auto_finalize,
+    async_remove_timer_listener,
     async_setup_frequency_schedules,
     async_setup_services,
+    async_setup_timer_listener,
 )
 
 if TYPE_CHECKING:
@@ -115,6 +117,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:  # noqa: ARG00
     # Register services
     await async_setup_services(hass)
 
+    # Move Active chores back to Pending when their linked timer helper is
+    # cancelled (see mark_active's timer_entity).
+    async_setup_timer_listener(hass)
+
     # Reconcile chores that were left Complete when HA last stopped: finalize
     # any whose auto-finalize delay has already elapsed, and reschedule the
     # rest for whatever time remains.
@@ -181,6 +187,10 @@ async def async_setup_entry(
     # Register services
     await async_setup_services(hass)
 
+    # Move Active chores back to Pending when their linked timer helper is
+    # cancelled (see mark_active's timer_entity).
+    async_setup_timer_listener(hass)
+
     # Reconcile chores that were left Complete when HA last stopped: finalize
     # any whose auto-finalize delay has already elapsed, and reschedule the
     # rest for whatever time remains.
@@ -222,6 +232,7 @@ async def async_unload_entry(
         # Remove the sidebar panel
         async_unregister_panel(hass)
         async_unregister_history_card(hass)
+        async_remove_timer_listener(hass)
 
         # Stop watching config file
         if DOMAIN in hass.data:

@@ -75,7 +75,7 @@ Tests require the following packages (included in `requirements.txt`):
 - pytest>=8.0.0
 - pytest-asyncio>=0.23.0
 - pytest-cov>=4.1.0
-- pytest-homeassistant-custom-component>=0.13.0
+- pytest-homeassistant (version must match homeassistant)
 
 ## Continuous Integration
 

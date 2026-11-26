@@ -38,6 +38,82 @@ mark_pending:
       selector:
         text:
 
+mark_active:
+  name: Mark Active
+  description: Mark a chore as actively being worked on. Active chores still count as outstanding (like pending) but are highlighted in the UI and track when they were started, optionally with a countdown timer. Moving a complete chore back to active deducts its points, like mark_pending. If user is not specified, marks it active for all assignees.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, marks active for all assignees)
+      required: false
+      example: "alice"
+      selector:
+        text:
+    chore_slug:
+      name: Chore Slug
+      description: The slug identifier of the chore
+      required: true
+      example: "dishes"
+      selector:
+        text:
+    timer_minutes:
+      name: Timer (minutes)
+      description: Optional countdown length in minutes. Calling again on an already-active chore with a timer restarts the timer; omitting it keeps any existing timer.
+      required: false
+      example: 15
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+          mode: box
+    timer_entity:
+      name: Timer helper
+      description: Optional timer helper (timer.*) running alongside the chore. If that timer is later cancelled (stopped, not just paused or run out) while the chore is still active, the chore goes back to pending.
+      required: false
+      example: "timer.dishes"
+      selector:
+        entity:
+          domain: timer
+
+pause_timer:
+  name: Pause Timer
+  description: Pause the timer on an active chore, remembering how much time was left. The chore stays active. Does nothing for a chore with no running timer.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, pauses it for all assignees)
+      required: false
+      example: "alice"
+      selector:
+        text:
+    chore_slug:
+      name: Chore Slug
+      description: The slug identifier of the chore
+      required: true
+      example: "dishes"
+      selector:
+        text:
+
+resume_timer:
+  name: Resume Timer
+  description: Resume a paused timer on an active chore for the time it had left. Does nothing for a chore whose timer isn't paused.
+  fields:
+    user:
+      name: User
+      description: The username of the assignee (optional - if not provided, resumes it for all assignees)
+      required: false
+      example: "alice"
+      selector:
+        text:
+    chore_slug:
+      name: Chore Slug
+      description: The slug identifier of the chore
+      required: true
+      example: "dishes"
+      selector:
+        text:
+
 mark_not_requested:
   name: Mark Not Requested
   description: Mark a chore as not requested. If user is not specified, marks it not requested for all assignees.
@@ -177,6 +253,17 @@ create_chore:
       example: "kitchen"
       selector:
         text:
+    suggested_duration:
+      name: Suggested duration
+      description: Suggested time to spend on the chore, in minutes (optional - 0 or empty for none)
+      required: false
+      example: 15
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+          mode: box
 
 update_chore:
   name: Update Chore
@@ -253,6 +340,17 @@ update_chore:
       example: "kitchen"
       selector:
         text:
+    suggested_duration:
+      name: Suggested duration
+      description: New suggested duration in minutes, or 0 to clear it (leave unset to keep current)
+      required: false
+      example: 15
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+          mode: box
     new_slug:
       name: New slug
       description: Rename the chore to this slug (leave empty to keep the current slug)

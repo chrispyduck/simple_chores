@@ -353,6 +353,20 @@ class TestChoreSensor:
         assert attrs["assignee"] == "alice"
         assert attrs["all_assignees"] == ["alice", "bob"]
         assert attrs["icon"] == "mdi:clipboard-list-outline"
+        assert attrs["suggested_duration"] is None
+
+    def test_sensor_suggested_duration_attribute(self, hass) -> None:
+        """Test that a chore's suggested duration is exposed as an attribute."""
+        chore = ChoreConfig(
+            name="Vacuum",
+            slug="vacuum",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            suggested_duration=20,
+        )
+        sensor = ChoreSensor(hass, chore, "alice")
+
+        assert sensor.extra_state_attributes["suggested_duration"] == 20
 
     def test_sensor_custom_icon(self, hass) -> None:
         """Test sensor with custom icon."""

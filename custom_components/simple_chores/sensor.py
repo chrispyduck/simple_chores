@@ -14,6 +14,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import DOMAIN, LOGGER, SETTINGS_ENTITY_ID, sanitize_entity_id
 from .data import HistoryStorage, PointsStorage
 from .models import (
+    OUTSTANDING_CHORE_STATES,
     CategoryConfig,
     ChoreConfig,
     ChoreState,
@@ -35,6 +36,17 @@ if TYPE_CHECKING:
 # We manage our own parallelism using asyncio.gather() in services.py
 # Our async_update() is empty, so there's no I/O to limit
 PARALLEL_UPDATES = 0
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    """Parse an ISO-8601 timestamp restored from a state attribute."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 async def _cancel_auto_finalize_timer(
@@ -654,6 +666,17 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         # Initialize state - will be restored in async_added_to_hass if available
         self._attr_native_value = ChoreState.NOT_REQUESTED.value
 
+        # While Active: when the assignee started, and (optionally) when their
+        # timer runs out - or, while that timer is paused, how much of it was
+        # left. All are cleared whenever the chore leaves Active.
+        self._active_since: datetime | None = None
+        self._timer_ends_at: datetime | None = None
+        self._timer_paused_remaining: timedelta | None = None
+        # The HA timer helper (timer.*) running alongside this Active chore,
+        # if the UI that started it linked one. Cancelling that helper moves
+        # the chore back to Pending (see services.async_setup_timer_listener).
+        self._timer_entity: str | None = None
+
     async def async_added_to_hass(self) -> None:
         """Restore previous state when entity is added to hass."""
         await super().async_added_to_hass()
@@ -661,11 +684,22 @@ class ChoreSensor(RestoreEntity, SensorEntity):
         # Restore state from previous session
         last_state = await self.async_get_last_state()
         if last_state is not None and last_state.state in [
-            ChoreState.NOT_REQUESTED.value,
-            ChoreState.PENDING.value,
-            ChoreState.COMPLETE.value,
+            state.value for state in ChoreState
         ]:
             self._attr_native_value = last_state.state
+            if last_state.state == ChoreState.ACTIVE.value:
+                self._active_since = _parse_datetime(
+                    last_state.attributes.get("active_since")
+                ) or datetime.now(UTC)
+                self._timer_ends_at = _parse_datetime(
+                    last_state.attributes.get("timer_ends_at")
+                )
+                paused = last_state.attributes.get("timer_paused_remaining")
+                if isinstance(paused, (int, float)) and paused >= 0:
+                    self._timer_paused_remaining = timedelta(seconds=paused)
+                timer_entity = last_state.attributes.get("timer_entity")
+                if isinstance(timer_entity, str) and timer_entity:
+                    self._timer_entity = timer_entity
             LOGGER.debug(
                 "Restored state for %s: %s",
                 self.entity_id,
@@ -717,7 +751,107 @@ class ChoreSensor(RestoreEntity, SensorEntity):
             "points": self._chore.points_for(self._assignee),
             "default_points": self._chore.points,
             "category": self._chore.category,
+            "suggested_duration": self._chore.suggested_duration,
+            "active_since": (
+                self._active_since.isoformat() if self._active_since else None
+            ),
+            "timer_ends_at": (
+                self._timer_ends_at.isoformat() if self._timer_ends_at else None
+            ),
+            # Seconds left on a paused timer (timer_ends_at is null meanwhile).
+            "timer_paused_remaining": (
+                int(self._timer_paused_remaining.total_seconds())
+                if self._timer_paused_remaining is not None
+                else None
+            ),
+            "timer_entity": self._timer_entity,
         }
+
+    @property
+    def active_since(self) -> datetime | None:
+        """When the chore most recently became Active, if it is Active."""
+        return self._active_since
+
+    @property
+    def timer_ends_at(self) -> datetime | None:
+        """When the Active chore's timer runs out, if one was set."""
+        return self._timer_ends_at
+
+    @property
+    def timer_paused_remaining(self) -> timedelta | None:
+        """Time left on the Active chore's timer while it's paused, else None."""
+        return self._timer_paused_remaining
+
+    @property
+    def timer_entity(self) -> str | None:
+        """The HA timer helper linked to this Active chore, if any."""
+        return self._timer_entity
+
+    def pause_timer(self) -> bool:
+        """
+        Pause a running timer, remembering how much of it is left.
+
+        Returns:
+            True if a running timer was paused; False if there was none.
+
+        """
+        if (
+            self._attr_native_value != ChoreState.ACTIVE.value
+            or self._timer_ends_at is None
+        ):
+            return False
+        remaining = self._timer_ends_at - datetime.now(UTC)
+        self._timer_paused_remaining = max(remaining, timedelta(0))
+        self._timer_ends_at = None
+        return True
+
+    def resume_timer(self) -> bool:
+        """
+        Resume a paused timer for the time it had left.
+
+        Returns:
+            True if a paused timer was resumed; False if there was none.
+
+        """
+        if (
+            self._attr_native_value != ChoreState.ACTIVE.value
+            or self._timer_paused_remaining is None
+        ):
+            return False
+        self._timer_ends_at = datetime.now(UTC) + self._timer_paused_remaining
+        self._timer_paused_remaining = None
+        return True
+
+    def start_activity(
+        self, timer_minutes: int | None = None, timer_entity: str | None = None
+    ) -> None:
+        """
+        Mark the chore Active, starting (or continuing) its activity clock.
+
+        Re-activating a chore that is already Active keeps its original start
+        time; passing `timer_minutes` (re)starts the timer from now, while
+        omitting it leaves any existing timer alone. Likewise `timer_entity`
+        links (or re-links) an HA timer helper, and omitting it keeps any
+        existing link.
+
+        Args:
+            timer_minutes: Optional length of the timer, in minutes
+            timer_entity: Optional HA timer helper (timer.*) whose
+                cancellation should move the chore back to Pending
+
+        """
+        now = datetime.now(UTC)
+        if self._attr_native_value != ChoreState.ACTIVE.value:
+            self._attr_native_value = ChoreState.ACTIVE.value
+            self._active_since = now
+            self._timer_ends_at = None
+            self._timer_paused_remaining = None
+            self._timer_entity = None
+        if timer_entity:
+            self._timer_entity = timer_entity
+        if timer_minutes:
+            self._timer_ends_at = now + timedelta(minutes=timer_minutes)
+            self._timer_paused_remaining = None
 
     def get_state(self) -> str:
         """
@@ -737,7 +871,14 @@ class ChoreSensor(RestoreEntity, SensorEntity):
             state: The new state value
 
         """
+        if state == ChoreState.ACTIVE.value:
+            self.start_activity()
+            return
         self._attr_native_value = state
+        self._active_since = None
+        self._timer_ends_at = None
+        self._timer_paused_remaining = None
+        self._timer_entity = None
 
     def update_chore_config(self, chore: ChoreConfig) -> None:
         """
@@ -802,11 +943,13 @@ class ChoreSummarySensor(SensorEntity):
         self._cached_attributes = {
             "assignee": self._assignee,
             "pending_chores": [],
+            "active_chores": [],
             "complete_chores": [],
             "not_requested_chores": [],
             "all_chores": [],
             "total_chores": 0,
             "total_pending": 0,
+            "total_active": 0,
             "total_complete": 0,
             "total_chores_today": 0,
             "total_points": 0,
@@ -835,6 +978,7 @@ class ChoreSummarySensor(SensorEntity):
         - Properties return the cached values
         """
         pending_entities = []
+        active_entities = []
         complete_entities = []
         not_requested_entities = []
         pending_count = 0
@@ -850,7 +994,12 @@ class ChoreSummarySensor(SensorEntity):
                 # machine updates.
                 current_state = sensor._attr_native_value
 
-                if current_state == ChoreState.PENDING.value:
+                if current_state in OUTSTANDING_CHORE_STATES:
+                    # Active chores are still outstanding, so they count
+                    # towards the pending total/points, but are also listed
+                    # separately so dashboards can highlight them.
+                    if current_state == ChoreState.ACTIVE.value:
+                        active_entities.append(full_entity_id)
                     pending_entities.append(full_entity_id)
                     pending_count += 1
                     pending_points += sensor.chore.points_for(sensor.assignee)
@@ -881,11 +1030,13 @@ class ChoreSummarySensor(SensorEntity):
         self._cached_attributes = {
             "assignee": self._assignee,
             "pending_chores": pending_entities,
+            "active_chores": active_entities,
             "complete_chores": complete_entities,
             "not_requested_chores": not_requested_entities,
             "all_chores": all_entities,
             "total_chores": len(all_entities),
             "total_pending": pending_count,
+            "total_active": len(active_entities),
             "total_complete": len(complete_entities),
             "total_chores_today": pending_count + len(complete_entities),
             "total_points": total_points,
@@ -1122,7 +1273,7 @@ class PrivilegeSensor(RestoreEntity, SensorEntity):
                     self._assignee
                 ):
                     continue
-                if sensor.get_state() == ChoreState.PENDING.value:
+                if sensor.get_state() in OUTSTANDING_CHORE_STATES:
                     return False
             return True
 

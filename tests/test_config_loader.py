@@ -679,6 +679,39 @@ class TestConfigLoaderUpdateChore:
         assert chore.points_by_assignee == {}
 
     @pytest.mark.asyncio
+    async def test_update_chore_suggested_duration(
+        self,
+        hass,
+        temp_config_file: Path,
+        valid_config_data: dict[str, Any],
+    ) -> None:
+        """Test setting, keeping, and clearing a chore's suggested duration."""
+        temp_config_file.write_text(yaml.dump(valid_config_data))
+
+        loader = ConfigLoader(hass, temp_config_file)
+        await loader.async_load()
+
+        await loader.async_update_chore(slug="dishes", suggested_duration=15)
+        chore = loader.config.get_chore_by_slug("dishes")
+        assert chore is not None
+        assert chore.suggested_duration == 15
+        saved_data = yaml.safe_load(temp_config_file.read_text())
+        dishes_chore = next(c for c in saved_data["chores"] if c["slug"] == "dishes")
+        assert dishes_chore["suggested_duration"] == 15
+
+        # None keeps the current value.
+        await loader.async_update_chore(slug="dishes", name="Dishes!")
+        chore = loader.config.get_chore_by_slug("dishes")
+        assert chore is not None
+        assert chore.suggested_duration == 15
+
+        # 0 clears it.
+        await loader.async_update_chore(slug="dishes", suggested_duration=0)
+        chore = loader.config.get_chore_by_slug("dishes")
+        assert chore is not None
+        assert chore.suggested_duration is None
+
+    @pytest.mark.asyncio
     async def test_update_chore_multiple_fields(
         self,
         hass,

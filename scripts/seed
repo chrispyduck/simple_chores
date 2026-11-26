@@ -4,10 +4,14 @@ Seed the local dev Home Assistant instance with sample Simple Chores data:
 categories, chores, privileges, and a mix of completions/resets/missed
 activity so the frontend has something to look at.
 
-Expects a clean instance - onboarded, with the Simple Chores integration
-already added (Settings -> Devices & Services -> Add Integration). Re-run
-after wiping config/ and redoing those two steps; it doesn't try to detect
-or skip data that's already there.
+Expects an onboarded instance with the Simple Chores integration already
+added (Settings -> Devices & Services -> Add Integration).
+
+Safe to re-run: categories, chores, and privileges that already exist (by
+slug) are updated in place to match the definitions below rather than
+created again. The simulated activity only runs when the history is empty,
+so re-running doesn't pile up duplicate points and history entries; pass
+--force-activity to run it anyway.
 
 Needs a long-lived access token: click your name (bottom left of the HA
 UI) -> Security -> Long-Lived Access Tokens -> Create Token. A fresh
@@ -38,78 +42,156 @@ CATEGORIES = [
     {"name": "Homework", "slug": "homework", "icon": "mdi:book-open-variant"},
 ]
 
+# Every chore bob is assigned to has a suggested duration (minutes); half of
+# the rest do, so the other kids' views show a mix.
 CHORES = [
     {
         "name": "Wash the dishes",
         "slug": "wash_dishes",
+        "icon": "mdi:dishwasher",
+        "description": (
+            "Wash, dry, and put away the dishes after dinner. Wipe down the "
+            "counters when you're done."
+        ),
         "frequency": "daily",
         "assignees": "alice,bob",
         "points": 5,
         "category": "kitchen",
+        "suggested_duration": 20,
     },
     {
         "name": "Take out the trash",
         "slug": "take_out_trash",
+        "icon": "mdi:trash-can-outline",
+        "description": (
+            "Empty the kitchen trash and recycling into the bins outside. Put a"
+            " fresh bag in the can."
+        ),
         "frequency": "daily",
         "assignees": "alice,bob,charlie",
         "points": 3,
         "category": "kitchen",
+        "suggested_duration": 5,
     },
     {
         "name": "Feed the pet",
         "slug": "feed_pet",
+        "icon": "mdi:paw",
+        "description": "Fill the food bowl in the morning and top up the water bowl.",
         "frequency": "daily",
         "assignees": "alice,bob,charlie",
         "points": 2,
+        "suggested_duration": 5,
     },
     {
         "name": "Make your bed",
         "slug": "make_bed",
+        "icon": "mdi:bed-king-outline",
+        "description": (
+            "Straighten the sheets, pull up the blanket, and put your pillows back."
+        ),
         "frequency": "daily",
         "assignees": "alice,bob,charlie",
         "points": 2,
         "category": "bedroom",
+        "suggested_duration": 5,
     },
     {
         "name": "Clean your room",
         "slug": "clean_room",
+        "icon": "mdi:broom",
+        "description": (
+            "Pick up the floor, put clothes in the hamper, and put toys and "
+            "books back where they belong."
+        ),
         "frequency": "manual",
         "assignees": "alice,bob,charlie",
         "points": 10,
         "points_by_assignee": "charlie:15",
         "category": "bedroom",
+        "suggested_duration": 30,
     },
     {
         "name": "Mow the lawn",
         "slug": "mow_lawn",
+        "icon": "mdi:mower",
+        "description": (
+            "Mow the front and back yard and empty the clippings into the yard "
+            "waste bin."
+        ),
         "frequency": "manual",
         "assignees": "bob",
         "points": 20,
         "category": "outdoor",
+        "suggested_duration": 60,
     },
     {
         "name": "Rake the leaves",
         "slug": "rake_leaves",
+        "icon": "mdi:leaf",
+        "description": "Rake the leaves in the front yard into piles and bag them up.",
         "frequency": "once",
         "assignees": "alice,bob,charlie",
         "points": 15,
         "category": "outdoor",
+        "suggested_duration": 45,
     },
     {
         "name": "Reading homework",
         "slug": "homework_reading",
+        "icon": "mdi:book-open-page-variant",
+        "description": (
+            "Read for at least 20 minutes and write down the pages you read."
+        ),
         "frequency": "daily",
         "assignees": "alice,charlie",
         "points": 5,
         "category": "homework",
+        "suggested_duration": 20,
     },
     {
         "name": "Math homework",
         "slug": "homework_math",
+        "icon": "mdi:calculator-variant",
+        "description": "Finish tonight's math worksheet and have a grown-up check it.",
         "frequency": "daily",
         "assignees": "bob,charlie",
         "points": 5,
         "category": "homework",
+        "suggested_duration": 30,
+    },
+    {
+        "name": "Practice piano",
+        "slug": "practice_piano",
+        "icon": "mdi:piano",
+        "description": "Run through your scales, then play this week's lesson piece.",
+        "frequency": "daily",
+        "assignees": "alice",
+        "points": 5,
+        "suggested_duration": 30,
+    },
+    {
+        "name": "Water the plants",
+        "slug": "water_plants",
+        "icon": "mdi:watering-can",
+        "description": "Water the garden beds and the pots on the porch.",
+        "frequency": "daily",
+        "assignees": "alice,charlie",
+        "points": 3,
+        "category": "outdoor",
+        # 0 clears any duration left over from an earlier seed run.
+        "suggested_duration": 0,
+    },
+    {
+        "name": "Fold laundry",
+        "slug": "fold_laundry",
+        "icon": "mdi:tshirt-crew",
+        "description": "Fold your clean clothes and put them away in your dresser.",
+        "frequency": "manual",
+        "assignees": "charlie",
+        "points": 4,
+        "category": "bedroom",
+        "suggested_duration": 0,
     },
 ]
 
@@ -140,18 +222,11 @@ PRIVILEGES = [
 ]
 
 
-def call_service(base_url, token, service, data, *, dry_run, return_response=False):
-    if dry_run:
-        print(f"  [dry-run] {service} {json.dumps(data)}")
-        return None
-
-    url = f"{base_url}/api/services/{DOMAIN}/{service}"
-    if return_response:
-        url += "?return_response"
+def request_json(base_url, token, path, data=None, *, what):
     request = urllib.request.Request(
-        url,
-        data=json.dumps(data).encode(),
-        method="POST",
+        f"{base_url}{path}",
+        data=None if data is None else json.dumps(data).encode(),
+        method="GET" if data is None else "POST",
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -162,26 +237,78 @@ def call_service(base_url, token, service, data, *, dry_run, return_response=Fal
             return json.loads(response.read() or b"{}")
     except urllib.error.HTTPError as err:
         detail = err.read().decode(errors="replace")
-        sys.exit(f"{service} failed: HTTP {err.code} {err.reason}\n{detail}")
+        sys.exit(f"{what} failed: HTTP {err.code} {err.reason}\n{detail}")
     except urllib.error.URLError as err:
         sys.exit(f"Could not reach {base_url}: {err.reason}")
 
 
-def seed(base_url: str, token: str | None, *, dry_run: bool) -> None:
+def call_service(base_url, token, service, data, *, dry_run, return_response=False):
+    if dry_run:
+        print(f"  [dry-run] {service} {json.dumps(data)}")
+        return None
+
+    path = f"/api/services/{DOMAIN}/{service}"
+    if return_response:
+        path += "?return_response"
+    return request_json(base_url, token, path, data, what=service)
+
+
+def existing_slugs(base_url, token) -> dict[str, set[str]]:
+    """Slugs of the categories, chores, and privileges already configured.
+
+    Read from the integration's sensor attributes. Chores and privileges
+    only get sensors once they have an assignee, which every seed entry does.
+    """
+    found = {"category_slug": set(), "chore_slug": set(), "privilege_slug": set()}
+    for state in request_json(base_url, token, "/api/states", what="Reading states"):
+        attributes = state.get("attributes", {})
+        for key, slugs in found.items():
+            if attributes.get(key):
+                slugs.add(attributes[key])
+    return found
+
+
+def seed(
+    base_url: str, token: str | None, *, dry_run: bool, force_activity: bool
+) -> None:
     def call(service, data, **kwargs):
         return call_service(base_url, token, service, data, dry_run=dry_run, **kwargs)
 
-    print("Creating categories...")
-    for category in CATEGORIES:
-        call("create_category", category)
+    existing = (
+        {"category_slug": set(), "chore_slug": set(), "privilege_slug": set()}
+        if dry_run
+        else existing_slugs(base_url, token)
+    )
 
-    print("Creating chores...")
-    for chore in CHORES:
-        call("create_chore", chore)
+    def upsert(kind, items, slug_key):
+        created = updated = 0
+        for item in items:
+            if item["slug"] in existing[slug_key]:
+                call(f"update_{kind}", item)
+                updated += 1
+            else:
+                call(f"create_{kind}", item)
+                created += 1
+        print(f"  {created} created, {updated} updated")
 
-    print("Creating privileges...")
-    for privilege in PRIVILEGES:
-        call("create_privilege", privilege)
+    # Categories first (chores reference them), then chores (privileges
+    # link to them).
+    print("Categories...")
+    upsert("category", CATEGORIES, "category_slug")
+    print("Chores...")
+    upsert("chore", CHORES, "chore_slug")
+    print("Privileges...")
+    upsert("privilege", PRIVILEGES, "privilege_slug")
+
+    if not dry_run and not force_activity:
+        history = call("get_history", {}, return_response=True) or {}
+        entries = history.get("service_response", {}).get("entries", [])
+        if entries:
+            print(
+                f"Skipping simulated activity - {len(entries)} history entries "
+                "already on record (use --force-activity to run it anyway)."
+            )
+            return
 
     print("Simulating activity...")
     call("mark_complete", {"chore_slug": "wash_dishes", "user": "alice"})
@@ -237,6 +364,11 @@ def main() -> None:
     parser.add_argument(
         "--dry-run", action="store_true", help="print the calls without making them"
     )
+    parser.add_argument(
+        "--force-activity",
+        action="store_true",
+        help="simulate activity even if history entries already exist",
+    )
     args = parser.parse_args()
 
     if not args.token and not args.dry_run:
@@ -246,7 +378,12 @@ def main() -> None:
             "left) -> Security -> Long-Lived Access Tokens -> Create Token."
         )
 
-    seed(args.url.rstrip("/"), args.token, dry_run=args.dry_run)
+    seed(
+        args.url.rstrip("/"),
+        args.token,
+        dry_run=args.dry_run,
+        force_activity=args.force_activity,
+    )
 
 
 if __name__ == "__main__":
