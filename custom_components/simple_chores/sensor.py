@@ -956,6 +956,7 @@ class ChoreSummarySensor(SensorEntity):
             "points_earned": 0,
             "points_missed": 0,
             "points_possible": 0,
+            "total_suggested_duration": 0,
             "privileges": [],
         }
 
@@ -983,6 +984,9 @@ class ChoreSummarySensor(SensorEntity):
         not_requested_entities = []
         pending_count = 0
         pending_points = 0
+        # Sum of suggested_duration (minutes) for pending + active chores;
+        # chores without a suggested duration contribute nothing.
+        pending_duration = 0
 
         for entity_id, sensor in self._manager.sensors.items():
             if sanitize_entity_id(sensor.assignee) == sanitize_entity_id(
@@ -1003,6 +1007,7 @@ class ChoreSummarySensor(SensorEntity):
                     pending_entities.append(full_entity_id)
                     pending_count += 1
                     pending_points += sensor.chore.points_for(sensor.assignee)
+                    pending_duration += sensor.chore.suggested_duration or 0
                 elif current_state == ChoreState.COMPLETE.value:
                     complete_entities.append(full_entity_id)
                 elif current_state == ChoreState.NOT_REQUESTED.value:
@@ -1043,6 +1048,7 @@ class ChoreSummarySensor(SensorEntity):
             "points_earned": points_earned,
             "points_missed": points_missed,
             "points_possible": points_possible,
+            "total_suggested_duration": pending_duration,
             "privileges": privileges_list,
         }
 

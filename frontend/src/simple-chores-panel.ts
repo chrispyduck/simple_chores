@@ -397,6 +397,7 @@ export class SimpleChoresPanel extends LitElement {
       </div>
 
       ${this._renderPointsSummary(filtered)}
+      ${this._renderDurationSummary(filtered)}
 
       ${sorted.length === 0
         ? html`<p class="empty">
@@ -488,6 +489,46 @@ export class SimpleChoresPanel extends LitElement {
             ${i > 0 ? html`<span class="points-summary-sep">·</span>` : nothing}
             <span
               ><strong>${this._displayName(assignee)}</strong> ${total}</span
+            >
+          `
+        )}
+      </div>
+    `;
+  }
+
+  /**
+   * A "time estimated" line, the duration counterpart to the points
+   * summary: each displayed assignee's total suggested_duration across the
+   * currently-filtered chores. Chores without a suggested duration count as
+   * 0, and the line is hidden entirely when nothing shown has one.
+   */
+  private _renderDurationSummary(chores: ChoreDefinition[]) {
+    const totals = new Map<string, number>();
+    for (const chore of chores) {
+      if (!chore.suggestedDuration) continue;
+      for (const a of chore.assignees) {
+        if (this._bulkUser && a.assignee !== this._bulkUser) continue;
+        totals.set(
+          a.assignee,
+          (totals.get(a.assignee) ?? 0) + chore.suggestedDuration
+        );
+      }
+    }
+    if (totals.size === 0) return nothing;
+
+    const entries = [...totals.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+    return html`
+      <div class="points-summary duration-summary">
+        <ha-icon icon="mdi:timer-outline"></ha-icon>
+        <span>Time estimated:</span>
+        ${entries.map(
+          ([assignee, total], i) => html`
+            ${i > 0 ? html`<span class="points-summary-sep">·</span>` : nothing}
+            <span
+              ><strong>${this._displayName(assignee)}</strong> ${formatDuration(
+                total
+              )}</span
             >
           `
         )}
@@ -3289,6 +3330,9 @@ export class SimpleChoresPanel extends LitElement {
     }
     .points-summary-sep {
       opacity: 0.5;
+    }
+    .points-summary + .duration-summary {
+      margin-top: -6px;
     }
 
     .history-list {

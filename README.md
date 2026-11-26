@@ -19,6 +19,7 @@ This entire codebase was vibe coded with Claude Sonnet 4.5. This is as much an e
   * **Note**: A daily or weekly chore must be requested at least once (marked as Pending or Complete) before it starts resetting on its schedule. Until then, it behaves like a manual chore.
 * Each assignee has a summary sensor at `sensor.simple_chore_summary_{assignee}` that tracks:
   * Count of pending/active/complete/not requested chores (`total_pending`, `total_active`, `total_complete`, `total_chores_today`)
+  * `total_suggested_duration`: Sum of `suggested_duration` (minutes) across pending and active chores (chores without one count as 0)
   * Lists of chores in each state (`pending_chores`, `active_chores`, `complete_chores`, `not_requested_chores`). Active chores are also included in `pending_chores` / `total_pending`.
   * **Points tracking**:
     * `total_points`: Lifetime earned points (cumulative)
