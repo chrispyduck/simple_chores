@@ -443,3 +443,57 @@ class TestChoreSummarySensor:
 
         attrs = manager.summary_sensors["chris"].extra_state_attributes
         assert attrs["total_complete"] == 1
+
+    @pytest.mark.asyncio
+    async def test_summary_sensor_total_suggested_duration(self, hass) -> None:
+        """Test total_suggested_duration sums pending + active chore durations."""
+        hass.data = {}
+        config = SimpleChoresConfig(
+            chores=[
+                ChoreConfig(
+                    name="Dishes",
+                    slug="dishes",
+                    frequency=ChoreFrequency.DAILY,
+                    assignees=["alice"],
+                    suggested_duration=15,
+                ),
+                ChoreConfig(
+                    name="Vacuum",
+                    slug="vacuum",
+                    frequency=ChoreFrequency.DAILY,
+                    assignees=["alice"],
+                    suggested_duration=30,
+                ),
+                ChoreConfig(
+                    name="Laundry",
+                    slug="laundry",
+                    frequency=ChoreFrequency.DAILY,
+                    assignees=["alice"],
+                    suggested_duration=45,
+                ),
+                ChoreConfig(
+                    name="Trash",
+                    slug="trash",
+                    frequency=ChoreFrequency.DAILY,
+                    assignees=["alice"],
+                ),
+            ]
+        )
+        mock_config_loader = MagicMock()
+        mock_config_loader.config = config
+        manager = ChoreSensorManager(hass, Mock(), mock_config_loader)
+        await manager.async_setup()
+
+        alice_summary = manager.summary_sensors["alice"]
+        await alice_summary.async_update()
+        assert alice_summary.extra_state_attributes["total_suggested_duration"] == 0
+
+        manager.sensors["alice_dishes"].set_state(ChoreState.PENDING.value)
+        manager.sensors["alice_vacuum"].set_state(ChoreState.ACTIVE.value)
+        manager.sensors["alice_laundry"].set_state(ChoreState.COMPLETE.value)
+        manager.sensors["alice_trash"].set_state(ChoreState.PENDING.value)
+        await alice_summary.async_update()
+
+        # dishes (pending, 15) + vacuum (active, 30); laundry is complete and
+        # trash has no suggested duration
+        assert alice_summary.extra_state_attributes["total_suggested_duration"] == 45

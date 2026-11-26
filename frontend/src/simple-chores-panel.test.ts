@@ -77,6 +77,61 @@ describe("simple-chores-panel", () => {
     );
   });
 
+  it("shows each assignee's total suggested duration for the visible chores", async () => {
+    const chore = (
+      assignee: string,
+      slug: string,
+      suggested_duration?: number
+    ): [string, HassEntity] => [
+      `sensor.simple_chore_${assignee}_${slug}`,
+      {
+        entity_id: `sensor.simple_chore_${assignee}_${slug}`,
+        state: "Pending",
+        attributes: {
+          chore_slug: slug,
+          chore_name: slug,
+          assignee,
+          frequency: "daily",
+          points: 1,
+          default_points: 1,
+          ...(suggested_duration ? { suggested_duration } : {}),
+        },
+      },
+    ];
+    const states = Object.fromEntries([
+      chore("alice", "dishes", 30),
+      chore("bob", "dishes", 30),
+      chore("alice", "laundry", 45),
+      chore("bob", "trash"),
+    ]);
+    const el = await mountPanel(makeHass({ states }));
+
+    const summary = el.shadowRoot!.querySelector(".duration-summary");
+    expect(summary).not.toBeNull();
+    const text = summary!.textContent!.replace(/\s+/g, " ");
+    expect(text).toContain("alice 1 hr 15 min");
+    expect(text).toContain("bob 30 min");
+  });
+
+  it("hides the duration summary when no visible chore has a duration", async () => {
+    const states: Record<string, HassEntity> = {
+      "sensor.simple_chore_alice_dishes": {
+        entity_id: "sensor.simple_chore_alice_dishes",
+        state: "Pending",
+        attributes: {
+          chore_slug: "dishes",
+          chore_name: "Dishes",
+          assignee: "alice",
+          frequency: "daily",
+          points: 1,
+          default_points: 1,
+        },
+      },
+    };
+    const el = await mountPanel(makeHass({ states }));
+    expect(el.shadowRoot!.querySelector(".duration-summary")).toBeNull();
+  });
+
   it("renders a chore card built from a chore sensor entity", async () => {
     const states: Record<string, HassEntity> = {
       "sensor.simple_chore_alice_dishes": {
