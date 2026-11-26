@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 _STATIC_REGISTERED = f"{DOMAIN}_panel_static_registered"
 _CARD_STATIC_REGISTERED = f"{DOMAIN}_history_card_static_registered"
+_CARD_MODULE_URL = f"{DOMAIN}_history_card_module_url"
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
@@ -119,13 +120,30 @@ async def async_register_history_card(hass: HomeAssistant) -> None:
         )
         return
 
+    # The bundle's URL never changes between releases, so browsers (and the
+    # companion apps) would otherwise keep running a stale cached copy after
+    # an update - which is how new card types end up "doesn't exist". Stamp
+    # the module URL with the file's mtime, as the admin panel does.
+    try:
+        cache_bust = int(view_path.stat().st_mtime)
+    except OSError:
+        cache_bust = 0
+    module_url = f"{CARD_URL}?v={cache_bust}"
+
     if not hass.data.get(_CARD_STATIC_REGISTERED):
         await hass.http.async_register_static_paths(
             [StaticPathConfig(CARD_URL, str(view_path), cache_headers=False)]
         )
         hass.data[_CARD_STATIC_REGISTERED] = True
 
-    frontend.add_extra_js_url(hass, CARD_URL)
+    # Drop any URL from an earlier setup (e.g. a reload after the bundle was
+    # updated in place) so pages don't load two copies of the cards.
+    previous_url = hass.data.get(_CARD_MODULE_URL)
+    if previous_url is not None and previous_url != module_url:
+        frontend.remove_extra_js_url(hass, previous_url)
+
+    frontend.add_extra_js_url(hass, module_url)
+    hass.data[_CARD_MODULE_URL] = module_url
 
 
 def async_unregister_history_card(hass: HomeAssistant) -> None:
@@ -136,4 +154,6 @@ def async_unregister_history_card(hass: HomeAssistant) -> None:
         hass: Home Assistant instance
 
     """
-    frontend.remove_extra_js_url(hass, CARD_URL)
+    module_url = hass.data.pop(_CARD_MODULE_URL, None)
+    if module_url is not None:
+        frontend.remove_extra_js_url(hass, module_url)
