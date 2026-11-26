@@ -100,7 +100,7 @@ Services that modify chore/point state MUST call `_update_summary_sensors(hass, 
 
 ### Testing
 
-**Framework:** pytest 8.3.4 with `pytest-homeassistant-custom-component`
+**Framework:** pytest 9 with `pytest-homeassistant` (pinned to the same version as `homeassistant`)
 
 **Test Organization:**
 - Class-based: `TestMarkCompleteService`, `TestPointsTracking`, etc.
@@ -206,7 +206,7 @@ await storage.set_points_missed(user, amount)  # Sets absolute value
 3. **Storing points_possible** instead of calculating dynamically
 4. **Using set_points_missed()** when you should use add_points_missed()
 5. **start_new_day order:** Calculate missed points BEFORE resetting states
-6. **Testing without hass fixture:** Use pytest-homeassistant-custom-component's hass
+6. **Testing without hass fixture:** Use pytest-homeassistant's hass
 7. **Entity ID sanitization:** Always use sanitize_entity_id() for slugs
 8. **Missing event loop yields:** Add `await asyncio.sleep(0)` after batch state updates
 

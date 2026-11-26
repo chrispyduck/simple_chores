@@ -351,6 +351,7 @@ class ConfigLoader:
         points: int | None = None,
         points_by_assignee: dict[str, int] | None = None,
         category: str | None = None,
+        suggested_duration: int | None = None,
         new_slug: str | None = None,
     ) -> None:
         """
@@ -367,6 +368,8 @@ class ConfigLoader:
             points_by_assignee: New per-assignee point overrides, or {} to
                 clear them all (None to keep current)
             category: New category slug, or "" to uncategorize (None to keep current)
+            suggested_duration: New suggested duration in minutes, or 0 to
+                clear it (None to keep current)
             new_slug: Rename the chore to this slug (None to keep current slug)
 
         Raises:
@@ -406,6 +409,9 @@ class ConfigLoader:
             updated_data["points_by_assignee"] = points_by_assignee
         if category is not None:
             updated_data["category"] = category
+        if suggested_duration is not None:
+            # 0 clears it - ChoreConfig normalizes 0 to None.
+            updated_data["suggested_duration"] = suggested_duration
         if renamed_slug is not None:
             updated_data["slug"] = renamed_slug
 

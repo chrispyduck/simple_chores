@@ -10,17 +10,19 @@ Service actions have been implemented to allow external automation and scripts t
 
 1. `simple_chores.mark_complete` - Mark a chore as complete for a specific user or all assignees (awards points immediately)
 2. `simple_chores.mark_pending` - Mark a chore as pending for a specific user or all assignees (deducts points if chore was previously complete)
-3. `simple_chores.mark_not_requested` - Mark a chore as not requested for a specific user or all assignees
-4. `simple_chores.finalize_one` - Immediately finalize one completed chore (the same reset auto-finalize performs, on demand); chores that aren't currently complete are left alone
-5. `simple_chores.reset_completed` - Reset all completed chores to not requested (optionally for a specific user)
-6. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, once chores are deleted entirely (calculates missed points for pending manual/once chores). Daily and weekly chores reset themselves automatically on their own schedule instead (see `update_settings` below) and are left untouched here.
-7. `simple_chores.create_chore` - Dynamically create a new chore at runtime
-8. `simple_chores.update_chore` - Update an existing chore's properties (including points)
-9. `simple_chores.delete_chore` - Delete a chore
-10. `simple_chores.refresh_summary` - Force refresh of summary sensor attributes
-11. `simple_chores.adjust_points` - Manually adjust an assignee's earned points by a specified amount (positive or negative)
-12. `simple_chores.reset_points` - Reset points tracking (daily stats and/or total points)
-13. `simple_chores.undo_completion` - Administrators only. Reverse a completed chore's history entry, clawing back its points and optionally withholding an additional penalty
+3. `simple_chores.mark_active` - Mark a chore as actively being worked on, optionally with a countdown timer (`timer_minutes`). Counts as outstanding like pending; deducts points if the chore was previously complete
+4. `simple_chores.pause_timer` / `simple_chores.resume_timer` - Pause an active chore's timer (keeping the time left) and resume it later
+5. `simple_chores.mark_not_requested` - Mark a chore as not requested for a specific user or all assignees
+6. `simple_chores.finalize_one` - Immediately finalize one completed chore (the same reset auto-finalize performs, on demand); chores that aren't currently complete are left alone
+7. `simple_chores.reset_completed` - Reset all completed chores to not requested (optionally for a specific user)
+8. `simple_chores.start_new_day` - Reset completed chores based on frequency: manual chores to not requested, once chores are deleted entirely (calculates missed points for pending manual/once chores). Daily and weekly chores reset themselves automatically on their own schedule instead (see `update_settings` below) and are left untouched here.
+9. `simple_chores.create_chore` - Dynamically create a new chore at runtime
+10. `simple_chores.update_chore` - Update an existing chore's properties (including points and `suggested_duration` in minutes - pass `0` to clear it)
+11. `simple_chores.delete_chore` - Delete a chore
+12. `simple_chores.refresh_summary` - Force refresh of summary sensor attributes
+13. `simple_chores.adjust_points` - Manually adjust an assignee's earned points by a specified amount (positive or negative)
+14. `simple_chores.reset_points` - Reset points tracking (daily stats and/or total points)
+15. `simple_chores.undo_completion` - Administrators only. Reverse a completed chore's history entry, clawing back its points and optionally withholding an additional penalty
 
 ### Privilege Services
 
@@ -41,6 +43,35 @@ Service actions have been implemented to allow external automation and scripts t
 
 `finalize_one` only acts on sensors that are currently Complete; it's a no-op
 (not an error) for any that aren't.
+
+### mark_active
+
+- `user` (optional, string): As above.
+- `chore_slug` (required, string): As above.
+- `timer_minutes` (optional, integer, 1-1440): Countdown length. Re-marking an
+  already-active chore keeps its original `active_since`; passing a timer
+  restarts the countdown from now, omitting it keeps any existing timer.
+- `timer_entity` (optional, `timer.*` entity ID): A timer helper running
+  alongside the chore. If that helper is cancelled (`timer.cancel`) while
+  the chore is still Active, the chore moves back to Pending. Pausing the
+  helper or letting it run out leaves the chore Active. The chore card
+  passes this automatically when it has a `timer_entity` configured.
+
+While Active, the chore sensor exposes `active_since` and `timer_ends_at`
+(ISO-8601, or `null`), plus `timer_paused_remaining` (seconds, or `null`)
+while the timer is paused, and `timer_entity` (the linked helper, or
+`null`). All clear as soon as the chore leaves Active.
+
+### pause_timer, resume_timer
+
+- `user` (optional, string): As above.
+- `chore_slug` (required, string): As above.
+
+`pause_timer` stops a running timer on an Active chore: `timer_ends_at`
+becomes `null` and `timer_paused_remaining` holds the seconds left.
+`resume_timer` restarts it for that remaining time. The chore stays Active
+throughout. Both are no-ops (not errors) for a chore with nothing to pause
+or resume. Starting a new timer via `mark_active` discards a paused one.
 
 ### reset_completed, start_new_day
 

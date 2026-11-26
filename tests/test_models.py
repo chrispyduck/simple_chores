@@ -119,6 +119,42 @@ class TestChoreConfig:
         assert chore.points_for("alice") == 5
         assert chore.points_for("bob") == 2
 
+    def test_suggested_duration_defaults_none(self) -> None:
+        """Test that a chore has no suggested duration unless one is given."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+        )
+        assert chore.suggested_duration is None
+
+    @pytest.mark.parametrize(("value", "expected"), [(15, 15), (0, None), ("", None)])
+    def test_suggested_duration_normalizes_zero_to_none(
+        self, value: object, expected: int | None
+    ) -> None:
+        """Test that 0 / empty mean "no suggested duration"."""
+        chore = ChoreConfig(
+            name="Dishes",
+            slug="dishes",
+            frequency=ChoreFrequency.DAILY,
+            assignees=["alice"],
+            suggested_duration=value,
+        )
+        assert chore.suggested_duration == expected
+
+    @pytest.mark.parametrize("value", [-5, 1441])
+    def test_suggested_duration_rejects_out_of_range(self, value: int) -> None:
+        """Test that a negative or more-than-a-day duration is rejected."""
+        with pytest.raises(ValidationError):
+            ChoreConfig(
+                name="Dishes",
+                slug="dishes",
+                frequency=ChoreFrequency.DAILY,
+                assignees=["alice"],
+                suggested_duration=value,
+            )
+
     def test_points_by_assignee_rejects_negative_values(self) -> None:
         """Test that a negative points override raises a validation error."""
         with pytest.raises(ValidationError) as exc_info:

@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
+import { customElementOnce } from "./define-once";
 
 import { HomeAssistant, knownAssignees, parseChores } from "./types";
 import type { HistoryCardConfig } from "./simple-chores-history-card";
@@ -19,7 +20,7 @@ const DATALIST_ID = "simple-chores-history-card-editor-assignees";
  * not the admin-only user list the panel uses elsewhere, since this card -
  * and its editor - needs to work for non-admin dashboard editors too.
  */
-@customElement("simple-chores-history-card-editor")
+@customElementOnce("simple-chores-history-card-editor")
 export class SimpleChoresHistoryCardEditor extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
 

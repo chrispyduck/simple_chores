@@ -8,8 +8,10 @@ import {
   SETTINGS_ENTITY_ID,
   categoryToDraft,
   choreToDraft,
+  describeActivityClock,
   displayName,
   emptyChoreDraft,
+  formatDuration,
   historyActionClass,
   historyActionLabel,
   knownAssignees,
@@ -18,6 +20,7 @@ import {
   parseHistoryEntries,
   parsePointGoals,
   parsePrivileges,
+  parseSuggestedDuration,
   parseSettings,
   parseSummaries,
   privilegeToDraft,
@@ -112,6 +115,18 @@ describe("parseChores", () => {
 
     expect(chores).toHaveLength(1);
     expect(chores[0].slug).toBe("dishes");
+  });
+
+  it("reads suggested_duration, treating missing or 0 as none", () => {
+    const states = statesOf(
+      ["sensor.simple_chore_alice_dishes", "Pending", { chore_slug: "dishes", assignee: "alice", suggested_duration: 15 }],
+      ["sensor.simple_chore_alice_trash", "Pending", { chore_slug: "trash", assignee: "alice" }],
+      ["sensor.simple_chore_alice_beds", "Pending", { chore_slug: "beds", assignee: "alice", suggested_duration: 0 }]
+    );
+    const bySlug = Object.fromEntries(parseChores(states).map((c) => [c.slug, c]));
+    expect(bySlug.dishes.suggestedDuration).toBe(15);
+    expect(bySlug.trash.suggestedDuration).toBeNull();
+    expect(bySlug.beds.suggestedDuration).toBeNull();
   });
 
   it("skips entities without a chore_slug attribute", () => {
@@ -407,9 +422,10 @@ describe("knownAssignees", () => {
         icon: "",
         points: 1,
         category: null,
+        suggestedDuration: null,
         assignees: [
-          { assignee: "bob", entityId: "x", state: "Pending", points: 1 },
-          { assignee: "alice", entityId: "y", state: "Pending", points: 1 },
+          { assignee: "bob", entityId: "x", state: "Pending", points: 1, activeSince: null, timerEndsAt: null },
+          { assignee: "alice", entityId: "y", state: "Pending", points: 1, activeSince: null, timerEndsAt: null },
         ],
       },
     ];
@@ -437,7 +453,8 @@ describe("knownAssignees", () => {
         icon: "",
         points: 1,
         category: null,
-        assignees: [{ assignee: "alice", entityId: "x", state: "Pending", points: 1 }],
+        suggestedDuration: null,
+        assignees: [{ assignee: "alice", entityId: "x", state: "Pending", points: 1, activeSince: null, timerEndsAt: null }],
       },
     ];
     const privileges: PrivilegeDefinition[] = [
@@ -480,9 +497,10 @@ describe("choreToDraft / emptyChoreDraft", () => {
     icon: "mdi:water",
     points: 2,
     category: "kitchen",
+    suggestedDuration: null,
     assignees: [
-      { assignee: "alice", entityId: "a", state: "Pending", points: 10 },
-      { assignee: "bob", entityId: "b", state: "Pending", points: 2 },
+      { assignee: "alice", entityId: "a", state: "Pending", points: 10, activeSince: null, timerEndsAt: null },
+      { assignee: "bob", entityId: "b", state: "Pending", points: 2, activeSince: null, timerEndsAt: null },
     ],
   };
 
@@ -499,6 +517,12 @@ describe("choreToDraft / emptyChoreDraft", () => {
   it("carries over the assignee name list", () => {
     const draft = choreToDraft(baseChore);
     expect(draft.assignees).toEqual(["alice", "bob"]);
+  });
+
+  it("maps suggestedDuration to the draft's text value", () => {
+    expect(choreToDraft({ ...baseChore, suggestedDuration: 20 }).suggestedDuration).toBe("20");
+    expect(choreToDraft(baseChore).suggestedDuration).toBe("");
+    expect(emptyChoreDraft().suggestedDuration).toBe("");
   });
 
   it("starts with an empty override map for a brand new chore", () => {
@@ -726,5 +750,102 @@ describe("historyActionClass", () => {
     expect(historyActionClass("missed")).toBe("state-warn");
     expect(historyActionClass("privilege_temporarily_disabled")).toBe("state-warn");
     expect(historyActionClass("reset")).toBe("state-neutral");
+  });
+});
+
+describe("Active chore state", () => {
+  it("parses active_since/timer_ends_at onto the assignee status", () => {
+    const chores = parseChores(
+      statesOf(
+        [
+          "sensor.simple_chore_alice_dishes",
+          "Active",
+          {
+            chore_slug: "dishes",
+            assignee: "alice",
+            active_since: "2026-01-01T12:00:00+00:00",
+            timer_ends_at: "2026-01-01T12:15:00+00:00",
+          },
+        ],
+        ["sensor.simple_chore_bob_dishes", "Pending", { chore_slug: "dishes", assignee: "bob" }]
+      )
+    );
+    const [alice, bob] = chores[0].assignees;
+    expect(alice.state).toBe("Active");
+    expect(alice.activeSince).toBe("2026-01-01T12:00:00+00:00");
+    expect(alice.timerEndsAt).toBe("2026-01-01T12:15:00+00:00");
+    expect(bob.activeSince).toBeNull();
+    expect(bob.timerEndsAt).toBeNull();
+  });
+
+  it("reads total_active from summaries, defaulting to 0", () => {
+    const [summary] = parseSummaries(
+      statesOf(["sensor.simple_chore_meta_alice_summary", "2", { assignee: "alice", total_active: 1 }])
+    );
+    expect(summary.totalActive).toBe(1);
+    const [legacy] = parseSummaries(
+      statesOf(["sensor.simple_chore_meta_bob_summary", "0", { assignee: "bob" }])
+    );
+    expect(legacy.totalActive).toBe(0);
+  });
+});
+
+describe("describeActivityClock", () => {
+  const start = Date.parse("2026-01-01T12:00:00Z");
+
+  it("shows elapsed time when there's no timer", () => {
+    expect(describeActivityClock("2026-01-01T12:00:00Z", null, start + 65_000)).toEqual({
+      label: "1:05 elapsed",
+      overdue: false,
+    });
+  });
+
+  it("includes hours once past an hour", () => {
+    expect(describeActivityClock("2026-01-01T12:00:00Z", null, start + 3_725_000)?.label).toBe(
+      "1:02:05 elapsed"
+    );
+  });
+
+  it("counts down while the timer is running", () => {
+    expect(
+      describeActivityClock("2026-01-01T12:00:00Z", "2026-01-01T12:10:00Z", start + 60_000)
+    ).toEqual({ label: "9:00 left", overdue: false });
+  });
+
+  it("reports overdue once the timer has run out", () => {
+    expect(
+      describeActivityClock("2026-01-01T12:00:00Z", "2026-01-01T12:10:00Z", start + 662_000)
+    ).toEqual({ label: "1:02 over", overdue: true });
+  });
+
+  it("returns null with nothing to show", () => {
+    expect(describeActivityClock(null, null, start)).toBeNull();
+    expect(describeActivityClock("garbage", null, start)).toBeNull();
+  });
+});
+
+describe("parseSuggestedDuration", () => {
+  it("parses whole minutes", () => {
+    expect(parseSuggestedDuration("15")).toBe(15);
+    expect(parseSuggestedDuration(" 7.9 ")).toBe(7);
+  });
+
+  it("treats blank, invalid and non-positive input as none (0)", () => {
+    expect(parseSuggestedDuration("")).toBe(0);
+    expect(parseSuggestedDuration("abc")).toBe(0);
+    expect(parseSuggestedDuration("0")).toBe(0);
+    expect(parseSuggestedDuration("-5")).toBe(0);
+  });
+
+  it("clamps to one day", () => {
+    expect(parseSuggestedDuration("5000")).toBe(1440);
+  });
+});
+
+describe("formatDuration", () => {
+  it("formats minutes and hours", () => {
+    expect(formatDuration(45)).toBe("45 min");
+    expect(formatDuration(60)).toBe("1 hr");
+    expect(formatDuration(90)).toBe("1 hr 30 min");
   });
 });

@@ -3,18 +3,18 @@
  * Copyright 2019 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const M = globalThis, V = M.ShadowRoot && (M.ShadyCSS === void 0 || M.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, G = Symbol(), te = /* @__PURE__ */ new WeakMap();
-let me = class {
-  constructor(e, s, i) {
-    if (this._$cssResult$ = !0, i !== G) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
-    this.cssText = e, this.t = s;
+const q = globalThis, V = q.ShadowRoot && (q.ShadyCSS === void 0 || q.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, Y = Symbol(), ie = /* @__PURE__ */ new WeakMap();
+let be = class {
+  constructor(e, i, o) {
+    if (this._$cssResult$ = !0, o !== Y) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
+    this.cssText = e, this.t = i;
   }
   get styleSheet() {
     let e = this.o;
-    const s = this.t;
+    const i = this.t;
     if (V && e === void 0) {
-      const i = s !== void 0 && s.length === 1;
-      i && (e = te.get(s)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), i && te.set(s, e));
+      const o = i !== void 0 && i.length === 1;
+      o && (e = ie.get(i)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), o && ie.set(i, e));
     }
     return e;
   }
@@ -22,33 +22,33 @@ let me = class {
     return this.cssText;
   }
 };
-const ke = (t) => new me(typeof t == "string" ? t : t + "", void 0, G), Ce = (t, ...e) => {
-  const s = t.length === 1 ? t[0] : e.reduce((i, o, a) => i + ((n) => {
-    if (n._$cssResult$ === !0) return n.cssText;
-    if (typeof n == "number") return n;
-    throw Error("Value passed to 'css' function must be a 'css' function result: " + n + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
-  })(o) + t[a + 1], t[0]);
-  return new me(s, t, G);
-}, Ae = (t, e) => {
-  if (V) t.adoptedStyleSheets = e.map((s) => s instanceof CSSStyleSheet ? s : s.styleSheet);
-  else for (const s of e) {
-    const i = document.createElement("style"), o = M.litNonce;
-    o !== void 0 && i.setAttribute("nonce", o), i.textContent = s.cssText, t.appendChild(i);
+const Ce = (t) => new be(typeof t == "string" ? t : t + "", void 0, Y), De = (t, ...e) => {
+  const i = t.length === 1 ? t[0] : e.reduce((o, s, a) => o + ((r) => {
+    if (r._$cssResult$ === !0) return r.cssText;
+    if (typeof r == "number") return r;
+    throw Error("Value passed to 'css' function must be a 'css' function result: " + r + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
+  })(s) + t[a + 1], t[0]);
+  return new be(i, t, Y);
+}, Ee = (t, e) => {
+  if (V) t.adoptedStyleSheets = e.map((i) => i instanceof CSSStyleSheet ? i : i.styleSheet);
+  else for (const i of e) {
+    const o = document.createElement("style"), s = q.litNonce;
+    s !== void 0 && o.setAttribute("nonce", s), o.textContent = i.cssText, t.appendChild(o);
   }
 }, se = V ? (t) => t : (t) => t instanceof CSSStyleSheet ? ((e) => {
-  let s = "";
-  for (const i of e.cssRules) s += i.cssText;
-  return ke(s);
+  let i = "";
+  for (const o of e.cssRules) i += o.cssText;
+  return Ce(i);
 })(t) : t;
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const { is: Ee, defineProperty: De, getOwnPropertyDescriptor: Se, getOwnPropertyNames: Ue, getOwnPropertySymbols: Pe, getPrototypeOf: Te } = Object, W = globalThis, ie = W.trustedTypes, Re = ie ? ie.emptyScript : "", Ne = W.reactiveElementPolyfillSupport, N = (t, e) => t, H = { toAttribute(t, e) {
+const { is: Se, defineProperty: Ue, getOwnPropertyDescriptor: Pe, getOwnPropertyNames: Ne, getOwnPropertySymbols: Te, getPrototypeOf: Re } = Object, W = globalThis, oe = W.trustedTypes, ze = oe ? oe.emptyScript : "", Fe = W.reactiveElementPolyfillSupport, R = (t, e) => t, H = { toAttribute(t, e) {
   switch (e) {
     case Boolean:
-      t = t ? Re : null;
+      t = t ? ze : null;
       break;
     case Object:
     case Array:
@@ -56,86 +56,86 @@ const { is: Ee, defineProperty: De, getOwnPropertyDescriptor: Se, getOwnProperty
   }
   return t;
 }, fromAttribute(t, e) {
-  let s = t;
+  let i = t;
   switch (e) {
     case Boolean:
-      s = t !== null;
+      i = t !== null;
       break;
     case Number:
-      s = t === null ? null : Number(t);
+      i = t === null ? null : Number(t);
       break;
     case Object:
     case Array:
       try {
-        s = JSON.parse(t);
+        i = JSON.parse(t);
       } catch {
-        s = null;
+        i = null;
       }
   }
-  return s;
-} }, Y = (t, e) => !Ee(t, e), oe = { attribute: !0, type: String, converter: H, reflect: !1, useDefault: !1, hasChanged: Y };
+  return i;
+} }, X = (t, e) => !Se(t, e), ae = { attribute: !0, type: String, converter: H, reflect: !1, useDefault: !1, hasChanged: X };
 Symbol.metadata ??= Symbol("metadata"), W.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
-let A = class extends HTMLElement {
+let C = class extends HTMLElement {
   static addInitializer(e) {
     this._$Ei(), (this.l ??= []).push(e);
   }
   static get observedAttributes() {
     return this.finalize(), this._$Eh && [...this._$Eh.keys()];
   }
-  static createProperty(e, s = oe) {
-    if (s.state && (s.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((s = Object.create(s)).wrapped = !0), this.elementProperties.set(e, s), !s.noAccessor) {
-      const i = Symbol(), o = this.getPropertyDescriptor(e, i, s);
-      o !== void 0 && De(this.prototype, e, o);
+  static createProperty(e, i = ae) {
+    if (i.state && (i.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((i = Object.create(i)).wrapped = !0), this.elementProperties.set(e, i), !i.noAccessor) {
+      const o = Symbol(), s = this.getPropertyDescriptor(e, o, i);
+      s !== void 0 && Ue(this.prototype, e, s);
     }
   }
-  static getPropertyDescriptor(e, s, i) {
-    const { get: o, set: a } = Se(this.prototype, e) ?? { get() {
-      return this[s];
-    }, set(n) {
-      this[s] = n;
+  static getPropertyDescriptor(e, i, o) {
+    const { get: s, set: a } = Pe(this.prototype, e) ?? { get() {
+      return this[i];
+    }, set(r) {
+      this[i] = r;
     } };
-    return { get: o, set(n) {
-      const l = o?.call(this);
-      a?.call(this, n), this.requestUpdate(e, l, i);
+    return { get: s, set(r) {
+      const l = s?.call(this);
+      a?.call(this, r), this.requestUpdate(e, l, o);
     }, configurable: !0, enumerable: !0 };
   }
   static getPropertyOptions(e) {
-    return this.elementProperties.get(e) ?? oe;
+    return this.elementProperties.get(e) ?? ae;
   }
   static _$Ei() {
-    if (this.hasOwnProperty(N("elementProperties"))) return;
-    const e = Te(this);
+    if (this.hasOwnProperty(R("elementProperties"))) return;
+    const e = Re(this);
     e.finalize(), e.l !== void 0 && (this.l = [...e.l]), this.elementProperties = new Map(e.elementProperties);
   }
   static finalize() {
-    if (this.hasOwnProperty(N("finalized"))) return;
-    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(N("properties"))) {
-      const s = this.properties, i = [...Ue(s), ...Pe(s)];
-      for (const o of i) this.createProperty(o, s[o]);
+    if (this.hasOwnProperty(R("finalized"))) return;
+    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(R("properties"))) {
+      const i = this.properties, o = [...Ne(i), ...Te(i)];
+      for (const s of o) this.createProperty(s, i[s]);
     }
     const e = this[Symbol.metadata];
     if (e !== null) {
-      const s = litPropertyMetadata.get(e);
-      if (s !== void 0) for (const [i, o] of s) this.elementProperties.set(i, o);
+      const i = litPropertyMetadata.get(e);
+      if (i !== void 0) for (const [o, s] of i) this.elementProperties.set(o, s);
     }
     this._$Eh = /* @__PURE__ */ new Map();
-    for (const [s, i] of this.elementProperties) {
-      const o = this._$Eu(s, i);
-      o !== void 0 && this._$Eh.set(o, s);
+    for (const [i, o] of this.elementProperties) {
+      const s = this._$Eu(i, o);
+      s !== void 0 && this._$Eh.set(s, i);
     }
     this.elementStyles = this.finalizeStyles(this.styles);
   }
   static finalizeStyles(e) {
-    const s = [];
+    const i = [];
     if (Array.isArray(e)) {
-      const i = new Set(e.flat(1 / 0).reverse());
-      for (const o of i) s.unshift(se(o));
-    } else e !== void 0 && s.push(se(e));
-    return s;
+      const o = new Set(e.flat(1 / 0).reverse());
+      for (const s of o) i.unshift(se(s));
+    } else e !== void 0 && i.push(se(e));
+    return i;
   }
-  static _$Eu(e, s) {
-    const i = s.attribute;
-    return i === !1 ? void 0 : typeof i == "string" ? i : typeof e == "string" ? e.toLowerCase() : void 0;
+  static _$Eu(e, i) {
+    const o = i.attribute;
+    return o === !1 ? void 0 : typeof o == "string" ? o : typeof e == "string" ? e.toLowerCase() : void 0;
   }
   constructor() {
     super(), this._$Ep = void 0, this.isUpdatePending = !1, this.hasUpdated = !1, this._$Em = null, this._$Ev();
@@ -150,13 +150,13 @@ let A = class extends HTMLElement {
     this._$EO?.delete(e);
   }
   _$E_() {
-    const e = /* @__PURE__ */ new Map(), s = this.constructor.elementProperties;
-    for (const i of s.keys()) this.hasOwnProperty(i) && (e.set(i, this[i]), delete this[i]);
+    const e = /* @__PURE__ */ new Map(), i = this.constructor.elementProperties;
+    for (const o of i.keys()) this.hasOwnProperty(o) && (e.set(o, this[o]), delete this[o]);
     e.size > 0 && (this._$Ep = e);
   }
   createRenderRoot() {
     const e = this.shadowRoot ?? this.attachShadow(this.constructor.shadowRootOptions);
-    return Ae(e, this.constructor.elementStyles), e;
+    return Ee(e, this.constructor.elementStyles), e;
   }
   connectedCallback() {
     this.renderRoot ??= this.createRenderRoot(), this.enableUpdating(!0), this._$EO?.forEach((e) => e.hostConnected?.());
@@ -166,42 +166,42 @@ let A = class extends HTMLElement {
   disconnectedCallback() {
     this._$EO?.forEach((e) => e.hostDisconnected?.());
   }
-  attributeChangedCallback(e, s, i) {
-    this._$AK(e, i);
+  attributeChangedCallback(e, i, o) {
+    this._$AK(e, o);
   }
-  _$ET(e, s) {
-    const i = this.constructor.elementProperties.get(e), o = this.constructor._$Eu(e, i);
-    if (o !== void 0 && i.reflect === !0) {
-      const a = (i.converter?.toAttribute !== void 0 ? i.converter : H).toAttribute(s, i.type);
-      this._$Em = e, a == null ? this.removeAttribute(o) : this.setAttribute(o, a), this._$Em = null;
+  _$ET(e, i) {
+    const o = this.constructor.elementProperties.get(e), s = this.constructor._$Eu(e, o);
+    if (s !== void 0 && o.reflect === !0) {
+      const a = (o.converter?.toAttribute !== void 0 ? o.converter : H).toAttribute(i, o.type);
+      this._$Em = e, a == null ? this.removeAttribute(s) : this.setAttribute(s, a), this._$Em = null;
     }
   }
-  _$AK(e, s) {
-    const i = this.constructor, o = i._$Eh.get(e);
-    if (o !== void 0 && this._$Em !== o) {
-      const a = i.getPropertyOptions(o), n = typeof a.converter == "function" ? { fromAttribute: a.converter } : a.converter?.fromAttribute !== void 0 ? a.converter : H;
-      this._$Em = o;
-      const l = n.fromAttribute(s, a.type);
-      this[o] = l ?? this._$Ej?.get(o) ?? l, this._$Em = null;
+  _$AK(e, i) {
+    const o = this.constructor, s = o._$Eh.get(e);
+    if (s !== void 0 && this._$Em !== s) {
+      const a = o.getPropertyOptions(s), r = typeof a.converter == "function" ? { fromAttribute: a.converter } : a.converter?.fromAttribute !== void 0 ? a.converter : H;
+      this._$Em = s;
+      const l = r.fromAttribute(i, a.type);
+      this[s] = l ?? this._$Ej?.get(s) ?? l, this._$Em = null;
     }
   }
-  requestUpdate(e, s, i, o = !1, a) {
+  requestUpdate(e, i, o, s = !1, a) {
     if (e !== void 0) {
-      const n = this.constructor;
-      if (o === !1 && (a = this[e]), i ??= n.getPropertyOptions(e), !((i.hasChanged ?? Y)(a, s) || i.useDefault && i.reflect && a === this._$Ej?.get(e) && !this.hasAttribute(n._$Eu(e, i)))) return;
-      this.C(e, s, i);
+      const r = this.constructor;
+      if (s === !1 && (a = this[e]), o ??= r.getPropertyOptions(e), !((o.hasChanged ?? X)(a, i) || o.useDefault && o.reflect && a === this._$Ej?.get(e) && !this.hasAttribute(r._$Eu(e, o)))) return;
+      this.C(e, i, o);
     }
     this.isUpdatePending === !1 && (this._$ES = this._$EP());
   }
-  C(e, s, { useDefault: i, reflect: o, wrapped: a }, n) {
-    i && !(this._$Ej ??= /* @__PURE__ */ new Map()).has(e) && (this._$Ej.set(e, n ?? s ?? this[e]), a !== !0 || n !== void 0) || (this._$AL.has(e) || (this.hasUpdated || i || (s = void 0), this._$AL.set(e, s)), o === !0 && this._$Em !== e && (this._$Eq ??= /* @__PURE__ */ new Set()).add(e));
+  C(e, i, { useDefault: o, reflect: s, wrapped: a }, r) {
+    o && !(this._$Ej ??= /* @__PURE__ */ new Map()).has(e) && (this._$Ej.set(e, r ?? i ?? this[e]), a !== !0 || r !== void 0) || (this._$AL.has(e) || (this.hasUpdated || o || (i = void 0), this._$AL.set(e, i)), s === !0 && this._$Em !== e && (this._$Eq ??= /* @__PURE__ */ new Set()).add(e));
   }
   async _$EP() {
     this.isUpdatePending = !0;
     try {
       await this._$ES;
-    } catch (s) {
-      Promise.reject(s);
+    } catch (i) {
+      Promise.reject(i);
     }
     const e = this.scheduleUpdate();
     return e != null && await e, !this.isUpdatePending;
@@ -213,28 +213,28 @@ let A = class extends HTMLElement {
     if (!this.isUpdatePending) return;
     if (!this.hasUpdated) {
       if (this.renderRoot ??= this.createRenderRoot(), this._$Ep) {
-        for (const [o, a] of this._$Ep) this[o] = a;
+        for (const [s, a] of this._$Ep) this[s] = a;
         this._$Ep = void 0;
       }
-      const i = this.constructor.elementProperties;
-      if (i.size > 0) for (const [o, a] of i) {
-        const { wrapped: n } = a, l = this[o];
-        n !== !0 || this._$AL.has(o) || l === void 0 || this.C(o, void 0, a, l);
+      const o = this.constructor.elementProperties;
+      if (o.size > 0) for (const [s, a] of o) {
+        const { wrapped: r } = a, l = this[s];
+        r !== !0 || this._$AL.has(s) || l === void 0 || this.C(s, void 0, a, l);
       }
     }
     let e = !1;
-    const s = this._$AL;
+    const i = this._$AL;
     try {
-      e = this.shouldUpdate(s), e ? (this.willUpdate(s), this._$EO?.forEach((i) => i.hostUpdate?.()), this.update(s)) : this._$EM();
-    } catch (i) {
-      throw e = !1, this._$EM(), i;
+      e = this.shouldUpdate(i), e ? (this.willUpdate(i), this._$EO?.forEach((o) => o.hostUpdate?.()), this.update(i)) : this._$EM();
+    } catch (o) {
+      throw e = !1, this._$EM(), o;
     }
-    e && this._$AE(s);
+    e && this._$AE(i);
   }
   willUpdate(e) {
   }
   _$AE(e) {
-    this._$EO?.forEach((s) => s.hostUpdated?.()), this.hasUpdated || (this.hasUpdated = !0, this.firstUpdated(e)), this.updated(e);
+    this._$EO?.forEach((i) => i.hostUpdated?.()), this.hasUpdated || (this.hasUpdated = !0, this.firstUpdated(e)), this.updated(e);
   }
   _$EM() {
     this._$AL = /* @__PURE__ */ new Map(), this.isUpdatePending = !1;
@@ -249,84 +249,84 @@ let A = class extends HTMLElement {
     return !0;
   }
   update(e) {
-    this._$Eq &&= this._$Eq.forEach((s) => this._$ET(s, this[s])), this._$EM();
+    this._$Eq &&= this._$Eq.forEach((i) => this._$ET(i, this[i])), this._$EM();
   }
   updated(e) {
   }
   firstUpdated(e) {
   }
 };
-A.elementStyles = [], A.shadowRootOptions = { mode: "open" }, A[N("elementProperties")] = /* @__PURE__ */ new Map(), A[N("finalized")] = /* @__PURE__ */ new Map(), Ne?.({ ReactiveElement: A }), (W.reactiveElementVersions ??= []).push("2.1.2");
+C.elementStyles = [], C.shadowRootOptions = { mode: "open" }, C[R("elementProperties")] = /* @__PURE__ */ new Map(), C[R("finalized")] = /* @__PURE__ */ new Map(), Fe?.({ ReactiveElement: C }), (W.reactiveElementVersions ??= []).push("2.1.2");
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const X = globalThis, ae = (t) => t, L = X.trustedTypes, ne = L ? L.createPolicy("lit-html", { createHTML: (t) => t }) : void 0, be = "$lit$", v = `lit$${Math.random().toFixed(9).slice(2)}$`, _e = "?" + v, ze = `<${_e}>`, k = document, F = () => k.createComment(""), I = (t) => t === null || typeof t != "object" && typeof t != "function", Z = Array.isArray, Fe = (t) => Z(t) || typeof t?.[Symbol.iterator] == "function", K = `[ 	
-\f\r]`, T = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, re = /-->/g, le = />/g, $ = RegExp(`>|${K}(?:([^\\s"'>=/]+)(${K}*=${K}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), ce = /'/g, de = /"/g, ye = /^(?:script|style|textarea|title)$/i, Ie = (t) => (e, ...s) => ({ _$litType$: t, strings: e, values: s }), r = Ie(1), U = Symbol.for("lit-noChange"), d = Symbol.for("lit-nothing"), pe = /* @__PURE__ */ new WeakMap(), w = k.createTreeWalker(k, 129);
-function fe(t, e) {
-  if (!Z(t) || !t.hasOwnProperty("raw")) throw Error("invalid template strings array");
+const Z = globalThis, re = (t) => t, L = Z.trustedTypes, ne = L ? L.createPolicy("lit-html", { createHTML: (t) => t }) : void 0, _e = "$lit$", v = `lit$${Math.random().toFixed(9).slice(2)}$`, ye = "?" + v, Ie = `<${ye}>`, k = document, F = () => k.createComment(""), I = (t) => t === null || typeof t != "object" && typeof t != "function", J = Array.isArray, Me = (t) => J(t) || typeof t?.[Symbol.iterator] == "function", G = `[ 	
+\f\r]`, N = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, le = /-->/g, ce = />/g, $ = RegExp(`>|${G}(?:([^\\s"'>=/]+)(${G}*=${G}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`, "g"), de = /'/g, pe = /"/g, fe = /^(?:script|style|textarea|title)$/i, je = (t) => (e, ...i) => ({ _$litType$: t, strings: e, values: i }), n = je(1), U = Symbol.for("lit-noChange"), c = Symbol.for("lit-nothing"), ue = /* @__PURE__ */ new WeakMap(), w = k.createTreeWalker(k, 129);
+function ve(t, e) {
+  if (!J(t) || !t.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return ne !== void 0 ? ne.createHTML(e) : e;
 }
-const je = (t, e) => {
-  const s = t.length - 1, i = [];
-  let o, a = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", n = T;
-  for (let l = 0; l < s; l++) {
-    const c = t[l];
-    let b, _, u = -1, y = 0;
-    for (; y < c.length && (n.lastIndex = y, _ = n.exec(c), _ !== null); ) y = n.lastIndex, n === T ? _[1] === "!--" ? n = re : _[1] !== void 0 ? n = le : _[2] !== void 0 ? (ye.test(_[2]) && (o = RegExp("</" + _[2], "g")), n = $) : _[3] !== void 0 && (n = $) : n === $ ? _[0] === ">" ? (n = o ?? T, u = -1) : _[1] === void 0 ? u = -2 : (u = n.lastIndex - _[2].length, b = _[1], n = _[3] === void 0 ? $ : _[3] === '"' ? de : ce) : n === de || n === ce ? n = $ : n === re || n === le ? n = T : (n = $, o = void 0);
-    const f = n === $ && t[l + 1].startsWith("/>") ? " " : "";
-    a += n === T ? c + ze : u >= 0 ? (i.push(b), c.slice(0, u) + be + c.slice(u) + v + f) : c + v + (u === -2 ? l : f);
+const Oe = (t, e) => {
+  const i = t.length - 1, o = [];
+  let s, a = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", r = N;
+  for (let l = 0; l < i; l++) {
+    const d = t[l];
+    let b, _, g = -1, y = 0;
+    for (; y < d.length && (r.lastIndex = y, _ = r.exec(d), _ !== null); ) y = r.lastIndex, r === N ? _[1] === "!--" ? r = le : _[1] !== void 0 ? r = ce : _[2] !== void 0 ? (fe.test(_[2]) && (s = RegExp("</" + _[2], "g")), r = $) : _[3] !== void 0 && (r = $) : r === $ ? _[0] === ">" ? (r = s ?? N, g = -1) : _[1] === void 0 ? g = -2 : (g = r.lastIndex - _[2].length, b = _[1], r = _[3] === void 0 ? $ : _[3] === '"' ? pe : de) : r === pe || r === de ? r = $ : r === le || r === ce ? r = N : (r = $, s = void 0);
+    const f = r === $ && t[l + 1].startsWith("/>") ? " " : "";
+    a += r === N ? d + Ie : g >= 0 ? (o.push(b), d.slice(0, g) + _e + d.slice(g) + v + f) : d + v + (g === -2 ? l : f);
   }
-  return [fe(t, a + (t[s] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
+  return [ve(t, a + (t[i] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), o];
 };
-class j {
-  constructor({ strings: e, _$litType$: s }, i) {
-    let o;
+class M {
+  constructor({ strings: e, _$litType$: i }, o) {
+    let s;
     this.parts = [];
-    let a = 0, n = 0;
-    const l = e.length - 1, c = this.parts, [b, _] = je(e, s);
-    if (this.el = j.createElement(b, i), w.currentNode = this.el.content, s === 2 || s === 3) {
-      const u = this.el.content.firstChild;
-      u.replaceWith(...u.childNodes);
+    let a = 0, r = 0;
+    const l = e.length - 1, d = this.parts, [b, _] = Oe(e, i);
+    if (this.el = M.createElement(b, o), w.currentNode = this.el.content, i === 2 || i === 3) {
+      const g = this.el.content.firstChild;
+      g.replaceWith(...g.childNodes);
     }
-    for (; (o = w.nextNode()) !== null && c.length < l; ) {
-      if (o.nodeType === 1) {
-        if (o.hasAttributes()) for (const u of o.getAttributeNames()) if (u.endsWith(be)) {
-          const y = _[n++], f = o.getAttribute(u).split(v), q = /([.?@])?(.*)/.exec(y);
-          c.push({ type: 1, index: a, name: q[2], strings: f, ctor: q[1] === "." ? qe : q[1] === "?" ? Me : q[1] === "@" ? He : B }), o.removeAttribute(u);
-        } else u.startsWith(v) && (c.push({ type: 6, index: a }), o.removeAttribute(u));
-        if (ye.test(o.tagName)) {
-          const u = o.textContent.split(v), y = u.length - 1;
+    for (; (s = w.nextNode()) !== null && d.length < l; ) {
+      if (s.nodeType === 1) {
+        if (s.hasAttributes()) for (const g of s.getAttributeNames()) if (g.endsWith(_e)) {
+          const y = _[r++], f = s.getAttribute(g).split(v), O = /([.?@])?(.*)/.exec(y);
+          d.push({ type: 1, index: a, name: O[2], strings: f, ctor: O[1] === "." ? He : O[1] === "?" ? Le : O[1] === "@" ? We : B }), s.removeAttribute(g);
+        } else g.startsWith(v) && (d.push({ type: 6, index: a }), s.removeAttribute(g));
+        if (fe.test(s.tagName)) {
+          const g = s.textContent.split(v), y = g.length - 1;
           if (y > 0) {
-            o.textContent = L ? L.emptyScript : "";
-            for (let f = 0; f < y; f++) o.append(u[f], F()), w.nextNode(), c.push({ type: 2, index: ++a });
-            o.append(u[y], F());
+            s.textContent = L ? L.emptyScript : "";
+            for (let f = 0; f < y; f++) s.append(g[f], F()), w.nextNode(), d.push({ type: 2, index: ++a });
+            s.append(g[y], F());
           }
         }
-      } else if (o.nodeType === 8) if (o.data === _e) c.push({ type: 2, index: a });
+      } else if (s.nodeType === 8) if (s.data === ye) d.push({ type: 2, index: a });
       else {
-        let u = -1;
-        for (; (u = o.data.indexOf(v, u + 1)) !== -1; ) c.push({ type: 7, index: a }), u += v.length - 1;
+        let g = -1;
+        for (; (g = s.data.indexOf(v, g + 1)) !== -1; ) d.push({ type: 7, index: a }), g += v.length - 1;
       }
       a++;
     }
   }
-  static createElement(e, s) {
-    const i = k.createElement("template");
-    return i.innerHTML = e, i;
+  static createElement(e, i) {
+    const o = k.createElement("template");
+    return o.innerHTML = e, o;
   }
 }
-function P(t, e, s = t, i) {
+function P(t, e, i = t, o) {
   if (e === U) return e;
-  let o = i !== void 0 ? s._$Co?.[i] : s._$Cl;
+  let s = o !== void 0 ? i._$Co?.[o] : i._$Cl;
   const a = I(e) ? void 0 : e._$litDirective$;
-  return o?.constructor !== a && (o?._$AO?.(!1), a === void 0 ? o = void 0 : (o = new a(t), o._$AT(t, s, i)), i !== void 0 ? (s._$Co ??= [])[i] = o : s._$Cl = o), o !== void 0 && (e = P(t, o._$AS(t, e.values), o, i)), e;
+  return s?.constructor !== a && (s?._$AO?.(!1), a === void 0 ? s = void 0 : (s = new a(t), s._$AT(t, i, o)), o !== void 0 ? (i._$Co ??= [])[o] = s : i._$Cl = s), s !== void 0 && (e = P(t, s._$AS(t, e.values), s, o)), e;
 }
-class Oe {
-  constructor(e, s) {
-    this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = s;
+class qe {
+  constructor(e, i) {
+    this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = i;
   }
   get parentNode() {
     return this._$AM.parentNode;
@@ -335,34 +335,34 @@ class Oe {
     return this._$AM._$AU;
   }
   u(e) {
-    const { el: { content: s }, parts: i } = this._$AD, o = (e?.creationScope ?? k).importNode(s, !0);
-    w.currentNode = o;
-    let a = w.nextNode(), n = 0, l = 0, c = i[0];
-    for (; c !== void 0; ) {
-      if (n === c.index) {
+    const { el: { content: i }, parts: o } = this._$AD, s = (e?.creationScope ?? k).importNode(i, !0);
+    w.currentNode = s;
+    let a = w.nextNode(), r = 0, l = 0, d = o[0];
+    for (; d !== void 0; ) {
+      if (r === d.index) {
         let b;
-        c.type === 2 ? b = new O(a, a.nextSibling, this, e) : c.type === 1 ? b = new c.ctor(a, c.name, c.strings, this, e) : c.type === 6 && (b = new Le(a, this, e)), this._$AV.push(b), c = i[++l];
+        d.type === 2 ? b = new j(a, a.nextSibling, this, e) : d.type === 1 ? b = new d.ctor(a, d.name, d.strings, this, e) : d.type === 6 && (b = new Be(a, this, e)), this._$AV.push(b), d = o[++l];
       }
-      n !== c?.index && (a = w.nextNode(), n++);
+      r !== d?.index && (a = w.nextNode(), r++);
     }
-    return w.currentNode = k, o;
+    return w.currentNode = k, s;
   }
   p(e) {
-    let s = 0;
-    for (const i of this._$AV) i !== void 0 && (i.strings !== void 0 ? (i._$AI(e, i, s), s += i.strings.length - 2) : i._$AI(e[s])), s++;
+    let i = 0;
+    for (const o of this._$AV) o !== void 0 && (o.strings !== void 0 ? (o._$AI(e, o, i), i += o.strings.length - 2) : o._$AI(e[i])), i++;
   }
 }
-class O {
+class j {
   get _$AU() {
     return this._$AM?._$AU ?? this._$Cv;
   }
-  constructor(e, s, i, o) {
-    this.type = 2, this._$AH = d, this._$AN = void 0, this._$AA = e, this._$AB = s, this._$AM = i, this.options = o, this._$Cv = o?.isConnected ?? !0;
+  constructor(e, i, o, s) {
+    this.type = 2, this._$AH = c, this._$AN = void 0, this._$AA = e, this._$AB = i, this._$AM = o, this.options = s, this._$Cv = s?.isConnected ?? !0;
   }
   get parentNode() {
     let e = this._$AA.parentNode;
-    const s = this._$AM;
-    return s !== void 0 && e?.nodeType === 11 && (e = s.parentNode), e;
+    const i = this._$AM;
+    return i !== void 0 && e?.nodeType === 11 && (e = i.parentNode), e;
   }
   get startNode() {
     return this._$AA;
@@ -370,8 +370,8 @@ class O {
   get endNode() {
     return this._$AB;
   }
-  _$AI(e, s = this) {
-    e = P(this, e, s), I(e) ? e === d || e == null || e === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : e !== this._$AH && e !== U && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Fe(e) ? this.k(e) : this._(e);
+  _$AI(e, i = this) {
+    e = P(this, e, i), I(e) ? e === c || e == null || e === "" ? (this._$AH !== c && this._$AR(), this._$AH = c) : e !== this._$AH && e !== U && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Me(e) ? this.k(e) : this._(e);
   }
   O(e) {
     return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -380,31 +380,31 @@ class O {
     this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
   }
   _(e) {
-    this._$AH !== d && I(this._$AH) ? this._$AA.nextSibling.data = e : this.T(k.createTextNode(e)), this._$AH = e;
+    this._$AH !== c && I(this._$AH) ? this._$AA.nextSibling.data = e : this.T(k.createTextNode(e)), this._$AH = e;
   }
   $(e) {
-    const { values: s, _$litType$: i } = e, o = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = j.createElement(fe(i.h, i.h[0]), this.options)), i);
-    if (this._$AH?._$AD === o) this._$AH.p(s);
+    const { values: i, _$litType$: o } = e, s = typeof o == "number" ? this._$AC(e) : (o.el === void 0 && (o.el = M.createElement(ve(o.h, o.h[0]), this.options)), o);
+    if (this._$AH?._$AD === s) this._$AH.p(i);
     else {
-      const a = new Oe(o, this), n = a.u(this.options);
-      a.p(s), this.T(n), this._$AH = a;
+      const a = new qe(s, this), r = a.u(this.options);
+      a.p(i), this.T(r), this._$AH = a;
     }
   }
   _$AC(e) {
-    let s = pe.get(e.strings);
-    return s === void 0 && pe.set(e.strings, s = new j(e)), s;
+    let i = ue.get(e.strings);
+    return i === void 0 && ue.set(e.strings, i = new M(e)), i;
   }
   k(e) {
-    Z(this._$AH) || (this._$AH = [], this._$AR());
-    const s = this._$AH;
-    let i, o = 0;
-    for (const a of e) o === s.length ? s.push(i = new O(this.O(F()), this.O(F()), this, this.options)) : i = s[o], i._$AI(a), o++;
-    o < s.length && (this._$AR(i && i._$AB.nextSibling, o), s.length = o);
+    J(this._$AH) || (this._$AH = [], this._$AR());
+    const i = this._$AH;
+    let o, s = 0;
+    for (const a of e) s === i.length ? i.push(o = new j(this.O(F()), this.O(F()), this, this.options)) : o = i[s], o._$AI(a), s++;
+    s < i.length && (this._$AR(o && o._$AB.nextSibling, s), i.length = s);
   }
-  _$AR(e = this._$AA.nextSibling, s) {
-    for (this._$AP?.(!1, !0, s); e !== this._$AB; ) {
-      const i = ae(e).nextSibling;
-      ae(e).remove(), e = i;
+  _$AR(e = this._$AA.nextSibling, i) {
+    for (this._$AP?.(!1, !0, i); e !== this._$AB; ) {
+      const o = re(e).nextSibling;
+      re(e).remove(), e = o;
     }
   }
   setConnected(e) {
@@ -418,56 +418,56 @@ class B {
   get _$AU() {
     return this._$AM._$AU;
   }
-  constructor(e, s, i, o, a) {
-    this.type = 1, this._$AH = d, this._$AN = void 0, this.element = e, this.name = s, this._$AM = o, this.options = a, i.length > 2 || i[0] !== "" || i[1] !== "" ? (this._$AH = Array(i.length - 1).fill(new String()), this.strings = i) : this._$AH = d;
+  constructor(e, i, o, s, a) {
+    this.type = 1, this._$AH = c, this._$AN = void 0, this.element = e, this.name = i, this._$AM = s, this.options = a, o.length > 2 || o[0] !== "" || o[1] !== "" ? (this._$AH = Array(o.length - 1).fill(new String()), this.strings = o) : this._$AH = c;
   }
-  _$AI(e, s = this, i, o) {
+  _$AI(e, i = this, o, s) {
     const a = this.strings;
-    let n = !1;
-    if (a === void 0) e = P(this, e, s, 0), n = !I(e) || e !== this._$AH && e !== U, n && (this._$AH = e);
+    let r = !1;
+    if (a === void 0) e = P(this, e, i, 0), r = !I(e) || e !== this._$AH && e !== U, r && (this._$AH = e);
     else {
       const l = e;
-      let c, b;
-      for (e = a[0], c = 0; c < a.length - 1; c++) b = P(this, l[i + c], s, c), b === U && (b = this._$AH[c]), n ||= !I(b) || b !== this._$AH[c], b === d ? e = d : e !== d && (e += (b ?? "") + a[c + 1]), this._$AH[c] = b;
+      let d, b;
+      for (e = a[0], d = 0; d < a.length - 1; d++) b = P(this, l[o + d], i, d), b === U && (b = this._$AH[d]), r ||= !I(b) || b !== this._$AH[d], b === c ? e = c : e !== c && (e += (b ?? "") + a[d + 1]), this._$AH[d] = b;
     }
-    n && !o && this.j(e);
+    r && !s && this.j(e);
   }
   j(e) {
-    e === d ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
+    e === c ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
   }
 }
-class qe extends B {
+class He extends B {
   constructor() {
     super(...arguments), this.type = 3;
   }
   j(e) {
-    this.element[this.name] = e === d ? void 0 : e;
+    this.element[this.name] = e === c ? void 0 : e;
   }
 }
-class Me extends B {
+class Le extends B {
   constructor() {
     super(...arguments), this.type = 4;
   }
   j(e) {
-    this.element.toggleAttribute(this.name, !!e && e !== d);
+    this.element.toggleAttribute(this.name, !!e && e !== c);
   }
 }
-class He extends B {
-  constructor(e, s, i, o, a) {
-    super(e, s, i, o, a), this.type = 5;
+class We extends B {
+  constructor(e, i, o, s, a) {
+    super(e, i, o, s, a), this.type = 5;
   }
-  _$AI(e, s = this) {
-    if ((e = P(this, e, s, 0) ?? d) === U) return;
-    const i = this._$AH, o = e === d && i !== d || e.capture !== i.capture || e.once !== i.once || e.passive !== i.passive, a = e !== d && (i === d || o);
-    o && this.element.removeEventListener(this.name, this, i), a && this.element.addEventListener(this.name, this, e), this._$AH = e;
+  _$AI(e, i = this) {
+    if ((e = P(this, e, i, 0) ?? c) === U) return;
+    const o = this._$AH, s = e === c && o !== c || e.capture !== o.capture || e.once !== o.once || e.passive !== o.passive, a = e !== c && (o === c || s);
+    s && this.element.removeEventListener(this.name, this, o), a && this.element.addEventListener(this.name, this, e), this._$AH = e;
   }
   handleEvent(e) {
     typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
   }
 }
-class Le {
-  constructor(e, s, i) {
-    this.element = e, this.type = 6, this._$AN = void 0, this._$AM = s, this.options = i;
+class Be {
+  constructor(e, i, o) {
+    this.element = e, this.type = 6, this._$AN = void 0, this._$AM = i, this.options = o;
   }
   get _$AU() {
     return this._$AM._$AU;
@@ -476,24 +476,24 @@ class Le {
     P(this, e);
   }
 }
-const We = X.litHtmlPolyfillSupport;
-We?.(j, O), (X.litHtmlVersions ??= []).push("3.3.3");
-const Be = (t, e, s) => {
-  const i = s?.renderBefore ?? e;
-  let o = i._$litPart$;
-  if (o === void 0) {
-    const a = s?.renderBefore ?? null;
-    i._$litPart$ = o = new O(e.insertBefore(F(), a), a, void 0, s ?? {});
+const Ge = Z.litHtmlPolyfillSupport;
+Ge?.(M, j), (Z.litHtmlVersions ??= []).push("3.3.3");
+const Ke = (t, e, i) => {
+  const o = i?.renderBefore ?? e;
+  let s = o._$litPart$;
+  if (s === void 0) {
+    const a = i?.renderBefore ?? null;
+    o._$litPart$ = s = new j(e.insertBefore(F(), a), a, void 0, i ?? {});
   }
-  return o._$AI(t), o;
+  return s._$AI(t), s;
 };
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const J = globalThis;
-class z extends A {
+const Q = globalThis;
+class z extends C {
   constructor() {
     super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
   }
@@ -502,8 +502,8 @@ class z extends A {
     return this.renderOptions.renderBefore ??= e.firstChild, e;
   }
   update(e) {
-    const s = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Be(s, this.renderRoot, this.renderOptions);
+    const i = this.render();
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Ke(i, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -515,51 +515,41 @@ class z extends A {
     return U;
   }
 }
-z._$litElement$ = !0, z.finalized = !0, J.litElementHydrateSupport?.({ LitElement: z });
-const Ke = J.litElementPolyfillSupport;
-Ke?.({ LitElement: z });
-(J.litElementVersions ??= []).push("4.2.2");
+z._$litElement$ = !0, z.finalized = !0, Q.litElementHydrateSupport?.({ LitElement: z });
+const Ve = Q.litElementPolyfillSupport;
+Ve?.({ LitElement: z });
+(Q.litElementVersions ??= []).push("4.2.2");
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const Ve = (t) => (e, s) => {
-  s !== void 0 ? s.addInitializer(() => {
-    customElements.define(t, e);
-  }) : customElements.define(t, e);
-};
-/**
- * @license
- * Copyright 2017 Google LLC
- * SPDX-License-Identifier: BSD-3-Clause
- */
-const Ge = { attribute: !0, type: String, converter: H, reflect: !1, hasChanged: Y }, Ye = (t = Ge, e, s) => {
-  const { kind: i, metadata: o } = s;
-  let a = globalThis.litPropertyMetadata.get(o);
-  if (a === void 0 && globalThis.litPropertyMetadata.set(o, a = /* @__PURE__ */ new Map()), i === "setter" && ((t = Object.create(t)).wrapped = !0), a.set(s.name, t), i === "accessor") {
-    const { name: n } = s;
+const Ye = { attribute: !0, type: String, converter: H, reflect: !1, hasChanged: X }, Xe = (t = Ye, e, i) => {
+  const { kind: o, metadata: s } = i;
+  let a = globalThis.litPropertyMetadata.get(s);
+  if (a === void 0 && globalThis.litPropertyMetadata.set(s, a = /* @__PURE__ */ new Map()), o === "setter" && ((t = Object.create(t)).wrapped = !0), a.set(i.name, t), o === "accessor") {
+    const { name: r } = i;
     return { set(l) {
-      const c = e.get.call(this);
-      e.set.call(this, l), this.requestUpdate(n, c, t, !0, l);
+      const d = e.get.call(this);
+      e.set.call(this, l), this.requestUpdate(r, d, t, !0, l);
     }, init(l) {
-      return l !== void 0 && this.C(n, void 0, t, l), l;
+      return l !== void 0 && this.C(r, void 0, t, l), l;
     } };
   }
-  if (i === "setter") {
-    const { name: n } = s;
+  if (o === "setter") {
+    const { name: r } = i;
     return function(l) {
-      const c = this[n];
-      e.call(this, l), this.requestUpdate(n, c, t, !0, l);
+      const d = this[r];
+      e.call(this, l), this.requestUpdate(r, d, t, !0, l);
     };
   }
-  throw Error("Unsupported decorator location: " + i);
+  throw Error("Unsupported decorator location: " + o);
 };
-function Q(t) {
-  return (e, s) => typeof s == "object" ? Ye(t, e, s) : ((i, o, a) => {
-    const n = o.hasOwnProperty(a);
-    return o.constructor.createProperty(a, i), n ? Object.getOwnPropertyDescriptor(o, a) : void 0;
-  })(t, e, s);
+function ee(t) {
+  return (e, i) => typeof i == "object" ? Xe(t, e, i) : ((o, s, a) => {
+    const r = s.hasOwnProperty(a);
+    return s.constructor.createProperty(a, o), r ? Object.getOwnPropertyDescriptor(s, a) : void 0;
+  })(t, e, i);
 }
 /**
  * @license
@@ -567,9 +557,14 @@ function Q(t) {
  * SPDX-License-Identifier: BSD-3-Clause
  */
 function m(t) {
-  return Q({ ...t, state: !0, attribute: !1 });
+  return ee({ ...t, state: !0, attribute: !1 });
 }
-const Xe = "sensor.simple_chore_", ve = "sensor.simple_chore_privilege_", $e = "sensor.simple_chore_meta_", xe = "sensor.simple_chore_category_", Ze = "number.simple_chore_meta_", we = "sensor.simple_chore_meta_settings", Je = ["daily", "weekly", "manual", "once"], Qe = ["automatic", "manual"], et = [
+function Ze(t) {
+  return (e) => {
+    customElements.get(t) || customElements.define(t, e);
+  };
+}
+const Je = "sensor.simple_chore_", $e = "sensor.simple_chore_privilege_", xe = "sensor.simple_chore_meta_", we = "sensor.simple_chore_category_", Qe = "number.simple_chore_meta_", ke = "sensor.simple_chore_meta_settings", et = ["daily", "weekly", "manual", "once"], tt = ["automatic", "manual"], it = [
   "monday",
   "tuesday",
   "wednesday",
@@ -577,24 +572,34 @@ const Xe = "sensor.simple_chore_", ve = "sensor.simple_chore_privilege_", $e = "
   "friday",
   "saturday",
   "sunday"
-], E = "mdi:clipboard-list-outline", D = "mdi:star", S = "mdi:tag-outline", ee = "";
-function tt() {
+], D = "mdi:clipboard-list-outline", E = "mdi:star", S = "mdi:tag-outline", te = "";
+function st() {
   return {
     slug: "",
     name: "",
     description: "",
     frequency: "daily",
-    icon: E,
+    icon: D,
     points: 1,
     pointsByAssignee: {},
-    category: ee,
+    category: te,
+    suggestedDuration: "",
     assignees: []
   };
 }
-function st(t) {
+const Ae = 1440;
+function ot(t) {
+  const e = Math.floor(Number(t.trim()));
+  return !Number.isFinite(e) || e <= 0 ? 0 : Math.min(e, Ae);
+}
+function at(t) {
+  const e = Math.floor(t / 60), i = t % 60;
+  return e === 0 ? `${i} min` : i === 0 ? `${e} hr` : `${e} hr ${i} min`;
+}
+function rt(t) {
   const e = {};
-  for (const s of t.assignees)
-    s.points !== t.points && (e[s.assignee] = s.points);
+  for (const i of t.assignees)
+    i.points !== t.points && (e[i.assignee] = i.points);
   return {
     slug: t.slug,
     name: t.name,
@@ -603,35 +608,36 @@ function st(t) {
     icon: t.icon,
     points: t.points,
     pointsByAssignee: e,
-    category: t.category ?? ee,
-    assignees: t.assignees.map((s) => s.assignee)
+    category: t.category ?? te,
+    suggestedDuration: t.suggestedDuration ? String(t.suggestedDuration) : "",
+    assignees: t.assignees.map((i) => i.assignee)
   };
 }
-function it() {
+function nt() {
   return {
     slug: "",
     name: "",
     icon: S
   };
 }
-function ot(t) {
+function lt(t) {
   return {
     slug: t.slug,
     name: t.name,
     icon: t.icon
   };
 }
-function at() {
+function ct() {
   return {
     slug: "",
     name: "",
-    icon: D,
+    icon: E,
     behavior: "automatic",
     linkedChores: [],
     assignees: []
   };
 }
-function nt(t) {
+function dt(t) {
   return {
     slug: t.slug,
     name: t.name,
@@ -644,145 +650,149 @@ function nt(t) {
 function x(t) {
   return t.toLowerCase().replace(/\s+/g, "-").replace(/-/g, "_").replace(/[^a-z0-9_]/g, "").replace(/_+/g, "_");
 }
-function rt(t) {
+function pt(t) {
   const e = /* @__PURE__ */ new Map();
-  for (const [s, i] of Object.entries(t)) {
-    if (!s.startsWith(Xe) || s.startsWith(ve) || s.startsWith($e) || s.startsWith(xe)) continue;
-    const o = i.attributes, a = o.chore_slug;
+  for (const [i, o] of Object.entries(t)) {
+    if (!i.startsWith(Je) || i.startsWith($e) || i.startsWith(xe) || i.startsWith(we)) continue;
+    const s = o.attributes, a = s.chore_slug;
     if (!a) continue;
-    let n = e.get(a);
-    n || (n = {
+    let r = e.get(a);
+    r || (r = {
       slug: a,
-      name: o.chore_name ?? a,
-      description: o.description ?? "",
-      frequency: o.frequency ?? "daily",
-      icon: o.icon ?? E,
+      name: s.chore_name ?? a,
+      description: s.description ?? "",
+      frequency: s.frequency ?? "daily",
+      icon: s.icon ?? D,
       // default_points is the chore's shared value; older/unrefreshed
       // sensors may not have it yet, so fall back to this assignee's
       // resolved points rather than leaving the definition unset.
-      points: o.default_points ?? o.points ?? 0,
-      category: o.category ?? null,
+      points: s.default_points ?? s.points ?? 0,
+      category: s.category ?? null,
+      suggestedDuration: s.suggested_duration || null,
       assignees: []
-    }, e.set(a, n)), n.assignees.push({
-      assignee: o.assignee,
-      entityId: s,
-      state: i.state,
-      points: o.points ?? n.points
+    }, e.set(a, r)), r.assignees.push({
+      assignee: s.assignee,
+      entityId: i,
+      state: o.state,
+      points: s.points ?? r.points,
+      activeSince: s.active_since ?? null,
+      timerEndsAt: s.timer_ends_at ?? null
     });
   }
-  for (const s of e.values())
-    s.assignees.sort((i, o) => i.assignee.localeCompare(o.assignee));
-  return [...e.values()].sort((s, i) => s.name.localeCompare(i.name));
+  for (const i of e.values())
+    i.assignees.sort((o, s) => o.assignee.localeCompare(s.assignee));
+  return [...e.values()].sort((i, o) => i.name.localeCompare(o.name));
 }
 function he(t) {
   const e = /* @__PURE__ */ new Map();
-  for (const [s, i] of Object.entries(t)) {
-    if (!s.startsWith(ve)) continue;
-    const o = i.attributes, a = o.privilege_slug;
+  for (const [i, o] of Object.entries(t)) {
+    if (!i.startsWith($e)) continue;
+    const s = o.attributes, a = s.privilege_slug;
     if (!a) continue;
-    let n = e.get(a);
-    n || (n = {
+    let r = e.get(a);
+    r || (r = {
       slug: a,
-      name: o.privilege_name ?? a,
-      icon: o.icon ?? D,
-      behavior: o.behavior ?? "automatic",
-      linkedChores: o.linked_chores ?? [],
+      name: s.privilege_name ?? a,
+      icon: s.icon ?? E,
+      behavior: s.behavior ?? "automatic",
+      linkedChores: s.linked_chores ?? [],
       assignees: []
-    }, e.set(a, n)), n.assignees.push({
-      assignee: o.assignee,
-      entityId: s,
-      state: i.state,
-      disableUntil: o.disable_until,
-      disableReason: o.disable_reason
+    }, e.set(a, r)), r.assignees.push({
+      assignee: s.assignee,
+      entityId: i,
+      state: o.state,
+      disableUntil: s.disable_until,
+      disableReason: s.disable_reason
     });
   }
-  for (const s of e.values())
-    s.assignees.sort((i, o) => i.assignee.localeCompare(o.assignee));
-  return [...e.values()].sort((s, i) => s.name.localeCompare(i.name));
+  for (const i of e.values())
+    i.assignees.sort((o, s) => o.assignee.localeCompare(s.assignee));
+  return [...e.values()].sort((i, o) => i.name.localeCompare(o.name));
 }
-function lt(t) {
+function ut(t) {
   const e = [];
-  for (const [s, i] of Object.entries(t)) {
-    if (!s.startsWith(xe)) continue;
-    const o = i.attributes, a = o.category_slug;
+  for (const [i, o] of Object.entries(t)) {
+    if (!i.startsWith(we)) continue;
+    const s = o.attributes, a = s.category_slug;
     a && e.push({
       slug: a,
-      name: o.category_name ?? a,
-      icon: o.icon ?? S,
-      entityId: s,
-      choreCount: Number(i.state) || 0
+      name: s.category_name ?? a,
+      icon: s.icon ?? S,
+      entityId: i,
+      choreCount: Number(o.state) || 0
     });
   }
-  return e.sort((s, i) => s.name.localeCompare(i.name));
+  return e.sort((i, o) => i.name.localeCompare(o.name));
 }
-const C = {
+const A = {
   autoFinalizeEnabled: !0,
   autoFinalizeDelayMinutes: 60,
   newDayTime: "02:00:00",
   newWeekDay: "monday",
   newWeekTime: "02:00:00"
 };
-function ct(t) {
-  const e = t[we];
-  if (!e) return { ...C };
-  const s = e.attributes;
+function ht(t) {
+  const e = t[ke];
+  if (!e) return { ...A };
+  const i = e.attributes;
   return {
-    autoFinalizeEnabled: s.auto_finalize_enabled ?? C.autoFinalizeEnabled,
-    autoFinalizeDelayMinutes: s.auto_finalize_delay_minutes ?? C.autoFinalizeDelayMinutes,
-    newDayTime: s.new_day_time ?? C.newDayTime,
-    newWeekDay: s.new_week_day ?? C.newWeekDay,
-    newWeekTime: s.new_week_time ?? C.newWeekTime
+    autoFinalizeEnabled: i.auto_finalize_enabled ?? A.autoFinalizeEnabled,
+    autoFinalizeDelayMinutes: i.auto_finalize_delay_minutes ?? A.autoFinalizeDelayMinutes,
+    newDayTime: i.new_day_time ?? A.newDayTime,
+    newWeekDay: i.new_week_day ?? A.newWeekDay,
+    newWeekTime: i.new_week_time ?? A.newWeekTime
   };
 }
-function dt(t) {
+function gt(t) {
   const e = [];
-  for (const [s, i] of Object.entries(t)) {
-    if (!s.startsWith($e) || s === we) continue;
-    const o = i.attributes, a = o.assignee;
+  for (const [i, o] of Object.entries(t)) {
+    if (!i.startsWith(xe) || i === ke) continue;
+    const s = o.attributes, a = s.assignee;
     a && e.push({
       assignee: a,
-      entityId: s,
-      totalPoints: o.total_points ?? 0,
-      pointsEarned: o.points_earned ?? 0,
-      pointsMissed: o.points_missed ?? 0,
-      pointsPossible: o.points_possible ?? 0,
-      totalPending: o.total_pending ?? 0,
-      totalComplete: o.total_complete ?? 0
+      entityId: i,
+      totalPoints: s.total_points ?? 0,
+      pointsEarned: s.points_earned ?? 0,
+      pointsMissed: s.points_missed ?? 0,
+      pointsPossible: s.points_possible ?? 0,
+      totalPending: s.total_pending ?? 0,
+      totalActive: s.total_active ?? 0,
+      totalComplete: s.total_complete ?? 0
     });
   }
-  return e.sort((s, i) => s.assignee.localeCompare(i.assignee));
+  return e.sort((i, o) => i.assignee.localeCompare(o.assignee));
 }
-function pt(t) {
+function mt(t) {
   const e = [];
-  for (const [s, i] of Object.entries(t)) {
-    if (!s.startsWith(Ze)) continue;
-    const o = i.attributes.assignee;
-    o && e.push({
-      assignee: o,
-      entityId: s,
-      value: Number(i.state) || 0
+  for (const [i, o] of Object.entries(t)) {
+    if (!i.startsWith(Qe)) continue;
+    const s = o.attributes.assignee;
+    s && e.push({
+      assignee: s,
+      entityId: i,
+      value: Number(o.state) || 0
     });
   }
-  return e.sort((s, i) => s.assignee.localeCompare(i.assignee));
+  return e.sort((i, o) => i.assignee.localeCompare(o.assignee));
 }
-function ht(t, e) {
-  const s = /* @__PURE__ */ new Set();
-  for (const i of t)
-    for (const o of i.assignees) s.add(o.assignee);
-  for (const i of e)
-    for (const o of i.assignees) s.add(o.assignee);
-  return [...s].sort((i, o) => i.localeCompare(o));
+function bt(t, e) {
+  const i = /* @__PURE__ */ new Set();
+  for (const o of t)
+    for (const s of o.assignees) i.add(s.assignee);
+  for (const o of e)
+    for (const s of o.assignees) i.add(s.assignee);
+  return [...i].sort((o, s) => o.localeCompare(s));
 }
-function ut(t) {
+function _t(t) {
   const e = {};
-  for (const s of t)
-    s.username && (e[s.username.toLowerCase()] = s.name);
+  for (const i of t)
+    i.username && (e[i.username.toLowerCase()] = i.name);
   return e;
 }
-function gt(t, e) {
+function yt(t, e) {
   return e[t.toLowerCase()] ?? t;
 }
-const mt = [
+const ft = [
   "completed",
   "uncompleted",
   "reset",
@@ -794,7 +804,7 @@ const mt = [
   "privilege_disabled",
   "privilege_temporarily_disabled"
 ];
-function bt(t) {
+function vt(t) {
   return t ? t.map((e) => ({
     id: e.id,
     timestamp: e.timestamp,
@@ -813,7 +823,7 @@ function bt(t) {
     undone: e.undone ?? !1
   })) : [];
 }
-function ue(t) {
+function ge(t) {
   switch (t) {
     case "completed":
       return "Completed";
@@ -839,18 +849,31 @@ function ue(t) {
       return t;
   }
 }
-function ge(t) {
+function me(t) {
   return t === "completed" || t === "privilege_enabled" ? "state-good" : t === "uncompleted" || t === "undone" || t === "privilege_disabled" ? "state-bad" : t === "missed" || t === "adjusted" || t === "privilege_temporarily_disabled" ? "state-warn" : "state-neutral";
 }
-var _t = Object.defineProperty, yt = Object.getOwnPropertyDescriptor, g = (t, e, s, i) => {
-  for (var o = i > 1 ? void 0 : i ? yt(e, s) : e, a = t.length - 1, n; a >= 0; a--)
-    (n = t[a]) && (o = (i ? n(e, s, o) : n(o)) || o);
-  return i && o && _t(e, s, o), o;
+function K(t) {
+  const e = Math.max(0, Math.floor(t)), i = Math.floor(e / 3600), o = Math.floor(e % 3600 / 60), s = e % 60, a = (r) => String(r).padStart(2, "0");
+  return i > 0 ? `${i}:${a(o)}:${a(s)}` : `${o}:${a(s)}`;
+}
+function $t(t, e, i) {
+  const o = e ? Date.parse(e) : NaN;
+  if (!Number.isNaN(o)) {
+    const a = (o - i) / 1e3;
+    return a > 0 ? { label: `${K(Math.ceil(a))} left`, overdue: !1 } : { label: `${K(-a)} over`, overdue: !0 };
+  }
+  const s = t ? Date.parse(t) : NaN;
+  return Number.isNaN(s) ? null : { label: `${K((i - s) / 1e3)} elapsed`, overdue: !1 };
+}
+var xt = Object.defineProperty, wt = Object.getOwnPropertyDescriptor, h = (t, e, i, o) => {
+  for (var s = o > 1 ? void 0 : o ? wt(e, i) : e, a = t.length - 1, r; a >= 0; a--)
+    (r = t[a]) && (s = (o ? r(e, i, s) : r(s)) || s);
+  return o && s && xt(e, i, s), s;
 };
-const p = "simple_chores", R = "__uncategorized__";
-let h = class extends z {
+const u = "simple_chores", T = "__uncategorized__";
+let p = class extends z {
   constructor() {
-    super(...arguments), this.narrow = !1, this._tab = "chores", this._dialog = null, this._busy = !1, this._error = null, this._bulkUser = "", this._categoryFilter = "", this._choreSort = "name", this._userDisplayNames = {}, this._settingsDraft = null, this._resetPointsDialog = null, this._undoDialog = null, this._userAdjustInput = {}, this._userAdjustReasonInput = {}, this._disableReasonInput = {}, this._untilFlash = {}, this._lastDisableUntil = {}, this._historyEntries = null, this._historyLoading = !1, this._historyUserFilter = "", this._historyCategoryFilter = "", this._historyChoreFilter = "", this._historyActionFilter = [], this._loadedUserDisplayNames = !1, this._openResetPointsDialog = (t) => {
+    super(...arguments), this.narrow = !1, this._tab = "chores", this._dialog = null, this._busy = !1, this._error = null, this._bulkUser = "", this._categoryFilter = "", this._choreSort = "name", this._userDisplayNames = {}, this._settingsDraft = null, this._resetPointsDialog = null, this._undoDialog = null, this._startDialog = null, this._now = Date.now(), this._hasActiveChore = !1, this._userAdjustInput = {}, this._userAdjustReasonInput = {}, this._disableReasonInput = {}, this._untilFlash = {}, this._lastDisableUntil = {}, this._historyEntries = null, this._historyLoading = !1, this._historyUserFilter = "", this._historyCategoryFilter = "", this._historyChoreFilter = "", this._historyActionFilter = [], this._loadedUserDisplayNames = !1, this._openResetPointsDialog = (t) => {
       this._error = null, this._resetPointsDialog = {
         user: t.length === 1 ? t[0] : "",
         resetTotal: !1
@@ -877,18 +900,28 @@ let h = class extends z {
     }, this._closeDialog = () => {
       this._dialog = null;
     }, this._openCreateChore = () => {
-      this._error = null, this._dialog = { kind: "chore", draft: tt() };
+      this._error = null, this._dialog = { kind: "chore", draft: st() };
     }, this._openCreatePrivilege = () => {
-      this._error = null, this._dialog = { kind: "privilege", draft: at() };
+      this._error = null, this._dialog = { kind: "privilege", draft: ct() };
     }, this._openCreateCategory = () => {
-      this._error = null, this._dialog = { kind: "category", draft: it() };
+      this._error = null, this._dialog = { kind: "category", draft: nt() };
     };
   }
   updated(t) {
     t.has("hass") && !this.hass?.user?.is_admin && (this._error = "You must be an administrator to manage chores and privileges."), this.hass && !this._loadedUserDisplayNames && (this._loadedUserDisplayNames = !0, this._loadUserDisplayNames());
   }
   willUpdate(t) {
-    t.has("hass") && this.hass && this._detectUntilChanges();
+    t.has("hass") && this.hass && (this._detectUntilChanges(), this._hasActiveChore = Object.entries(this.hass.states).some(
+      ([e, i]) => e.startsWith("sensor.simple_chore_") && i.state === "Active"
+    ));
+  }
+  connectedCallback() {
+    super.connectedCallback(), this._clockInterval = window.setInterval(() => {
+      this._hasActiveChore && (this._now = Date.now());
+    }, 1e3);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback(), window.clearInterval(this._clockInterval), this._clockInterval = void 0;
   }
   /**
    * Compare each privilege assignee's `disableUntil` against what we last
@@ -899,18 +932,18 @@ let h = class extends z {
   _detectUntilChanges() {
     const t = he(this.hass.states);
     let e = null;
-    for (const s of t)
-      for (const i of s.assignees) {
-        const o = this._disableReasonKey(s.slug, i.assignee), a = this._lastDisableUntil[o];
-        a !== void 0 && a !== i.disableUntil && (e = e ?? {}, e[o] = !0, this._scheduleUntilFlashClear(o)), this._lastDisableUntil[o] = i.disableUntil;
+    for (const i of t)
+      for (const o of i.assignees) {
+        const s = this._disableReasonKey(i.slug, o.assignee), a = this._lastDisableUntil[s];
+        a !== void 0 && a !== o.disableUntil && (e = e ?? {}, e[s] = !0, this._scheduleUntilFlashClear(s)), this._lastDisableUntil[s] = o.disableUntil;
       }
     e && (this._untilFlash = { ...this._untilFlash, ...e });
   }
   _scheduleUntilFlashClear(t) {
     setTimeout(() => {
       if (!this._untilFlash[t]) return;
-      const { [t]: e, ...s } = this._untilFlash;
-      this._untilFlash = s;
+      const { [t]: e, ...i } = this._untilFlash;
+      this._untilFlash = i;
     }, 900);
   }
   /**
@@ -924,33 +957,33 @@ let h = class extends z {
       const t = await this.hass.callWS({
         type: "config/auth/list"
       });
-      this._userDisplayNames = ut(t);
+      this._userDisplayNames = _t(t);
     } catch (t) {
       console.warn("simple-chores-panel: failed to load user display names", t);
     }
   }
   _displayName(t) {
-    return gt(t, this._userDisplayNames);
+    return yt(t, this._userDisplayNames);
   }
   render() {
-    if (!this.hass) return d;
-    const t = rt(this.hass.states), e = he(this.hass.states), s = lt(this.hass.states), i = ct(this.hass.states), o = dt(this.hass.states), a = pt(this.hass.states), n = ht(t, e);
-    return r`
+    if (!this.hass) return c;
+    const t = pt(this.hass.states), e = he(this.hass.states), i = ut(this.hass.states), o = ht(this.hass.states), s = gt(this.hass.states), a = mt(this.hass.states), r = bt(t, e);
+    return n`
       <div class="toolbar">
         <ha-icon icon="mdi:clipboard-check-outline"></ha-icon>
         <span class="toolbar-title">Chores</span>
-        ${this._busy ? r`<ha-icon class="spin" icon="mdi:loading"></ha-icon>` : d}
+        ${this._busy ? n`<ha-icon class="spin" icon="mdi:loading"></ha-icon>` : c}
       </div>
 
       <div class="content">
-        ${this._error ? r`
+        ${this._error ? n`
               <div class="banner error">
                 <span>${this._error}</span>
                 <button class="icon-button" @click=${this._dismissError}>
                   <ha-icon icon="mdi:close"></ha-icon>
                 </button>
               </div>
-            ` : d}
+            ` : c}
 
         <div class="tabs">
           <button
@@ -991,52 +1024,53 @@ let h = class extends z {
           </button>
         </div>
 
-        ${this._tab === "chores" ? this._renderChoresTab(t, s, n) : this._tab === "privileges" ? this._renderPrivilegesTab(e, t, n) : this._tab === "categories" ? this._renderCategoriesTab(s, n) : this._tab === "users" ? this._renderUsersTab(n, o, a) : this._tab === "history" ? this._renderHistoryTab(t, s, n) : this._renderSettingsTab(i, n)}
+        ${this._tab === "chores" ? this._renderChoresTab(t, i, r) : this._tab === "privileges" ? this._renderPrivilegesTab(e, t, r) : this._tab === "categories" ? this._renderCategoriesTab(i, r) : this._tab === "users" ? this._renderUsersTab(r, s, a) : this._tab === "history" ? this._renderHistoryTab(t, i, r) : this._renderSettingsTab(o, r)}
       </div>
 
-      ${this._dialog ? this._renderDialog(t, s, n) : d}
-      ${this._resetPointsDialog ? this._renderResetPointsDialog(n) : d}
-      ${this._undoDialog ? this._renderUndoDialog() : d}
+      ${this._dialog ? this._renderDialog(t, i, r) : c}
+      ${this._resetPointsDialog ? this._renderResetPointsDialog(r) : c}
+      ${this._undoDialog ? this._renderUndoDialog() : c}
+      ${this._startDialog ? this._renderStartDialog() : c}
     `;
   }
   // --- Chores tab ----------------------------------------------------
-  _renderChoresTab(t, e, s) {
-    const i = t.filter((n) => {
+  _renderChoresTab(t, e, i) {
+    const o = t.filter((r) => {
       if (this._categoryFilter) {
-        if (this._categoryFilter === R) {
-          if (n.category) return !1;
-        } else if (n.category !== this._categoryFilter)
+        if (this._categoryFilter === T) {
+          if (r.category) return !1;
+        } else if (r.category !== this._categoryFilter)
           return !1;
       }
-      return !(this._bulkUser && !n.assignees.some((l) => l.assignee === this._bulkUser));
-    }), o = this._sortChores(i, e), a = this._categoryFilter && this._categoryFilter !== R;
-    return r`
+      return !(this._bulkUser && !r.assignees.some((l) => l.assignee === this._bulkUser));
+    }), s = this._sortChores(o, e), a = this._categoryFilter && this._categoryFilter !== T;
+    return n`
       <div class="actions-row">
         <button class="primary" @click=${this._openCreateChore}>
           <ha-icon icon="mdi:plus"></ha-icon> New chore
         </button>
         ${this._renderCategoryFilterPicker(e)}
         ${this._renderChoreSortPicker()}
-        ${a ? r`
+        ${a ? n`
               <button
                 title="Reset completed manual chores in this category to not requested, and count pending ones as missed"
                 @click=${() => this._categoryAction(this._categoryFilter, "finalize_by_category")}
               >
                 Finalize by category
               </button>
-            ` : d}
+            ` : c}
         <div class="spacer"></div>
-        ${this._renderBulkUserPicker(s)}
+        ${this._renderBulkUserPicker(i)}
         <button @click=${() => this._resetCompleted()}>Reset completed</button>
         <button @click=${() => this._startNewDay()}>Start new day</button>
       </div>
 
-      ${this._renderPointsSummary(i)}
+      ${this._renderPointsSummary(o)}
 
-      ${o.length === 0 ? r`<p class="empty">
+      ${s.length === 0 ? n`<p class="empty">
             ${t.length === 0 ? "No chores yet. Create one to get started." : "No chores match the current filters."}
-          </p>` : r`<div class="card-grid">
-            ${o.map((n) => this._renderChoreCard(n, e))}
+          </p>` : n`<div class="card-grid">
+            ${s.map((r) => this._renderChoreCard(r, e))}
           </div>`}
     `;
   }
@@ -1047,38 +1081,38 @@ let h = class extends z {
       { value: "frequency", label: "Sort: Frequency" },
       { value: "category", label: "Sort: Category" }
     ];
-    return r`
+    return n`
       <select
         class="user-picker"
         title="Sort chores"
         .value=${this._choreSort}
         @change=${(e) => this._choreSort = e.target.value}
       >
-        ${t.map((e) => r`<option value=${e.value}>${e.label}</option>`)}
+        ${t.map((e) => n`<option value=${e.value}>${e.label}</option>`)}
       </select>
     `;
   }
   _sortChores(t, e) {
-    const s = [...t], i = (o) => o ? e.find((a) => a.slug === o)?.name ?? o : "";
+    const i = [...t], o = (s) => s ? e.find((a) => a.slug === s)?.name ?? s : "";
     switch (this._choreSort) {
       case "points":
-        s.sort((o, a) => a.points - o.points || o.name.localeCompare(a.name));
+        i.sort((s, a) => a.points - s.points || s.name.localeCompare(a.name));
         break;
       case "frequency":
-        s.sort(
-          (o, a) => o.frequency.localeCompare(a.frequency) || o.name.localeCompare(a.name)
+        i.sort(
+          (s, a) => s.frequency.localeCompare(a.frequency) || s.name.localeCompare(a.name)
         );
         break;
       case "category":
-        s.sort(
-          (o, a) => i(o.category).localeCompare(i(a.category)) || o.name.localeCompare(a.name)
+        i.sort(
+          (s, a) => o(s.category).localeCompare(o(a.category)) || s.name.localeCompare(a.name)
         );
         break;
       case "name":
       default:
-        s.sort((o, a) => o.name.localeCompare(a.name));
+        i.sort((s, a) => s.name.localeCompare(a.name));
     }
-    return s;
+    return i;
   }
   /**
    * A "points possible" line summing each displayed assignee's points
@@ -1088,20 +1122,20 @@ let h = class extends z {
    */
   _renderPointsSummary(t) {
     const e = /* @__PURE__ */ new Map();
-    for (const i of t)
-      for (const o of i.assignees)
-        this._bulkUser && o.assignee !== this._bulkUser || e.set(o.assignee, (e.get(o.assignee) ?? 0) + o.points);
-    if (e.size === 0) return d;
-    const s = [...e.entries()].sort((i, o) => i[0].localeCompare(o[0]));
-    return r`
+    for (const o of t)
+      for (const s of o.assignees)
+        this._bulkUser && s.assignee !== this._bulkUser || e.set(s.assignee, (e.get(s.assignee) ?? 0) + s.points);
+    if (e.size === 0) return c;
+    const i = [...e.entries()].sort((o, s) => o[0].localeCompare(s[0]));
+    return n`
       <div class="points-summary">
         <ha-icon icon="mdi:star-outline"></ha-icon>
         <span>Points possible:</span>
-        ${s.map(
-      ([i, o], a) => r`
-            ${a > 0 ? r`<span class="points-summary-sep">·</span>` : d}
+        ${i.map(
+      ([o, s], a) => n`
+            ${a > 0 ? n`<span class="points-summary-sep">·</span>` : c}
             <span
-              ><strong>${this._displayName(i)}</strong> ${o}</span
+              ><strong>${this._displayName(o)}</strong> ${s}</span
             >
           `
     )}
@@ -1109,7 +1143,7 @@ let h = class extends z {
     `;
   }
   _renderCategoryFilterPicker(t) {
-    return r`
+    return n`
       <select
         class="user-picker"
         title="Filter chores by category"
@@ -1117,15 +1151,15 @@ let h = class extends z {
         @change=${(e) => this._categoryFilter = e.target.value}
       >
         <option value="">All categories</option>
-        <option value=${R}>Uncategorized</option>
+        <option value=${T}>Uncategorized</option>
         ${t.map(
-      (e) => r`<option value=${e.slug}>${e.name}</option>`
+      (e) => n`<option value=${e.slug}>${e.name}</option>`
     )}
       </select>
     `;
   }
   _renderBulkUserPicker(t) {
-    return r`
+    return n`
       <select
         class="user-picker"
         title="Filter the chores shown below, and limit Reset completed / Start new day, to one assignee"
@@ -1134,23 +1168,24 @@ let h = class extends z {
       >
         <option value="">All assignees</option>
         ${t.map(
-      (e) => r`<option value=${e}>${this._displayName(e)}</option>`
+      (e) => n`<option value=${e}>${this._displayName(e)}</option>`
     )}
       </select>
     `;
   }
   _renderChoreCard(t, e) {
-    const s = t.assignees.some((a) => a.points !== t.points), i = `${t.points} point${t.points === 1 ? "" : "s"}${s ? " (default)" : ""}`, o = t.category ? e.find((a) => a.slug === t.category)?.name ?? t.category : null;
-    return r`
+    const i = t.assignees.some((a) => a.points !== t.points), o = `${t.points} point${t.points === 1 ? "" : "s"}${i ? " (default)" : ""}`, s = t.category ? e.find((a) => a.slug === t.category)?.name ?? t.category : null;
+    return n`
       <div class="card">
         <div class="card-header">
-          <ha-icon .icon=${t.icon || E}></ha-icon>
+          <ha-icon .icon=${t.icon || D}></ha-icon>
           <div class="card-title">
             <div class="name">${t.name}</div>
             <div class="meta">
-              ${t.frequency} · ${i}
-              ${o ? r` · ${o}` : d}
-              ${t.description ? r` · ${t.description}` : d}
+              ${t.frequency} · ${o}
+              ${s ? n` · ${s}` : c}
+              ${t.suggestedDuration ? n` · ~${at(t.suggestedDuration)}` : c}
+              ${t.description ? n` · ${t.description}` : c}
             </div>
           </div>
           <div class="card-actions">
@@ -1172,15 +1207,16 @@ let h = class extends z {
         </div>
         <div class="assignee-list">
           ${t.assignees.filter((a) => !this._bulkUser || a.assignee === this._bulkUser).map(
-      (a) => r`
-                <div class="assignee-row">
+      (a) => n`
+                <div class="assignee-row ${a.state === "Active" ? "active-row" : ""}">
                   <span class="assignee-name">${this._displayName(a.assignee)}</span>
-                  ${a.points !== t.points ? r`<span class="points-override-badge" title="Point override"
+                  ${a.points !== t.points ? n`<span class="points-override-badge" title="Point override"
                         >${a.points}pt</span
-                      >` : d}
+                      >` : c}
                   <span class="state-chip ${this._choreStateClass(a.state)}"
                     >${a.state}</span
                   >
+                  ${a.state === "Active" ? this._renderActivityClock(a) : c}
                   <div class="row-actions">
                     <button
                       class="icon-button"
@@ -1189,6 +1225,13 @@ let h = class extends z {
                       @click=${() => this._markChore(t.slug, a.assignee, "mark_pending")}
                     >
                       <ha-icon icon="mdi:plus-circle-outline"></ha-icon>
+                    </button>
+                    <button
+                      class="icon-button"
+                      title=${a.state === "Active" ? "Restart timer" : "Start (mark active)"}
+                      @click=${() => this._openStartDialog(t, a.assignee)}
+                    >
+                      <ha-icon icon="mdi:timer-play-outline"></ha-icon>
                     </button>
                     <button
                       class="icon-button"
@@ -1226,36 +1269,45 @@ let h = class extends z {
       </div>
     `;
   }
+  _renderActivityClock(t) {
+    const e = $t(t.activeSince, t.timerEndsAt, this._now);
+    return e ? n`<span
+      class="activity-clock ${e.overdue ? "overdue" : ""}"
+      title=${t.activeSince ? `Started ${new Date(t.activeSince).toLocaleTimeString()}` : ""}
+      ><ha-icon icon=${e.overdue ? "mdi:timer-alert-outline" : "mdi:timer-outline"}></ha-icon
+      >${e.label}</span
+    >` : c;
+  }
   _choreStateClass(t) {
-    return t === "Complete" ? "state-good" : t === "Pending" ? "state-warn" : "state-neutral";
+    return t === "Active" ? "state-active" : t === "Complete" ? "state-good" : t === "Pending" ? "state-warn" : "state-neutral";
   }
   // --- Privileges tab --------------------------------------------------
-  _renderPrivilegesTab(t, e, s) {
-    return r`
+  _renderPrivilegesTab(t, e, i) {
+    return n`
       <div class="actions-row">
         <button class="primary" @click=${this._openCreatePrivilege}>
           <ha-icon icon="mdi:plus"></ha-icon> New privilege
         </button>
       </div>
 
-      ${t.length === 0 ? r`<p class="empty">No privileges yet. Create one to get started.</p>` : r`<div class="card-grid">
-            ${t.map((i) => this._renderPrivilegeCard(i, e, s))}
+      ${t.length === 0 ? n`<p class="empty">No privileges yet. Create one to get started.</p>` : n`<div class="card-grid">
+            ${t.map((o) => this._renderPrivilegeCard(o, e, i))}
           </div>`}
     `;
   }
-  _renderPrivilegeCard(t, e, s) {
-    const i = t.linkedChores.map(
-      (o) => e.find((a) => a.slug === o)?.name ?? o
+  _renderPrivilegeCard(t, e, i) {
+    const o = t.linkedChores.map(
+      (s) => e.find((a) => a.slug === s)?.name ?? s
     );
-    return r`
+    return n`
       <div class="card">
         <div class="card-header">
-          <ha-icon .icon=${t.icon || D}></ha-icon>
+          <ha-icon .icon=${t.icon || E}></ha-icon>
           <div class="card-title">
             <div class="name">${t.name}</div>
             <div class="meta">
               ${t.behavior}
-              ${i.length ? r` · linked: ${i.join(", ")}` : r` · linked: all requested chores`}
+              ${o.length ? n` · linked: ${o.join(", ")}` : n` · linked: all requested chores`}
             </div>
           </div>
           <div class="card-actions">
@@ -1276,27 +1328,27 @@ let h = class extends z {
           </div>
         </div>
         <div class="assignee-list">
-          ${t.assignees.map((o) => {
-      const a = o.state === "Temporarily Disabled", n = this._disableReasonKey(t.slug, o.assignee);
-      return r`
+          ${t.assignees.map((s) => {
+      const a = s.state === "Temporarily Disabled", r = this._disableReasonKey(t.slug, s.assignee);
+      return n`
               <div class="assignee-row privilege-row">
                 <div class="assignee-main">
-                  <span class="assignee-name">${this._displayName(o.assignee)}</span>
-                  <span class="state-chip ${this._privilegeStateClass(o.state)}">
-                    ${o.state}${a && o.disableUntil ? r`<span
-                          class="until-date ${this._untilFlash[n] ? "until-flash" : ""}"
+                  <span class="assignee-name">${this._displayName(s.assignee)}</span>
+                  <span class="state-chip ${this._privilegeStateClass(s.state)}">
+                    ${s.state}${a && s.disableUntil ? n`<span
+                          class="until-date ${this._untilFlash[r] ? "until-flash" : ""}"
                         >
-                          (${this._formatUntil(o.disableUntil)})</span
-                        >` : d}
+                          (${this._formatUntil(s.disableUntil)})</span
+                        >` : c}
                   </span>
-                  ${t.behavior === "manual" ? r`
+                  ${t.behavior === "manual" ? n`
                         <div class="row-actions">
                           <button
                             class="action-chip"
                             title="Enable"
-                            ?disabled=${o.state === "Enabled"}
-                            @click=${() => this._call(p, "enable_privilege", {
-        user: o.assignee,
+                            ?disabled=${s.state === "Enabled"}
+                            @click=${() => this._call(u, "enable_privilege", {
+        user: s.assignee,
         privilege_slug: t.slug
       })}
                           >
@@ -1306,9 +1358,9 @@ let h = class extends z {
                           <button
                             class="action-chip"
                             title="Disable"
-                            ?disabled=${o.state === "Disabled"}
-                            @click=${() => this._call(p, "disable_privilege", {
-        user: o.assignee,
+                            ?disabled=${s.state === "Disabled"}
+                            @click=${() => this._call(u, "disable_privilege", {
+        user: s.assignee,
         privilege_slug: t.slug
       })}
                           >
@@ -1316,7 +1368,7 @@ let h = class extends z {
                             <span>Disable</span>
                           </button>
                         </div>
-                      ` : d}
+                      ` : c}
                 </div>
                 <div class="block-steppers">
                   <span class="block-steppers-label">Temporary block</span>
@@ -1324,11 +1376,11 @@ let h = class extends z {
                     type="text"
                     class="disable-reason-input"
                     placeholder="Reason (optional)"
-                    .value=${this._disableReasonInput[n] ?? o.disableReason ?? ""}
+                    .value=${this._disableReasonInput[r] ?? s.disableReason ?? ""}
                     @input=${(l) => {
         this._disableReasonInput = {
           ...this._disableReasonInput,
-          [n]: l.target.value
+          [r]: l.target.value
         };
       }}
                     @keydown=${(l) => {
@@ -1337,8 +1389,8 @@ let h = class extends z {
                     @blur=${() => {
         a && this._saveDisableReason(
           t.slug,
-          o.assignee,
-          o.disableReason
+          s.assignee,
+          s.disableReason
         );
       }}
                   />
@@ -1346,13 +1398,13 @@ let h = class extends z {
                     ${this._renderBlockStepper(
         "1h",
         a,
-        () => this._adjustTemporaryDisable(t.slug, o.assignee, -60),
+        () => this._adjustTemporaryDisable(t.slug, s.assignee, -60),
         () => this._addTemporaryDisable(
           t.slug,
-          o.assignee,
+          s.assignee,
           a,
           60,
-          n
+          r
         )
       )}
                     ${this._renderBlockStepper(
@@ -1360,22 +1412,22 @@ let h = class extends z {
         a,
         () => this._adjustTemporaryDisable(
           t.slug,
-          o.assignee,
+          s.assignee,
           -1440
         ),
         () => this._addTemporaryDisable(
           t.slug,
-          o.assignee,
+          s.assignee,
           a,
           1440,
-          n
+          r
         )
       )}
                     <button
                       class="action-chip"
                       title="Clear the block now"
                       ?disabled=${!a}
-                      @click=${() => this._clearTemporaryDisable(t.slug, o.assignee)}
+                      @click=${() => this._clearTemporaryDisable(t.slug, s.assignee)}
                     >
                       <ha-icon icon="mdi:backspace-outline"></ha-icon>
                       <span>Clear</span>
@@ -1395,18 +1447,18 @@ let h = class extends z {
    * inside one bordered pill, matching how Home Assistant renders its own
    * number/counter steppers.
    */
-  _renderBlockStepper(t, e, s, i) {
-    return r`
+  _renderBlockStepper(t, e, i, o) {
+    return n`
       <div class="stepper">
         <button
           title="Shorten the block by ${t}"
           ?disabled=${!e}
-          @click=${s}
+          @click=${i}
         >
           <ha-icon icon="mdi:minus"></ha-icon>
         </button>
         <span class="stepper-unit">${t}</span>
-        <button title="Extend the block by ${t}" @click=${i}>
+        <button title="Extend the block by ${t}" @click=${o}>
           <ha-icon icon="mdi:plus"></ha-icon>
         </button>
       </div>
@@ -1417,18 +1469,18 @@ let h = class extends z {
   }
   _formatUntil(t) {
     try {
-      const e = new Date(t), s = /* @__PURE__ */ new Date(), i = e.toDateString() === s.toDateString(), o = e.toLocaleTimeString([], {
+      const e = new Date(t), i = /* @__PURE__ */ new Date(), o = e.toDateString() === i.toDateString(), s = e.toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit"
       });
-      return i ? `until ${o}` : `until ${e.toLocaleDateString()} ${o}`;
+      return o ? `until ${s}` : `until ${e.toLocaleDateString()} ${s}`;
     } catch {
       return "";
     }
   }
   // --- Categories tab --------------------------------------------------
   _renderCategoriesTab(t, e) {
-    return r`
+    return n`
       <div class="actions-row">
         <button class="primary" @click=${this._openCreateCategory}>
           <ha-icon icon="mdi:plus"></ha-icon> New category
@@ -1437,16 +1489,16 @@ let h = class extends z {
         ${this._renderBulkUserPicker(e)}
       </div>
 
-      ${t.length === 0 ? r`<p class="empty">
+      ${t.length === 0 ? n`<p class="empty">
             No categories yet. Create one, then assign it to chores.
-          </p>` : r`<div class="card-grid">
-            ${t.map((s) => this._renderCategoryCard(s))}
+          </p>` : n`<div class="card-grid">
+            ${t.map((i) => this._renderCategoryCard(i))}
           </div>`}
     `;
   }
   _renderCategoryCard(t) {
     const e = `${t.choreCount} chore${t.choreCount === 1 ? "" : "s"}`;
-    return r`
+    return n`
       <div class="card">
         <div class="card-header">
           <ha-icon .icon=${t.icon || S}></ha-icon>
@@ -1517,8 +1569,8 @@ let h = class extends z {
       newWeekDay: t.newWeekDay,
       newWeekTime: t.newWeekTime
     });
-    const s = this._settingsDraft;
-    return r`
+    const i = this._settingsDraft;
+    return n`
       <div class="settings-section">
         <h3>Auto-finalize</h3>
         <p class="hint">
@@ -1531,9 +1583,9 @@ let h = class extends z {
         <label class="checkbox-item settings-toggle">
           <input
             type="checkbox"
-            .checked=${s.autoFinalizeEnabled}
-            @change=${(i) => {
-      s.autoFinalizeEnabled = i.target.checked, this.requestUpdate();
+            .checked=${i.autoFinalizeEnabled}
+            @change=${(o) => {
+      i.autoFinalizeEnabled = o.target.checked, this.requestUpdate();
     }}
           />
           Enable auto-finalize
@@ -1544,10 +1596,10 @@ let h = class extends z {
           <input
             type="number"
             min="1"
-            ?disabled=${!s.autoFinalizeEnabled}
-            .value=${String(s.autoFinalizeDelayMinutes)}
-            @input=${(i) => {
-      s.autoFinalizeDelayMinutes = Number(i.target.value) || 1, this.requestUpdate();
+            ?disabled=${!i.autoFinalizeEnabled}
+            .value=${String(i.autoFinalizeDelayMinutes)}
+            @input=${(o) => {
+      i.autoFinalizeDelayMinutes = Number(o.target.value) || 1, this.requestUpdate();
     }}
           />
         </label>
@@ -1566,9 +1618,9 @@ let h = class extends z {
           <input
             type="time"
             step="1"
-            .value=${s.newDayTime}
-            @input=${(i) => {
-      s.newDayTime = i.target.value, this.requestUpdate();
+            .value=${i.newDayTime}
+            @input=${(o) => {
+      i.newDayTime = o.target.value, this.requestUpdate();
     }}
           />
         </label>
@@ -1576,14 +1628,14 @@ let h = class extends z {
         <label>
           New week day
           <select
-            .value=${s.newWeekDay}
-            @change=${(i) => {
-      s.newWeekDay = i.target.value, this.requestUpdate();
+            .value=${i.newWeekDay}
+            @change=${(o) => {
+      i.newWeekDay = o.target.value, this.requestUpdate();
     }}
           >
-            ${et.map(
-      (i) => r`<option value=${i} ?selected=${i === s.newWeekDay}>
-                ${i[0].toUpperCase()}${i.slice(1)}
+            ${it.map(
+      (o) => n`<option value=${o} ?selected=${o === i.newWeekDay}>
+                ${o[0].toUpperCase()}${o.slice(1)}
               </option>`
     )}
           </select>
@@ -1594,9 +1646,9 @@ let h = class extends z {
           <input
             type="time"
             step="1"
-            .value=${s.newWeekTime}
-            @input=${(i) => {
-      s.newWeekTime = i.target.value, this.requestUpdate();
+            .value=${i.newWeekTime}
+            @input=${(o) => {
+      i.newWeekTime = o.target.value, this.requestUpdate();
     }}
           />
         </label>
@@ -1647,7 +1699,7 @@ let h = class extends z {
   async _saveSettings() {
     const t = this._settingsDraft;
     if (!t) return;
-    await this._call(p, "update_settings", {
+    await this._call(u, "update_settings", {
       auto_finalize_enabled: t.autoFinalizeEnabled,
       auto_finalize_delay_minutes: t.autoFinalizeDelayMinutes,
       new_day_time: t.newDayTime,
@@ -1657,7 +1709,7 @@ let h = class extends z {
   }
   _renderResetPointsDialog(t) {
     const e = this._resetPointsDialog;
-    return e ? r`
+    return e ? n`
       <div class="overlay" @click=${this._onResetPointsOverlayClick}>
         <div class="dialog" role="dialog" aria-modal="true">
           <div class="dialog-header">
@@ -1677,13 +1729,13 @@ let h = class extends z {
               Assignee
               <select
                 .value=${e.user}
-                @change=${(s) => {
-      e.user = s.target.value, this.requestUpdate();
+                @change=${(i) => {
+      e.user = i.target.value, this.requestUpdate();
     }}
               >
                 <option value="">All users</option>
                 ${t.map(
-      (s) => r`<option value=${s}>${this._displayName(s)}</option>`
+      (i) => n`<option value=${i}>${this._displayName(i)}</option>`
     )}
               </select>
             </label>
@@ -1691,8 +1743,8 @@ let h = class extends z {
               <input
                 type="checkbox"
                 .checked=${e.resetTotal}
-                @change=${(s) => {
-      e.resetTotal = s.target.checked, this.requestUpdate();
+                @change=${(i) => {
+      e.resetTotal = i.target.checked, this.requestUpdate();
     }}
               />
               Also reset lifetime total points
@@ -1710,32 +1762,32 @@ let h = class extends z {
           </div>
         </div>
       </div>
-    ` : d;
+    ` : c;
   }
   async _confirmResetPoints() {
     const t = this._resetPointsDialog;
     if (!t) return;
-    await this._call(p, "reset_points", {
+    await this._call(u, "reset_points", {
       ...t.user ? { user: t.user } : {},
       reset_total: t.resetTotal
     }) && (this._resetPointsDialog = null);
   }
   // --- Users tab -----------------------------------------------------
-  _renderUsersTab(t, e, s) {
-    const i = new Map(e.map((a) => [a.assignee, a])), o = new Map(s.map((a) => [a.assignee, a]));
-    return r`
-      ${t.length === 0 ? r`<p class="empty">
+  _renderUsersTab(t, e, i) {
+    const o = new Map(e.map((a) => [a.assignee, a])), s = new Map(i.map((a) => [a.assignee, a]));
+    return n`
+      ${t.length === 0 ? n`<p class="empty">
             No assignees yet. Add one to a chore or privilege to get started.
-          </p>` : r`<div class="card-grid">
+          </p>` : n`<div class="card-grid">
             ${t.map(
-      (a) => this._renderUserCard(a, i.get(a), o.get(a))
+      (a) => this._renderUserCard(a, o.get(a), s.get(a))
     )}
           </div>`}
     `;
   }
-  _renderUserCard(t, e, s) {
-    const i = e?.totalPoints ?? 0, o = e?.pointsEarned ?? 0, a = e?.pointsMissed ?? 0, n = e?.pointsPossible ?? 0;
-    return r`
+  _renderUserCard(t, e, i) {
+    const o = e?.totalPoints ?? 0, s = e?.pointsEarned ?? 0, a = e?.pointsMissed ?? 0, r = e?.pointsPossible ?? 0;
+    return n`
       <div class="card">
         <div class="user-card-header">
           <div class="user-identity">
@@ -1743,13 +1795,13 @@ let h = class extends z {
             <span class="name">${this._displayName(t)}</span>
           </div>
           <div class="user-points-total" title="Lifetime total points">
-            <span class="user-points-value">${i}</span>
+            <span class="user-points-value">${o}</span>
             <span class="user-points-label">points</span>
           </div>
         </div>
         <div class="points-stats">
           <div class="points-stat">
-            <span class="points-stat-value">${o}</span>
+            <span class="points-stat-value">${s}</span>
             <span class="points-stat-label">earned today</span>
           </div>
           <div class="points-stat">
@@ -1757,25 +1809,25 @@ let h = class extends z {
             <span class="points-stat-label">missed</span>
           </div>
           <div class="points-stat">
-            <span class="points-stat-value">${n}</span>
+            <span class="points-stat-value">${r}</span>
             <span class="points-stat-label">possible today</span>
           </div>
         </div>
-        ${s ? r`
+        ${i ? n`
               <div class="user-goal-row">
                 <span class="user-goal-label">Point goal</span>
                 <input
                   type="number"
                   min="0"
                   class="user-goal-input"
-                  .value=${String(s.value)}
+                  .value=${String(i.value)}
                   @change=${(l) => this._setPointGoal(
-      s.entityId,
+      i.entityId,
       l.target.value
     )}
                 />
               </div>
-            ` : d}
+            ` : c}
         <div class="user-adjust-row">
           <input
             type="number"
@@ -1810,20 +1862,20 @@ let h = class extends z {
   }
   /** Save an edited point goal via the standard `number.set_value` service. */
   async _setPointGoal(t, e) {
-    const s = Math.max(0, Math.round(Number(e) || 0));
-    await this._call("number", "set_value", { entity_id: t, value: s });
+    const i = Math.max(0, Math.round(Number(e) || 0));
+    await this._call("number", "set_value", { entity_id: t, value: i });
   }
   async _applyPointsAdjustment(t) {
-    const e = this._userAdjustInput[t], s = Number(e);
-    if (!e || Number.isNaN(s) || s === 0) {
+    const e = this._userAdjustInput[t], i = Number(e);
+    if (!e || Number.isNaN(i) || i === 0) {
       this._error = "Enter a non-zero point adjustment first.";
       return;
     }
-    const i = this._userAdjustReasonInput[t]?.trim();
-    await this._call(p, "adjust_points", {
+    const o = this._userAdjustReasonInput[t]?.trim();
+    await this._call(u, "adjust_points", {
       user: t,
-      adjustment: s,
-      ...i ? { reason: i } : {}
+      adjustment: i,
+      ...o ? { reason: o } : {}
     }) && (this._userAdjustInput = { ...this._userAdjustInput, [t]: "" }, this._userAdjustReasonInput = { ...this._userAdjustReasonInput, [t]: "" });
   }
   /**
@@ -1839,12 +1891,12 @@ let h = class extends z {
     try {
       const t = await this.hass.callWS({
         type: "call_service",
-        domain: p,
+        domain: u,
         service: "get_history",
         service_data: {},
         return_response: !0
       });
-      this._historyEntries = bt(t?.response?.entries);
+      this._historyEntries = vt(t?.response?.entries);
     } catch (t) {
       this._error = t instanceof Error ? t.message : String(t);
     } finally {
@@ -1854,21 +1906,21 @@ let h = class extends z {
   async _clearHistory() {
     if (!confirm("Permanently delete every chore history entry? This cannot be undone."))
       return;
-    await this._call(p, "reset_history", {}) && (this._historyEntries = []);
+    await this._call(u, "reset_history", {}) && (this._historyEntries = []);
   }
-  _renderHistoryTab(t, e, s) {
-    const i = this._historyEntries ?? [], a = [...i.filter((l) => {
+  _renderHistoryTab(t, e, i) {
+    const o = this._historyEntries ?? [], a = [...o.filter((l) => {
       if (this._historyUserFilter && l.assignee !== this._historyUserFilter)
         return !1;
       if (this._historyCategoryFilter) {
-        if (this._historyCategoryFilter === R) {
+        if (this._historyCategoryFilter === T) {
           if (l.category) return !1;
         } else if (l.category !== this._historyCategoryFilter)
           return !1;
       }
       return !(this._historyChoreFilter && l.choreSlug !== this._historyChoreFilter || this._historyActionFilter.length > 0 && !this._historyActionFilter.includes(l.action));
-    })].sort((l, c) => c.timestamp.localeCompare(l.timestamp)), n = [...t].sort((l, c) => l.name.localeCompare(c.name));
-    return r`
+    })].sort((l, d) => d.timestamp.localeCompare(l.timestamp)), r = [...t].sort((l, d) => l.name.localeCompare(d.name));
+    return n`
       <div class="actions-row">
         <select
           class="user-picker"
@@ -1877,8 +1929,8 @@ let h = class extends z {
           @change=${(l) => this._historyUserFilter = l.target.value}
         >
           <option value="">All assignees</option>
-          ${s.map(
-      (l) => r`<option value=${l}>${this._displayName(l)}</option>`
+          ${i.map(
+      (l) => n`<option value=${l}>${this._displayName(l)}</option>`
     )}
         </select>
         <select
@@ -1888,8 +1940,8 @@ let h = class extends z {
           @change=${(l) => this._historyCategoryFilter = l.target.value}
         >
           <option value="">All categories</option>
-          <option value=${R}>Uncategorized</option>
-          ${e.map((l) => r`<option value=${l.slug}>${l.name}</option>`)}
+          <option value=${T}>Uncategorized</option>
+          ${e.map((l) => n`<option value=${l.slug}>${l.name}</option>`)}
         </select>
         <select
           class="user-picker"
@@ -1898,23 +1950,23 @@ let h = class extends z {
           @change=${(l) => this._historyChoreFilter = l.target.value}
         >
           <option value="">All chores</option>
-          ${n.map((l) => r`<option value=${l.slug}>${l.name}</option>`)}
+          ${r.map((l) => n`<option value=${l.slug}>${l.name}</option>`)}
         </select>
         <div
           class="chip-toggle-group"
           role="group"
           aria-label="Filter history by event type"
         >
-          ${mt.map((l) => {
-      const c = this._historyActionFilter.includes(l);
-      return r`
+          ${ft.map((l) => {
+      const d = this._historyActionFilter.includes(l);
+      return n`
               <button
                 type="button"
-                class="chip-toggle ${ge(l)} ${c ? "selected" : ""}"
-                aria-pressed=${c}
+                class="chip-toggle ${me(l)} ${d ? "selected" : ""}"
+                aria-pressed=${d}
                 @click=${() => this._toggleHistoryActionFilter(l)}
               >
-                ${ue(l)}
+                ${ge(l)}
               </button>
             `;
     })}
@@ -1925,9 +1977,9 @@ let h = class extends z {
         </button>
       </div>
 
-      ${this._historyEntries === null ? r`<p class="empty">Loading history&hellip;</p>` : a.length === 0 ? r`<p class="empty">
-              ${i.length === 0 ? "No chore history yet. Complete a chore to get started." : "No history entries match the current filters."}
-            </p>` : r`
+      ${this._historyEntries === null ? n`<p class="empty">Loading history&hellip;</p>` : a.length === 0 ? n`<p class="empty">
+              ${o.length === 0 ? "No chore history yet. Complete a chore to get started." : "No history entries match the current filters."}
+            </p>` : n`
               <div class="history-list">
                 <div class="history-row history-header">
                   <div class="history-cell history-time">Time</div>
@@ -1944,39 +1996,39 @@ let h = class extends z {
     `;
   }
   _renderHistoryRow(t, e) {
-    const s = t.category ? e.find((n) => n.slug === t.category)?.name ?? t.category : null, i = t.pointsDelta > 0 ? "points-positive" : t.pointsDelta < 0 ? "points-negative" : "", o = t.pointsDelta > 0 ? `+${t.pointsDelta}` : t.pointsDelta, a = t.action === "completed" && !t.undone && !!this.hass.user?.is_admin;
-    return r`
+    const i = t.category ? e.find((r) => r.slug === t.category)?.name ?? t.category : null, o = t.pointsDelta > 0 ? "points-positive" : t.pointsDelta < 0 ? "points-negative" : "", s = t.pointsDelta > 0 ? `+${t.pointsDelta}` : t.pointsDelta, a = t.action === "completed" && !t.undone && !!this.hass.user?.is_admin;
+    return n`
       <div class="history-row ${t.undone ? "history-row-undone" : ""}">
         <div class="history-cell history-time">
           ${this._formatHistoryTimestamp(t.timestamp)}
         </div>
         <div class="history-cell history-chore">
           <div class="name">${t.choreName}</div>
-          ${s ? r`<div class="meta">${s}</div>` : d}
-          ${t.reason ? r`<div class="meta">"${t.reason}"</div>` : d}
-          ${t.penalty ? r`<div class="meta points-negative">Penalty: -${t.penalty}</div>` : d}
+          ${i ? n`<div class="meta">${i}</div>` : c}
+          ${t.reason ? n`<div class="meta">"${t.reason}"</div>` : c}
+          ${t.penalty ? n`<div class="meta points-negative">Penalty: -${t.penalty}</div>` : c}
         </div>
         <div class="history-cell history-assignee">
           ${this._displayName(t.assignee)}
         </div>
         <div class="history-cell history-action">
-          <span class="state-chip ${ge(t.action)}">
-            ${ue(t.action)}
+          <span class="state-chip ${me(t.action)}">
+            ${ge(t.action)}
           </span>
         </div>
         <div class="history-cell history-earned" title="Points balance after this entry">
           ${t.pointsTotal}
-          ${t.pointsDelta !== 0 ? r`<div class="meta ${i}">${o}</div>` : d}
+          ${t.pointsDelta !== 0 ? n`<div class="meta ${o}">${s}</div>` : c}
         </div>
         <div
           class="history-cell history-missed"
           title="Cumulative missed points after this entry"
         >
           ${t.missedTotal ?? "—"}
-          ${t.pointsMissed > 0 ? r`<div class="meta points-negative">+${t.pointsMissed}</div>` : d}
+          ${t.pointsMissed > 0 ? n`<div class="meta points-negative">+${t.pointsMissed}</div>` : c}
         </div>
         <div class="history-cell history-undo">
-          ${a ? r`
+          ${a ? n`
                 <button
                   type="button"
                   class="action-chip history-undo-button"
@@ -1986,16 +2038,84 @@ let h = class extends z {
                   <ha-icon icon="mdi:undo"></ha-icon>
                   <span>Undo</span>
                 </button>
-              ` : t.undone ? r`<span class="meta">Undone</span>` : r`<span class="meta">—</span>`}
+              ` : t.undone ? n`<span class="meta">Undone</span>` : n`<span class="meta">—</span>`}
         </div>
       </div>
     `;
   }
+  _openStartDialog(t, e) {
+    this._error = null, this._startDialog = {
+      slug: t.slug,
+      choreName: t.name,
+      assignee: e,
+      // Pre-fill the timer with the chore's suggested duration, if any.
+      timerMinutes: t.suggestedDuration ? String(t.suggestedDuration) : ""
+    };
+  }
+  _renderStartDialog() {
+    const t = this._startDialog;
+    if (!t) return c;
+    const e = () => this._startDialog = null;
+    return n`
+      <div
+        class="overlay"
+        @click=${(i) => {
+      i.target === i.currentTarget && e();
+    }}
+      >
+        <div class="dialog" role="dialog" aria-modal="true">
+          <div class="dialog-header">
+            <h2>Start chore</h2>
+            <button class="icon-button" @click=${e}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="dialog-body">
+            <p class="hint">
+              Marks "${t.choreName}" active for ${this._displayName(t.assignee)}.
+              It stays outstanding until marked complete.
+            </p>
+            <label>
+              Timer (minutes, optional)
+              <input
+                type="number"
+                min="1"
+                max="1440"
+                placeholder="No timer"
+                .value=${t.timerMinutes}
+                @input=${(i) => {
+      t.timerMinutes = i.target.value, this.requestUpdate();
+    }}
+                @keydown=${(i) => {
+      i.key === "Enter" && this._confirmStart();
+    }}
+              />
+            </label>
+          </div>
+          <div class="dialog-footer">
+            <button @click=${e}>Cancel</button>
+            <button class="primary" ?disabled=${this._busy} @click=${() => this._confirmStart()}>
+              Start
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  async _confirmStart() {
+    const t = this._startDialog;
+    if (!t) return;
+    const e = Math.floor(Number(t.timerMinutes)), i = {
+      chore_slug: t.slug,
+      user: t.assignee
+    };
+    t.timerMinutes.trim() && e > 0 && (i.timer_minutes = Math.min(e, 1440)), await this._call(u, "mark_active", i) && (this._startDialog = null);
+  }
   _renderUndoDialog() {
     const t = this._undoDialog;
-    if (!t) return d;
+    if (!t) return c;
     const e = t.awarded + t.penalty;
-    return r`
+    return n`
       <div class="overlay" @click=${this._onUndoOverlayClick}>
         <div class="dialog" role="dialog" aria-modal="true">
           <div class="dialog-header">
@@ -2007,7 +2127,7 @@ let h = class extends z {
           <div class="dialog-body">
             <p class="hint danger-text">
               Reverses "${t.choreName}" for ${this._displayName(t.assignee)},
-              clawing back the ${t.awarded} point(s) it awarded${t.penalty ? r` plus a ${t.penalty}-point penalty (${e} total)` : d}. This cannot be undone.
+              clawing back the ${t.awarded} point(s) it awarded${t.penalty ? n` plus a ${t.penalty}-point penalty (${e} total)` : c}. This cannot be undone.
             </p>
             <label>
               Reason
@@ -2015,8 +2135,8 @@ let h = class extends z {
                 type="text"
                 placeholder="Why is this being undone?"
                 .value=${t.reason}
-                @input=${(s) => {
-      t.reason = s.target.value, this.requestUpdate();
+                @input=${(i) => {
+      t.reason = i.target.value, this.requestUpdate();
     }}
               />
             </label>
@@ -2026,10 +2146,10 @@ let h = class extends z {
                 type="number"
                 min="0"
                 .value=${String(t.penalty)}
-                @input=${(s) => {
+                @input=${(i) => {
       t.penalty = Math.max(
         0,
-        Number(s.target.value) || 0
+        Number(i.target.value) || 0
       ), this.requestUpdate();
     }}
               />
@@ -2048,7 +2168,7 @@ let h = class extends z {
   async _confirmUndo() {
     const t = this._undoDialog;
     if (!t) return;
-    await this._call(p, "undo_completion", {
+    await this._call(u, "undo_completion", {
       entry_id: t.entryId,
       penalty: t.penalty,
       ...t.reason.trim() ? { reason: t.reason.trim() } : {}
@@ -2062,27 +2182,27 @@ let h = class extends z {
     return Number.isNaN(e.getTime()) ? t : e.toLocaleString();
   }
   // --- Dialog ------------------------------------------------------------
-  _renderDialog(t, e, s) {
-    if (!this._dialog) return d;
-    const i = this._dialog.kind, o = this._dialog.original ? "Edit" : "New", a = i === "chore" ? "chore" : i === "privilege" ? "privilege" : "category";
-    return r`
+  _renderDialog(t, e, i) {
+    if (!this._dialog) return c;
+    const o = this._dialog.kind, s = this._dialog.original ? "Edit" : "New", a = o === "chore" ? "chore" : o === "privilege" ? "privilege" : "category";
+    return n`
       <div class="overlay" @click=${this._onOverlayClick}>
         <div class="dialog" role="dialog" aria-modal="true">
           <div class="dialog-header">
-            <h2>${o} ${a}</h2>
+            <h2>${s} ${a}</h2>
             <button class="icon-button" @click=${this._closeDialog}>
               <ha-icon icon="mdi:close"></ha-icon>
             </button>
           </div>
           <div class="dialog-body">
-            ${i === "chore" ? this._renderChoreForm(e, s) : i === "privilege" ? this._renderPrivilegeForm(t, s) : this._renderCategoryForm()}
+            ${o === "chore" ? this._renderChoreForm(e, i) : o === "privilege" ? this._renderPrivilegeForm(t, i) : this._renderCategoryForm()}
           </div>
           <div class="dialog-footer">
             <button @click=${this._closeDialog}>Cancel</button>
             <button
               class="primary"
               ?disabled=${this._busy}
-              @click=${() => i === "chore" ? this._saveChoreDialog() : i === "privilege" ? this._savePrivilegeDialog() : this._saveCategoryDialog()}
+              @click=${() => o === "chore" ? this._saveChoreDialog() : o === "privilege" ? this._savePrivilegeDialog() : this._saveCategoryDialog()}
             >
               Save
             </button>
@@ -2092,15 +2212,15 @@ let h = class extends z {
     `;
   }
   _renderChoreForm(t, e) {
-    const s = this._dialog.draft, i = !!this._dialog.original, o = x(s.slug || s.name), a = i && o && o !== this._dialog.original;
-    return r`
+    const i = this._dialog.draft, o = !!this._dialog.original, s = x(i.slug || i.name), a = o && s && s !== this._dialog.original;
+    return n`
       <label>
         Name
         <input
           type="text"
-          .value=${s.name}
-          @input=${(n) => {
-      s.name = n.target.value, this.requestUpdate();
+          .value=${i.name}
+          @input=${(r) => {
+      i.name = r.target.value, this.requestUpdate();
     }}
         />
       </label>
@@ -2109,22 +2229,22 @@ let h = class extends z {
         Slug
         <input
           type="text"
-          .value=${s.slug}
-          placeholder=${o || "auto-generated from name"}
-          @input=${(n) => {
-      s.slug = n.target.value, this.requestUpdate();
+          .value=${i.slug}
+          placeholder=${s || "auto-generated from name"}
+          @input=${(r) => {
+      i.slug = r.target.value, this.requestUpdate();
     }}
         />
-        ${a ? r`<span class="hint">Will be renamed to "${o}"</span>` : i ? d : r`<span class="hint">Will be saved as "${o}"</span>`}
+        ${a ? n`<span class="hint">Will be renamed to "${s}"</span>` : o ? c : n`<span class="hint">Will be saved as "${s}"</span>`}
       </label>
 
       <label>
         Description
         <input
           type="text"
-          .value=${s.description}
-          @input=${(n) => {
-      s.description = n.target.value, this.requestUpdate();
+          .value=${i.description}
+          @input=${(r) => {
+      i.description = r.target.value, this.requestUpdate();
     }}
         />
       </label>
@@ -2133,13 +2253,13 @@ let h = class extends z {
         <label>
           Frequency
           <select
-            .value=${s.frequency}
-            @change=${(n) => {
-      s.frequency = n.target.value, this.requestUpdate();
+            .value=${i.frequency}
+            @change=${(r) => {
+      i.frequency = r.target.value, this.requestUpdate();
     }}
           >
-            ${Je.map(
-      (n) => r`<option value=${n}>${n}</option>`
+            ${et.map(
+      (r) => n`<option value=${r}>${r}</option>`
     )}
           </select>
         </label>
@@ -2149,35 +2269,49 @@ let h = class extends z {
           <input
             type="number"
             min="0"
-            .value=${String(s.points)}
-            @input=${(n) => {
-      s.points = Number(n.target.value) || 0, this.requestUpdate();
+            .value=${String(i.points)}
+            @input=${(r) => {
+      i.points = Number(r.target.value) || 0, this.requestUpdate();
     }}
           />
         </label>
       </div>
 
       <label>
+        Suggested duration (minutes, optional)
+        <input
+          type="number"
+          min="1"
+          max=${String(Ae)}
+          placeholder="None"
+          .value=${i.suggestedDuration}
+          @input=${(r) => {
+      i.suggestedDuration = r.target.value, this.requestUpdate();
+    }}
+        />
+      </label>
+
+      <label>
         Category
         <select
-          .value=${s.category}
-          @change=${(n) => {
-      s.category = n.target.value, this.requestUpdate();
+          .value=${i.category}
+          @change=${(r) => {
+      i.category = r.target.value, this.requestUpdate();
     }}
         >
-          <option value=${ee}>Uncategorized</option>
+          <option value=${te}>Uncategorized</option>
           ${t.map(
-      (n) => r`<option value=${n.slug}>${n.name}</option>`
+      (r) => n`<option value=${r.slug}>${r.name}</option>`
     )}
         </select>
       </label>
 
-      ${this._renderIconField(s.icon, E, (n) => {
-      s.icon = n, this.requestUpdate();
+      ${this._renderIconField(i.icon, D, (r) => {
+      i.icon = r, this.requestUpdate();
     })}
 
-      ${this._renderAssigneeEditor(s, e)}
-      ${this._renderPointsByAssigneeEditor(s)}
+      ${this._renderAssigneeEditor(i, e)}
+      ${this._renderPointsByAssigneeEditor(i)}
     `;
   }
   /**
@@ -2187,7 +2321,7 @@ let h = class extends z {
    * for that assignee (see ChoreDraft.pointsByAssignee).
    */
   _renderPointsByAssigneeEditor(t) {
-    return t.assignees.length === 0 ? d : r`
+    return t.assignees.length === 0 ? c : n`
       <label>
         Points per assignee
         <span class="hint"
@@ -2196,18 +2330,18 @@ let h = class extends z {
         >
         <div class="points-override-list">
           ${t.assignees.map((e) => {
-      const s = t.pointsByAssignee[e] ?? t.points;
-      return r`
+      const i = t.pointsByAssignee[e] ?? t.points;
+      return n`
               <div class="points-override-row">
                 <span class="points-override-name">${this._displayName(e)}</span>
                 <input
                   type="number"
                   min="0"
                   class="points-override-input"
-                  .value=${String(s)}
-                  @input=${(i) => {
-        const o = Number(i.target.value) || 0, a = { ...t.pointsByAssignee };
-        o === t.points ? delete a[e] : a[e] = o, t.pointsByAssignee = a, this.requestUpdate();
+                  .value=${String(i)}
+                  @input=${(o) => {
+        const s = Number(o.target.value) || 0, a = { ...t.pointsByAssignee };
+        s === t.points ? delete a[e] : a[e] = s, t.pointsByAssignee = a, this.requestUpdate();
       }}
                 />
               </div>
@@ -2218,15 +2352,15 @@ let h = class extends z {
     `;
   }
   _renderPrivilegeForm(t, e) {
-    const s = this._dialog.draft, i = !!this._dialog.original, o = x(s.slug || s.name), a = i && o && o !== this._dialog.original;
-    return r`
+    const i = this._dialog.draft, o = !!this._dialog.original, s = x(i.slug || i.name), a = o && s && s !== this._dialog.original;
+    return n`
       <label>
         Name
         <input
           type="text"
-          .value=${s.name}
-          @input=${(n) => {
-      s.name = n.target.value, this.requestUpdate();
+          .value=${i.name}
+          @input=${(r) => {
+      i.name = r.target.value, this.requestUpdate();
     }}
         />
       </label>
@@ -2235,25 +2369,25 @@ let h = class extends z {
         Slug
         <input
           type="text"
-          .value=${s.slug}
-          placeholder=${o || "auto-generated from name"}
-          @input=${(n) => {
-      s.slug = n.target.value, this.requestUpdate();
+          .value=${i.slug}
+          placeholder=${s || "auto-generated from name"}
+          @input=${(r) => {
+      i.slug = r.target.value, this.requestUpdate();
     }}
         />
-        ${a ? r`<span class="hint">Will be renamed to "${o}"</span>` : i ? d : r`<span class="hint">Will be saved as "${o}"</span>`}
+        ${a ? n`<span class="hint">Will be renamed to "${s}"</span>` : o ? c : n`<span class="hint">Will be saved as "${s}"</span>`}
       </label>
 
       <label>
         Behavior
         <select
-          .value=${s.behavior}
-          @change=${(n) => {
-      s.behavior = n.target.value, this.requestUpdate();
+          .value=${i.behavior}
+          @change=${(r) => {
+      i.behavior = r.target.value, this.requestUpdate();
     }}
         >
-          ${Qe.map(
-      (n) => r`<option value=${n}>${n}</option>`
+          ${tt.map(
+      (r) => n`<option value=${r}>${r}</option>`
     )}
         </select>
         <span class="hint"
@@ -2262,8 +2396,8 @@ let h = class extends z {
         >
       </label>
 
-      ${this._renderIconField(s.icon, D, (n) => {
-      s.icon = n, this.requestUpdate();
+      ${this._renderIconField(i.icon, E, (r) => {
+      i.icon = r, this.requestUpdate();
     })}
 
       <label>
@@ -2273,37 +2407,37 @@ let h = class extends z {
           complete instead of a specific list.</span
         >
         <div class="checkbox-list">
-          ${t.length === 0 ? r`<span class="hint">No chores defined yet.</span>` : t.map(
-      (n) => r`
+          ${t.length === 0 ? n`<span class="hint">No chores defined yet.</span>` : t.map(
+      (r) => n`
                   <label class="checkbox-item">
                     <input
                       type="checkbox"
-                      .checked=${s.linkedChores.includes(n.slug)}
+                      .checked=${i.linkedChores.includes(r.slug)}
                       @change=${(l) => {
-        const c = l.target.checked;
-        s.linkedChores = c ? [...s.linkedChores, n.slug] : s.linkedChores.filter((b) => b !== n.slug), this.requestUpdate();
+        const d = l.target.checked;
+        i.linkedChores = d ? [...i.linkedChores, r.slug] : i.linkedChores.filter((b) => b !== r.slug), this.requestUpdate();
       }}
                     />
-                    ${n.name}
+                    ${r.name}
                   </label>
                 `
     )}
         </div>
       </label>
 
-      ${this._renderAssigneeEditor(s, e)}
+      ${this._renderAssigneeEditor(i, e)}
     `;
   }
   _renderCategoryForm() {
-    const t = this._dialog.draft, e = !!this._dialog.original, s = x(t.slug || t.name), i = e && s && s !== this._dialog.original;
-    return r`
+    const t = this._dialog.draft, e = !!this._dialog.original, i = x(t.slug || t.name), o = e && i && i !== this._dialog.original;
+    return n`
       <label>
         Name
         <input
           type="text"
           .value=${t.name}
-          @input=${(o) => {
-      t.name = o.target.value, this.requestUpdate();
+          @input=${(s) => {
+      t.name = s.target.value, this.requestUpdate();
     }}
         />
       </label>
@@ -2313,21 +2447,21 @@ let h = class extends z {
         <input
           type="text"
           .value=${t.slug}
-          placeholder=${s || "auto-generated from name"}
-          @input=${(o) => {
-      t.slug = o.target.value, this.requestUpdate();
+          placeholder=${i || "auto-generated from name"}
+          @input=${(s) => {
+      t.slug = s.target.value, this.requestUpdate();
     }}
         />
-        ${i ? r`<span class="hint">Will be renamed to "${s}"</span>` : e ? d : r`<span class="hint">Will be saved as "${s}"</span>`}
+        ${o ? n`<span class="hint">Will be renamed to "${i}"</span>` : e ? c : n`<span class="hint">Will be saved as "${i}"</span>`}
       </label>
 
-      ${this._renderIconField(t.icon, S, (o) => {
-      t.icon = o, this.requestUpdate();
+      ${this._renderIconField(t.icon, S, (s) => {
+      t.icon = s, this.requestUpdate();
     })}
     `;
   }
-  _renderIconField(t, e, s) {
-    return r`
+  _renderIconField(t, e, i) {
+    return n`
       <label>
         Icon
         <div class="icon-field">
@@ -2336,25 +2470,25 @@ let h = class extends z {
             type="text"
             .value=${t}
             placeholder=${e}
-            @input=${(i) => s(i.target.value)}
+            @input=${(o) => i(o.target.value)}
           />
         </div>
       </label>
     `;
   }
   _renderAssigneeEditor(t, e) {
-    return r`
+    return n`
       <label>
         Assignees
         <div class="chip-list">
           ${t.assignees.map(
-      (s) => r`
+      (i) => n`
               <span class="chip">
-                ${this._displayName(s)}
+                ${this._displayName(i)}
                 <button
                   class="chip-remove"
                   @click=${() => {
-        t.assignees = t.assignees.filter((i) => i !== s), this.requestUpdate();
+        t.assignees = t.assignees.filter((o) => o !== i), this.requestUpdate();
       }}
                 >
                   ✕
@@ -2366,14 +2500,14 @@ let h = class extends z {
             type="text"
             list="simple-chores-known-assignees"
             placeholder="Add assignee, press Enter"
-            @keydown=${(s) => this._onAssigneeKeydown(s, t)}
-            @blur=${(s) => this._commitAssigneeInput(s.target, t)}
+            @keydown=${(i) => this._onAssigneeKeydown(i, t)}
+            @blur=${(i) => this._commitAssigneeInput(i.target, t)}
           />
         </div>
       </label>
       <datalist id="simple-chores-known-assignees">
         ${e.map(
-      (s) => r`<option value=${s} label=${this._displayName(s)}></option>`
+      (i) => n`<option value=${i} label=${this._displayName(i)}></option>`
     )}
       </datalist>
     `;
@@ -2382,28 +2516,28 @@ let h = class extends z {
     t.key !== "Enter" && t.key !== "," || (t.preventDefault(), this._commitAssigneeInput(t.target, e));
   }
   _commitAssigneeInput(t, e) {
-    const s = t.value.trim().replace(/,$/, "");
-    s && !e.assignees.includes(s) && (e.assignees = [...e.assignees, s]), t.value = "", this.requestUpdate();
+    const i = t.value.trim().replace(/,$/, "");
+    i && !e.assignees.includes(i) && (e.assignees = [...e.assignees, i]), t.value = "", this.requestUpdate();
   }
   _openEditChore(t) {
     this._error = null, this._dialog = {
       kind: "chore",
       original: t.slug,
-      draft: st(t)
+      draft: rt(t)
     };
   }
   _openEditPrivilege(t) {
     this._error = null, this._dialog = {
       kind: "privilege",
       original: t.slug,
-      draft: nt(t)
+      draft: dt(t)
     };
   }
   _openEditCategory(t) {
     this._error = null, this._dialog = {
       kind: "category",
       original: t.slug,
-      draft: ot(t)
+      draft: lt(t)
     };
   }
   /**
@@ -2412,60 +2546,60 @@ let h = class extends z {
    * spreading this into the call data is a no-op when nothing changed.
    */
   _renameField(t, e) {
-    const s = x(e);
-    return s && s !== t ? { new_slug: s } : {};
+    const i = x(e);
+    return i && i !== t ? { new_slug: i } : {};
   }
-  async _call(t, e, s) {
+  async _call(t, e, i) {
     this._busy = !0;
     try {
-      return await this.hass.callService(t, e, s), !0;
-    } catch (i) {
-      return this._error = i instanceof Error ? i.message : String(i), !1;
+      return await this.hass.callService(t, e, i), !0;
+    } catch (o) {
+      return this._error = o instanceof Error ? o.message : String(o), !1;
     } finally {
       this._busy = !1;
     }
   }
-  _markChore(t, e, s) {
-    return this._call(p, s, { chore_slug: t, user: e });
+  _markChore(t, e, i) {
+    return this._call(u, i, { chore_slug: t, user: e });
   }
   /**
    * Immediately finalize one completed chore for one assignee - the same
    * reset auto-finalize performs after its delay, triggered on demand.
    */
   _finalizeOne(t, e) {
-    return this._call(p, "finalize_one", { chore_slug: t, user: e });
+    return this._call(u, "finalize_one", { chore_slug: t, user: e });
   }
   _resetCompleted() {
     const t = this._bulkUser ? { user: this._bulkUser } : {};
-    return this._call(p, "reset_completed", t);
+    return this._call(u, "reset_completed", t);
   }
   _startNewDay() {
     const t = this._bulkUser ? { user: this._bulkUser } : {};
-    return this._call(p, "start_new_day", t);
+    return this._call(u, "start_new_day", t);
   }
   _categoryAction(t, e) {
-    const s = {
+    const i = {
       category_slug: t,
       ...this._bulkUser ? { user: this._bulkUser } : {}
     };
-    return this._call(p, e, s);
+    return this._call(u, e, i);
   }
   async _deleteChore(t) {
-    const e = t.assignees.map((s) => this._displayName(s.assignee)).join(", ");
+    const e = t.assignees.map((i) => this._displayName(i.assignee)).join(", ");
     confirm(
       `Delete "${t.name}"? This removes it for every assignee (${e}).`
-    ) && await this._call(p, "delete_chore", { slug: t.slug });
+    ) && await this._call(u, "delete_chore", { slug: t.slug });
   }
   async _deletePrivilege(t) {
-    const e = t.assignees.map((s) => this._displayName(s.assignee)).join(", ");
+    const e = t.assignees.map((i) => this._displayName(i.assignee)).join(", ");
     confirm(
       `Delete "${t.name}"? This removes it for every assignee (${e}).`
-    ) && await this._call(p, "delete_privilege", { slug: t.slug });
+    ) && await this._call(u, "delete_privilege", { slug: t.slug });
   }
   async _deleteCategory(t) {
     confirm(
       `Delete "${t.name}"? Chores must be uncategorized or reassigned first.`
-    ) && await this._call(p, "delete_category", { slug: t.slug });
+    ) && await this._call(u, "delete_category", { slug: t.slug });
   }
   /** Key into `_disableReasonInput` for a given privilege/assignee row. */
   _disableReasonKey(t, e) {
@@ -2480,20 +2614,20 @@ let h = class extends z {
     if (Object.hasOwn(this._disableReasonInput, t))
       return this._disableReasonInput[t].trim();
   }
-  async _addTemporaryDisable(t, e, s, i, o) {
-    const a = this._pendingReason(o);
+  async _addTemporaryDisable(t, e, i, o, s) {
+    const a = this._pendingReason(s);
     if (await this._call(
-      p,
-      s ? "adjust_temporary_disable" : "temporarily_disable_privilege",
+      u,
+      i ? "adjust_temporary_disable" : "temporarily_disable_privilege",
       {
         user: e,
         privilege_slug: t,
-        ...s ? { adjustment: i } : { duration: i },
+        ...i ? { adjustment: o } : { duration: o },
         ...a !== void 0 ? { reason: a } : {}
       }
     ) && a !== void 0) {
-      const { [o]: l, ...c } = this._disableReasonInput;
-      this._disableReasonInput = c;
+      const { [s]: l, ...d } = this._disableReasonInput;
+      this._disableReasonInput = d;
     }
   }
   /**
@@ -2504,15 +2638,15 @@ let h = class extends z {
    * button otherwise, since the service just warns and no-ops. Carries along
    * any edited-but-unsaved reason, same as extending via `_addTemporaryDisable`.
    */
-  async _adjustTemporaryDisable(t, e, s) {
-    const i = this._disableReasonKey(t, e), o = this._pendingReason(i);
-    if (await this._call(p, "adjust_temporary_disable", {
+  async _adjustTemporaryDisable(t, e, i) {
+    const o = this._disableReasonKey(t, e), s = this._pendingReason(o);
+    if (await this._call(u, "adjust_temporary_disable", {
       user: e,
       privilege_slug: t,
-      adjustment: s,
-      ...o !== void 0 ? { reason: o } : {}
-    }) && o !== void 0) {
-      const { [i]: n, ...l } = this._disableReasonInput;
+      adjustment: i,
+      ...s !== void 0 ? { reason: s } : {}
+    }) && s !== void 0) {
+      const { [o]: r, ...l } = this._disableReasonInput;
       this._disableReasonInput = l;
     }
   }
@@ -2522,16 +2656,16 @@ let h = class extends z {
    * Fired on blur/Enter so editing the reason text doesn't require also
    * touching a stepper. No-ops if the field wasn't actually changed.
    */
-  async _saveDisableReason(t, e, s) {
-    const i = this._disableReasonKey(t, e), o = this._pendingReason(i);
-    if (o === void 0 || o === (s ?? "")) return;
-    if (await this._call(p, "adjust_temporary_disable", {
+  async _saveDisableReason(t, e, i) {
+    const o = this._disableReasonKey(t, e), s = this._pendingReason(o);
+    if (s === void 0 || s === (i ?? "")) return;
+    if (await this._call(u, "adjust_temporary_disable", {
       user: e,
       privilege_slug: t,
       adjustment: 0,
-      reason: o
+      reason: s
     })) {
-      const { [i]: n, ...l } = this._disableReasonInput;
+      const { [o]: r, ...l } = this._disableReasonInput;
       this._disableReasonInput = l;
     }
   }
@@ -2541,11 +2675,11 @@ let h = class extends z {
    * recomputed from linked chores, for automatic-behavior privileges).
    */
   async _clearTemporaryDisable(t, e) {
-    if (await this._call(p, "clear_temporary_disable", {
+    if (await this._call(u, "clear_temporary_disable", {
       user: e,
       privilege_slug: t
     })) {
-      const i = this._disableReasonKey(t, e), { [i]: o, ...a } = this._disableReasonInput;
+      const o = this._disableReasonKey(t, e), { [o]: s, ...a } = this._disableReasonInput;
       this._disableReasonInput = a;
     }
   }
@@ -2559,28 +2693,30 @@ let h = class extends z {
       this._error = "At least one assignee is required.";
       return;
     }
-    const s = e.assignees.join(","), i = Object.entries(e.pointsByAssignee).filter(([a]) => e.assignees.includes(a)).map(([a, n]) => `${a}:${n}`).join(",");
-    (t.original ? await this._call(p, "update_chore", {
+    const i = e.assignees.join(","), o = Object.entries(e.pointsByAssignee).filter(([r]) => e.assignees.includes(r)).map(([r, l]) => `${r}:${l}`).join(","), s = ot(e.suggestedDuration);
+    (t.original ? await this._call(u, "update_chore", {
       slug: t.original,
       name: e.name,
       description: e.description,
       frequency: e.frequency,
-      assignees: s,
-      icon: e.icon || E,
+      assignees: i,
+      icon: e.icon || D,
       points: e.points,
-      points_by_assignee: i,
+      points_by_assignee: o,
       category: e.category,
+      suggested_duration: s,
       ...this._renameField(t.original, e.slug || e.name)
-    }) : await this._call(p, "create_chore", {
+    }) : await this._call(u, "create_chore", {
       name: e.name,
       slug: x(e.slug || e.name),
       description: e.description,
       frequency: e.frequency,
-      assignees: s,
-      icon: e.icon || E,
+      assignees: i,
+      icon: e.icon || D,
       points: e.points,
-      points_by_assignee: i,
-      category: e.category
+      points_by_assignee: o,
+      category: e.category,
+      suggested_duration: s
     })) && (this._dialog = null);
   }
   async _saveCategoryDialog() {
@@ -2589,12 +2725,12 @@ let h = class extends z {
       this._error = "Name is required.";
       return;
     }
-    (t.original ? await this._call(p, "update_category", {
+    (t.original ? await this._call(u, "update_category", {
       slug: t.original,
       name: e.name,
       icon: e.icon || S,
       ...this._renameField(t.original, e.slug || e.name)
-    }) : await this._call(p, "create_category", {
+    }) : await this._call(u, "create_category", {
       name: e.name,
       slug: x(e.slug || e.name),
       icon: e.icon || S
@@ -2610,26 +2746,26 @@ let h = class extends z {
       this._error = "At least one assignee is required.";
       return;
     }
-    const s = e.assignees.join(","), i = e.linkedChores.join(",");
-    (t.original ? await this._call(p, "update_privilege", {
+    const i = e.assignees.join(","), o = e.linkedChores.join(",");
+    (t.original ? await this._call(u, "update_privilege", {
       slug: t.original,
       name: e.name,
-      icon: e.icon || D,
+      icon: e.icon || E,
       behavior: e.behavior,
-      linked_chores: i,
-      assignees: s,
+      linked_chores: o,
+      assignees: i,
       ...this._renameField(t.original, e.slug || e.name)
-    }) : await this._call(p, "create_privilege", {
+    }) : await this._call(u, "create_privilege", {
       name: e.name,
       slug: x(e.slug || e.name),
-      icon: e.icon || D,
+      icon: e.icon || E,
       behavior: e.behavior,
-      linked_chores: i,
-      assignees: s
+      linked_chores: o,
+      assignees: i
     })) && (this._dialog = null);
   }
 };
-h.styles = Ce`
+p.styles = De`
     :host {
       display: block;
       height: 100vh;
@@ -2886,6 +3022,28 @@ h.styles = Ce`
     .assignee-row:last-child {
       border-bottom: none;
     }
+    .assignee-row.active-row {
+      margin: 0 -8px;
+      padding: 8px;
+      border-radius: 8px;
+      background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.1);
+      box-shadow: inset 3px 0 0 var(--primary-color, #03a9f4);
+    }
+    .activity-clock {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary-color, #03a9f4);
+    }
+    .activity-clock ha-icon {
+      --mdc-icon-size: 16px;
+    }
+    .activity-clock.overdue {
+      color: var(--error-color, #db4437);
+      font-weight: 500;
+    }
     .assignee-row.privilege-row {
       flex-direction: column;
       align-items: stretch;
@@ -3024,6 +3182,10 @@ h.styles = Ce`
       100% {
         transform: scale(1);
       }
+    }
+    .state-active {
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
     }
     .state-good {
       background: rgba(76, 175, 80, 0.15);
@@ -3523,75 +3685,81 @@ h.styles = Ce`
       outline: none;
     }
   `;
-g([
-  Q({ attribute: !1 })
-], h.prototype, "hass", 2);
-g([
-  Q({ type: Boolean })
-], h.prototype, "narrow", 2);
-g([
+h([
+  ee({ attribute: !1 })
+], p.prototype, "hass", 2);
+h([
+  ee({ type: Boolean })
+], p.prototype, "narrow", 2);
+h([
   m()
-], h.prototype, "_tab", 2);
-g([
+], p.prototype, "_tab", 2);
+h([
   m()
-], h.prototype, "_dialog", 2);
-g([
+], p.prototype, "_dialog", 2);
+h([
   m()
-], h.prototype, "_busy", 2);
-g([
+], p.prototype, "_busy", 2);
+h([
   m()
-], h.prototype, "_error", 2);
-g([
+], p.prototype, "_error", 2);
+h([
   m()
-], h.prototype, "_bulkUser", 2);
-g([
+], p.prototype, "_bulkUser", 2);
+h([
   m()
-], h.prototype, "_categoryFilter", 2);
-g([
+], p.prototype, "_categoryFilter", 2);
+h([
   m()
-], h.prototype, "_choreSort", 2);
-g([
+], p.prototype, "_choreSort", 2);
+h([
   m()
-], h.prototype, "_userDisplayNames", 2);
-g([
+], p.prototype, "_userDisplayNames", 2);
+h([
   m()
-], h.prototype, "_settingsDraft", 2);
-g([
+], p.prototype, "_settingsDraft", 2);
+h([
   m()
-], h.prototype, "_resetPointsDialog", 2);
-g([
+], p.prototype, "_resetPointsDialog", 2);
+h([
   m()
-], h.prototype, "_undoDialog", 2);
-g([
+], p.prototype, "_undoDialog", 2);
+h([
   m()
-], h.prototype, "_userAdjustInput", 2);
-g([
+], p.prototype, "_startDialog", 2);
+h([
   m()
-], h.prototype, "_userAdjustReasonInput", 2);
-g([
+], p.prototype, "_now", 2);
+h([
   m()
-], h.prototype, "_disableReasonInput", 2);
-g([
+], p.prototype, "_userAdjustInput", 2);
+h([
   m()
-], h.prototype, "_untilFlash", 2);
-g([
+], p.prototype, "_userAdjustReasonInput", 2);
+h([
   m()
-], h.prototype, "_historyEntries", 2);
-g([
+], p.prototype, "_disableReasonInput", 2);
+h([
   m()
-], h.prototype, "_historyLoading", 2);
-g([
+], p.prototype, "_untilFlash", 2);
+h([
   m()
-], h.prototype, "_historyUserFilter", 2);
-g([
+], p.prototype, "_historyEntries", 2);
+h([
   m()
-], h.prototype, "_historyCategoryFilter", 2);
-g([
+], p.prototype, "_historyLoading", 2);
+h([
   m()
-], h.prototype, "_historyChoreFilter", 2);
-g([
+], p.prototype, "_historyUserFilter", 2);
+h([
   m()
-], h.prototype, "_historyActionFilter", 2);
-h = g([
-  Ve("simple-chores-panel")
-], h);
+], p.prototype, "_historyCategoryFilter", 2);
+h([
+  m()
+], p.prototype, "_historyChoreFilter", 2);
+h([
+  m()
+], p.prototype, "_historyActionFilter", 2);
+p = h([
+  Ze("simple-chores-panel")
+], p);

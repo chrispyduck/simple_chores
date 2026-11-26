@@ -1,9 +1,11 @@
 import { LitElement, html, css, nothing, PropertyValues } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
+import { customElementOnce } from "./define-once";
 
 import {
   CategoryDefinition,
   CategoryDraft,
+  ChoreAssigneeStatus,
   ChoreDefinition,
   ChoreDraft,
   ChoreFrequency,
@@ -16,6 +18,7 @@ import {
   HistoryEntry,
   HISTORY_ACTIONS,
   HomeAssistant,
+  MAX_SUGGESTED_DURATION_MINUTES,
   PointGoalDefinition,
   PrivilegeBehavior,
   PrivilegeDefinition,
@@ -32,15 +35,18 @@ import {
   emptyCategoryDraft,
   emptyChoreDraft,
   emptyPrivilegeDraft,
+  formatDuration,
   historyActionClass,
   historyActionLabel,
   knownAssignees,
   parseCategories,
   parseChores,
+  describeActivityClock,
   parseHistoryEntries,
   parsePointGoals,
   parsePrivileges,
   parseSettings,
+  parseSuggestedDuration,
   parseSummaries,
   privilegeToDraft,
   sanitizeSlug,
@@ -79,6 +85,15 @@ interface ResetPointsDraft {
   resetTotal: boolean;
 }
 
+/** Draft backing the Chores tab's "start chore" (mark active) dialog. */
+interface StartChoreDraft {
+  slug: string;
+  choreName: string;
+  assignee: string;
+  /** Raw input text; blank means no timer. */
+  timerMinutes: string;
+}
+
 /** Draft backing the History tab's "undo completion" dialog. */
 interface UndoCompletionDraft {
   entryId: string;
@@ -102,7 +117,7 @@ interface UndoCompletionDraft {
  * automations use. Home Assistant only shows this panel to administrators
  * (see panel.py's require_admin=True), which is what actually restricts it.
  */
-@customElement("simple-chores-panel")
+@customElementOnce("simple-chores-panel")
 export class SimpleChoresPanel extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ type: Boolean }) narrow = false;
@@ -118,6 +133,15 @@ export class SimpleChoresPanel extends LitElement {
   @state() private _settingsDraft: SettingsDraft | null = null;
   @state() private _resetPointsDialog: ResetPointsDraft | null = null;
   @state() private _undoDialog: UndoCompletionDraft | null = null;
+  @state() private _startDialog: StartChoreDraft | null = null;
+  /**
+   * Wall-clock time (ms) used to render Active chores' running clocks. Ticks
+   * once a second, but only while some chore is Active (see _hasActiveChore),
+   * so an idle panel doesn't re-render needlessly.
+   */
+  @state() private _now = Date.now();
+  private _hasActiveChore = false;
+  private _clockInterval: number | undefined;
   @state() private _userAdjustInput: Record<string, string> = {};
   @state() private _userAdjustReasonInput: Record<string, string> = {};
   /** Draft "reason" text per privilege block row, keyed by `${slug}:${assignee}`. */
@@ -155,7 +179,24 @@ export class SimpleChoresPanel extends LitElement {
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has("hass") && this.hass) {
       this._detectUntilChanges();
+      this._hasActiveChore = Object.entries(this.hass.states).some(
+        ([id, entity]) =>
+          id.startsWith("sensor.simple_chore_") && entity.state === "Active"
+      );
     }
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    this._clockInterval = window.setInterval(() => {
+      if (this._hasActiveChore) this._now = Date.now();
+    }, 1000);
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    window.clearInterval(this._clockInterval);
+    this._clockInterval = undefined;
   }
 
   /**
@@ -300,6 +341,7 @@ export class SimpleChoresPanel extends LitElement {
       ${this._dialog ? this._renderDialog(chores, categories, assignees) : nothing}
       ${this._resetPointsDialog ? this._renderResetPointsDialog(assignees) : nothing}
       ${this._undoDialog ? this._renderUndoDialog() : nothing}
+      ${this._startDialog ? this._renderStartDialog() : nothing}
     `;
   }
 
@@ -503,6 +545,9 @@ export class SimpleChoresPanel extends LitElement {
             <div class="meta">
               ${chore.frequency} · ${pointsLabel}
               ${categoryName ? html` · ${categoryName}` : nothing}
+              ${chore.suggestedDuration
+                ? html` · ~${formatDuration(chore.suggestedDuration)}`
+                : nothing}
               ${chore.description ? html` · ${chore.description}` : nothing}
             </div>
           </div>
@@ -528,7 +573,7 @@ export class SimpleChoresPanel extends LitElement {
             .filter((a) => !this._bulkUser || a.assignee === this._bulkUser)
             .map(
               (a) => html`
-                <div class="assignee-row">
+                <div class="assignee-row ${a.state === "Active" ? "active-row" : ""}">
                   <span class="assignee-name">${this._displayName(a.assignee)}</span>
                   ${a.points !== chore.points
                     ? html`<span class="points-override-badge" title="Point override"
@@ -538,6 +583,7 @@ export class SimpleChoresPanel extends LitElement {
                   <span class="state-chip ${this._choreStateClass(a.state)}"
                     >${a.state}</span
                   >
+                  ${a.state === "Active" ? this._renderActivityClock(a) : nothing}
                   <div class="row-actions">
                     <button
                       class="icon-button"
@@ -547,6 +593,13 @@ export class SimpleChoresPanel extends LitElement {
                         this._markChore(chore.slug, a.assignee, "mark_pending")}
                     >
                       <ha-icon icon="mdi:plus-circle-outline"></ha-icon>
+                    </button>
+                    <button
+                      class="icon-button"
+                      title=${a.state === "Active" ? "Restart timer" : "Start (mark active)"}
+                      @click=${() => this._openStartDialog(chore, a.assignee)}
+                    >
+                      <ha-icon icon="mdi:timer-play-outline"></ha-icon>
                     </button>
                     <button
                       class="icon-button"
@@ -587,7 +640,21 @@ export class SimpleChoresPanel extends LitElement {
     `;
   }
 
+  private _renderActivityClock(a: ChoreAssigneeStatus) {
+    const clock = describeActivityClock(a.activeSince, a.timerEndsAt, this._now);
+    if (!clock) return nothing;
+    return html`<span
+      class="activity-clock ${clock.overdue ? "overdue" : ""}"
+      title=${a.activeSince
+        ? `Started ${new Date(a.activeSince).toLocaleTimeString()}`
+        : ""}
+      ><ha-icon icon=${clock.overdue ? "mdi:timer-alert-outline" : "mdi:timer-outline"}></ha-icon
+      >${clock.label}</span
+    >`;
+  }
+
   private _choreStateClass(state: string): string {
+    if (state === "Active") return "state-active";
     if (state === "Complete") return "state-good";
     if (state === "Pending") return "state-warn";
     return "state-neutral";
@@ -1555,6 +1622,88 @@ export class SimpleChoresPanel extends LitElement {
     `;
   }
 
+  private _openStartDialog(chore: ChoreDefinition, assignee: string) {
+    this._error = null;
+    this._startDialog = {
+      slug: chore.slug,
+      choreName: chore.name,
+      assignee,
+      // Pre-fill the timer with the chore's suggested duration, if any.
+      timerMinutes: chore.suggestedDuration ? String(chore.suggestedDuration) : "",
+    };
+  }
+
+  private _renderStartDialog() {
+    const draft = this._startDialog;
+    if (!draft) return nothing;
+    const close = () => (this._startDialog = null);
+
+    return html`
+      <div
+        class="overlay"
+        @click=${(e: MouseEvent) => {
+          if (e.target === e.currentTarget) close();
+        }}
+      >
+        <div class="dialog" role="dialog" aria-modal="true">
+          <div class="dialog-header">
+            <h2>Start chore</h2>
+            <button class="icon-button" @click=${close}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="dialog-body">
+            <p class="hint">
+              Marks "${draft.choreName}" active for ${this._displayName(draft.assignee)}.
+              It stays outstanding until marked complete.
+            </p>
+            <label>
+              Timer (minutes, optional)
+              <input
+                type="number"
+                min="1"
+                max="1440"
+                placeholder="No timer"
+                .value=${draft.timerMinutes}
+                @input=${(e: Event) => {
+                  draft.timerMinutes = (e.target as HTMLInputElement).value;
+                  this.requestUpdate();
+                }}
+                @keydown=${(e: KeyboardEvent) => {
+                  if (e.key === "Enter") this._confirmStart();
+                }}
+              />
+            </label>
+          </div>
+          <div class="dialog-footer">
+            <button @click=${close}>Cancel</button>
+            <button class="primary" ?disabled=${this._busy} @click=${() => this._confirmStart()}>
+              Start
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private async _confirmStart() {
+    const draft = this._startDialog;
+    if (!draft) return;
+
+    const minutes = Math.floor(Number(draft.timerMinutes));
+    const data: Record<string, unknown> = {
+      chore_slug: draft.slug,
+      user: draft.assignee,
+    };
+    if (draft.timerMinutes.trim() && minutes > 0) {
+      data.timer_minutes = Math.min(minutes, 1440);
+    }
+
+    if (await this._call(SERVICE_DOMAIN, "mark_active", data)) {
+      this._startDialog = null;
+    }
+  }
+
   private _openUndoDialog = (entry: HistoryEntry) => {
     this._error = null;
     this._undoDialog = {
@@ -1791,6 +1940,21 @@ export class SimpleChoresPanel extends LitElement {
           />
         </label>
       </div>
+
+      <label>
+        Suggested duration (minutes, optional)
+        <input
+          type="number"
+          min="1"
+          max=${String(MAX_SUGGESTED_DURATION_MINUTES)}
+          placeholder="None"
+          .value=${draft.suggestedDuration}
+          @input=${(e: Event) => {
+            draft.suggestedDuration = (e.target as HTMLInputElement).value;
+            this.requestUpdate();
+          }}
+        />
+      </label>
 
       <label>
         Category
@@ -2378,6 +2542,8 @@ export class SimpleChoresPanel extends LitElement {
       .filter(([name]) => draft.assignees.includes(name))
       .map(([name, points]) => `${name}:${points}`)
       .join(",");
+    // 0 = no suggested duration (and clears an existing one on update).
+    const suggestedDuration = parseSuggestedDuration(draft.suggestedDuration);
     const ok = dialog.original
       ? await this._call(SERVICE_DOMAIN, "update_chore", {
           slug: dialog.original,
@@ -2389,6 +2555,7 @@ export class SimpleChoresPanel extends LitElement {
           points: draft.points,
           points_by_assignee: pointsByAssignee,
           category: draft.category,
+          suggested_duration: suggestedDuration,
           ...this._renameField(dialog.original, draft.slug || draft.name),
         })
       : await this._call(SERVICE_DOMAIN, "create_chore", {
@@ -2401,6 +2568,7 @@ export class SimpleChoresPanel extends LitElement {
           points: draft.points,
           points_by_assignee: pointsByAssignee,
           category: draft.category,
+          suggested_duration: suggestedDuration,
         });
 
     if (ok) this._dialog = null;
@@ -2725,6 +2893,28 @@ export class SimpleChoresPanel extends LitElement {
     .assignee-row:last-child {
       border-bottom: none;
     }
+    .assignee-row.active-row {
+      margin: 0 -8px;
+      padding: 8px;
+      border-radius: 8px;
+      background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.1);
+      box-shadow: inset 3px 0 0 var(--primary-color, #03a9f4);
+    }
+    .activity-clock {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary-color, #03a9f4);
+    }
+    .activity-clock ha-icon {
+      --mdc-icon-size: 16px;
+    }
+    .activity-clock.overdue {
+      color: var(--error-color, #db4437);
+      font-weight: 500;
+    }
     .assignee-row.privilege-row {
       flex-direction: column;
       align-items: stretch;
@@ -2863,6 +3053,10 @@ export class SimpleChoresPanel extends LitElement {
       100% {
         transform: scale(1);
       }
+    }
+    .state-active {
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
     }
     .state-good {
       background: rgba(76, 175, 80, 0.15);

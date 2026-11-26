@@ -1,14 +1,16 @@
 """Tests for simple_chores services."""
 
 from datetime import UTC, datetime, time, timedelta
+from typing import Any, ClassVar
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+import voluptuous as vol
 from homeassistant.auth.const import GROUP_ID_ADMIN
 from homeassistant.core import Context
 from homeassistant.exceptions import ServiceValidationError, Unauthorized
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
+from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.simple_chores.const import (
     ATTR_ADJUSTMENT,
@@ -63,6 +65,8 @@ from custom_components.simple_chores.sensor import (
     PrivilegeSensor,
 )
 from custom_components.simple_chores.services import (
+    CREATE_CHORE_SCHEMA,
+    UPDATE_CHORE_SCHEMA,
     _apply_frequency_reset,
     async_catch_up_auto_finalize,
     async_setup_frequency_schedules,
@@ -156,10 +160,11 @@ class TestServiceSetup:
 
         # Verify all services are in the correct domain
         services = hass.services.async_services_for_domain(DOMAIN)
-        # 12 chore services (incl. finalize_one) + 7 category services
-        # + 1 settings service + 8 privilege services + 3 history services -
-        # get_history, reset_history, undo_completion.
-        assert len(services) == 31
+        # 15 chore services (incl. finalize_one, mark_active, pause_timer,
+        # resume_timer) + 7 category services + 1 settings service + 8 privilege
+        # services + 3 history services - get_history, reset_history,
+        # undo_completion.
+        assert len(services) == 34
 
 
 class TestMarkCompleteService:
@@ -5063,3 +5068,33 @@ class TestUndoCompletionService:
             )
 
         assert points_storage.get_points("alice") == 0
+
+
+class TestSuggestedDurationSchema:
+    """Tests for the suggested_duration field on create/update_chore."""
+
+    BASE_CREATE: ClassVar[dict[str, Any]] = {
+        "name": "Dishes",
+        "slug": "dishes",
+        "frequency": "daily",
+        "assignees": "alice",
+    }
+
+    def test_create_defaults_to_zero(self) -> None:
+        """An omitted suggested_duration means none (0)."""
+        assert CREATE_CHORE_SCHEMA(self.BASE_CREATE)["suggested_duration"] == 0
+
+    def test_create_coerces_string(self) -> None:
+        """Values arrive from the UI as strings or numbers."""
+        data = CREATE_CHORE_SCHEMA({**self.BASE_CREATE, "suggested_duration": "15"})
+        assert data["suggested_duration"] == 15
+
+    def test_update_omitted_is_absent(self) -> None:
+        """Leaving it out of update_chore keeps the current value."""
+        assert "suggested_duration" not in UPDATE_CHORE_SCHEMA({"slug": "dishes"})
+
+    @pytest.mark.parametrize("value", [-1, 1441])
+    def test_rejects_out_of_range(self, value: int) -> None:
+        """Negative and more-than-a-day values are rejected."""
+        with pytest.raises(vol.Invalid):
+            UPDATE_CHORE_SCHEMA({"slug": "dishes", "suggested_duration": value})
